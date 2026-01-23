@@ -1,117 +1,93 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-const dotenv = require('dotenv');
-const connectDB = require('./config/database');
-const errorHandler = require('./middleware/error.middleware');
-const winston = require('winston');
+require('dotenv').config();
 
-// Load environment variables
-dotenv.config();
-
-// Create logger
-const logger = winston.createLogger({
-    level: 'info',
-    format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-    ),
-    transports: [
-        new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-        new winston.transports.File({ filename: 'logs/combined.log' }),
-        new winston.transports.Console({
-            format: winston.format.combine(
-                winston.format.colorize(),
-                winston.format.simple()
-            )
-        })
-    ]
-});
-
-// Import routes
-const authRoutes = require('./routes/auth.routes');
-const drinkRoutes = require('./routes/drink.routes');
-const orderRoutes = require('./routes/order.routes');
-const userRoutes = require('./routes/user.routes');
-const syncRoutes = require('./routes/sync.routes');
-
-// Initialize express app
 const app = express();
 
-// Connect to database
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Test route
+app.get('/', (req, res) => {
+    res.json({ 
+        message: 'Drink Quick API is running',
+        version: '1.0.0',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Health check
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'OK',
+        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    });
+});
+
+// Load routes with error handling
+try {
+    const drinkRoutes = require('./routes/drink.routes');
+    app.use('/api/drinks', drinkRoutes);
+    console.log('✅ Drink routes loaded successfully');
+} catch (error) {
+    console.error('❌ Failed to load drink routes:', error.message);
+    // Provide a fallback route
+    app.use('/api/drinks', (req, res) => {
+        res.status(503).json({ 
+            error: 'Drink routes temporarily unavailable',
+            message: error.message
+        });
+    });
+}
+
+// Add other routes with similar error handling
+// try {
+//     app.use('/api/auth', require('./routes/auth.routes'));
+// } catch (error) {
+//     console.error('Auth routes failed:', error.message);
+// }
+
+// MongoDB connection
+const connectDB = async () => {
+    try {
+        const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/drinkquick';
+        await mongoose.connect(MONGODB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+        });
+        console.log('✅ MongoDB Connected');
+    } catch (error) {
+        console.error('❌ MongoDB Connection Failed:', error.message);
+        // Don't exit in production, allow API to work without DB
+        console.log('⚠️  Starting without database connection');
+    }
+};
+
 connectDB();
 
-// Middleware
-app.use(helmet());
-app.use(cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
-    credentials: true
-}));
-app.use(morgan('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Request logging middleware
-app.use((req, res, next) => {
-    logger.info(`${req.method} ${req.url}`, {
-        ip: req.ip,
-        userAgent: req.get('User-Agent')
-    });
-    next();
-});
-
-// Health check route
-app.get('/health', (req, res) => {
-    res.status(200).json({
-        status: 'success',
-        message: 'Drinks Calculator API is running',
-        timestamp: new Date().toISOString(),
-        version: '1.0.0',
-        environment: process.env.NODE_ENV
-    });
-});
-
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/drinks', drinkRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/sync', syncRoutes);
-
 // Error handling middleware
-app.use(errorHandler);
+app.use((err, req, res, next) => {
+    console.error('Server Error:', err.stack);
+    res.status(500).json({
+        error: 'Internal Server Error',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    });
+});
 
 // 404 handler
 app.use('*', (req, res) => {
     res.status(404).json({
-        status: 'error',
-        message: 'Route not found'
+        error: 'Route not found',
+        path: req.originalUrl,
+        method: req.method
     });
 });
 
-const PORT = process.env.PORT || 5000;
-
-const server = app.listen(PORT, () => {
-    logger.info(`🚀 Server running on port ${PORT}`);
-    logger.info(`📚 API: http://localhost:${PORT}`);
-    logger.info(`🏥 Health: http://localhost:${PORT}/health`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🌐 Local: http://localhost:${PORT}`);
+    console.log(`📊 Health: http://localhost:${PORT}/health`);
 });
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err) => {
-    logger.error('UNHANDLED REJECTION! 💥 Shutting down...');
-    logger.error(err.name, err.message);
-    server.close(() => {
-        process.exit(1);
-    });
-});
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (err) => {
-    logger.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
-    logger.error(err.name, err.message);
-    process.exit(1);
-});
-
-module.exports = app;
