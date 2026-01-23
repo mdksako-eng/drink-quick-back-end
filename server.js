@@ -14,7 +14,12 @@ app.get('/', (req, res) => {
     res.json({ 
         message: 'Drink Quick API is running',
         version: '1.0.0',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        endpoints: [
+            '/api/drinks',
+            '/health',
+            '/api/drinks/health/route'
+        ]
     });
 });
 
@@ -22,7 +27,8 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => {
     res.status(200).json({ 
         status: 'OK',
-        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        uptime: process.uptime()
     });
 });
 
@@ -42,12 +48,13 @@ try {
     });
 }
 
-// Add other routes with similar error handling
-// try {
-//     app.use('/api/auth', require('./routes/auth.routes'));
-// } catch (error) {
-//     console.error('Auth routes failed:', error.message);
-// }
+// Test if routes are working
+app.get('/api/test', (req, res) => {
+    res.json({
+        message: 'API test endpoint',
+        working: true
+    });
+});
 
 // MongoDB connection
 const connectDB = async () => {
@@ -60,7 +67,6 @@ const connectDB = async () => {
         console.log('✅ MongoDB Connected');
     } catch (error) {
         console.error('❌ MongoDB Connection Failed:', error.message);
-        // Don't exit in production, allow API to work without DB
         console.log('⚠️  Starting without database connection');
     }
 };
@@ -76,12 +82,23 @@ app.use((err, req, res, next) => {
     });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
+// CORRECT 404 handler - FIXED!
+app.use((req, res) => {
     res.status(404).json({
         error: 'Route not found',
         path: req.originalUrl,
-        method: req.method
+        method: req.method,
+        availableEndpoints: [
+            'GET /',
+            'GET /health',
+            'GET /api/test',
+            'GET /api/drinks',
+            'GET /api/drinks/:id',
+            'POST /api/drinks',
+            'PUT /api/drinks/:id',
+            'DELETE /api/drinks/:id',
+            'GET /api/drinks/health/route'
+        ]
     });
 });
 
@@ -90,4 +107,5 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🌐 Local: http://localhost:${PORT}`);
     console.log(`📊 Health: http://localhost:${PORT}/health`);
+    console.log(`🍹 Drinks API: http://localhost:${PORT}/api/drinks`);
 });
