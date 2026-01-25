@@ -256,29 +256,44 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// 2. LOGIN USER
+// 2. LOGIN USER - UPDATED: Accepts username OR email
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    console.log(`🔑 Login attempt: ${email}`);
+    const { username, email, password } = req.body;
+    console.log(`🔑 Login attempt: ${email || username}`);
     
-    if (!email || !password) {
+    // Check if we have required fields
+    if (!password || (!email && !username)) {
       return res.status(400).json({ 
         success: false, 
-        message: 'Email and password required' 
+        message: 'Email/username and password required' 
       });
     }
     
-    // Find user by email
-    const result = await pool.query(
-      'SELECT id, username, email, password, role FROM users WHERE email = $1',
-      [email]
-    );
+    let result;
+    let queryField = '';
+    
+    // Find user by email OR username
+    if (email) {
+      queryField = 'email';
+      result = await pool.query(
+        'SELECT id, username, email, password, role FROM users WHERE email = $1',
+        [email]
+      );
+    } else {
+      queryField = 'username';
+      result = await pool.query(
+        'SELECT id, username, email, password, role FROM users WHERE username = $1',
+        [username]
+      );
+    }
+    
+    console.log(`🔍 Searching by ${queryField}: ${email || username}`);
     
     if (result.rows.length === 0) {
       return res.status(401).json({ 
         success: false, 
-        message: 'Invalid email or password' 
+        message: 'Invalid email/username or password' 
       });
     }
     
@@ -288,7 +303,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (password !== user.password) {
       return res.status(401).json({ 
         success: false, 
-        message: 'Invalid email or password' 
+        message: 'Invalid email/username or password' 
       });
     }
     
@@ -534,7 +549,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📍 Port: ${PORT}`);
   console.log(`🌐 URL: https://drink-quick-cal-kja1.onrender.com`);
   console.log(`🔐 Admin: /admin (password: ${ADMIN_PASSWORD})`);
-  console.log(`🔑 Login: POST /api/auth/login`);
+  console.log(`🔑 Login: POST /api/auth/login (accepts username OR email)`);
   console.log(`👤 Register: POST /api/auth/register`);
   console.log(`🍹 Drinks: GET /api/drinks`);
   console.log(`🧪 Test: GET /api/test`);
