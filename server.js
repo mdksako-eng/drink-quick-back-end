@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -17,6 +18,134 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Serve static files from 'public' directory
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ========== ADMIN ROUTES ==========
+// Simple password-based admin authentication
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+
+// Middleware to verify admin
+const verifyAdmin = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ 
+      success: false,
+      message: 'Unauthorized - No token provided' 
+    });
+  }
+  
+  const token = authHeader.split(' ')[1];
+  
+  // Simple token check
+  if (token === ADMIN_PASSWORD) {
+    next();
+  } else {
+    res.status(403).json({ 
+      success: false,
+      message: 'Invalid admin credentials' 
+    });
+  }
+};
+
+// Admin API routes
+app.get('/api/admin/users', verifyAdmin, async (req, res) => {
+  try {
+    // Assuming you have a User model
+    const User = require('./models/User'); // Adjust path as needed
+    
+    const users = await User.find({}, '-password -__v').sort({ createdAt: -1 });
+    
+    res.json({
+      success: true,
+      count: users.length,
+      users: users
+    });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching users' 
+    });
+  }
+});
+
+app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
+  try {
+    const User = require('./models/User');
+    const deletedUser = await User.findByIdAndDelete(req.params.id);
+    
+    if (!deletedUser) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+    
+    res.json({ 
+      success: true,
+      message: 'User deleted successfully',
+      deletedUser: {
+        id: deletedUser._id,
+        name: deletedUser.name,
+        email: deletedUser.email
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error deleting user' 
+    });
+  }
+});
+
+// Admin stats endpoint
+app.get('/api/admin/stats', verifyAdmin, async (req, res) => {
+  try {
+    const User = require('./models/User');
+    const totalUsers = await User.countDocuments();
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const newToday = await User.countDocuments({ createdAt: { $gte: today } });
+    
+    res.json({
+      success: true,
+      totalUsers,
+      newToday,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching stats' 
+    });
+  }
+});
+
+// Serve admin panel at /admin route
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// Admin info endpoint (no auth required)
+app.get('/api/admin/info', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Admin panel available at /admin',
+    requiresPassword: true,
+    endpoints: {
+      users: 'GET /api/admin/users',
+      deleteUser: 'DELETE /api/admin/users/:id',
+      stats: 'GET /api/admin/stats'
+    }
+  });
+});
+
+// ========== EXISTING ROUTES ==========
+
 // Test route
 app.get('/', (req, res) => {
     res.json({ 
@@ -28,7 +157,9 @@ app.get('/', (req, res) => {
             '/api/auth/*',
             '/api/drinks/*',
             '/health',
-            '/api/test'
+            '/api/test',
+            '/admin - User management panel',
+            '/api/admin/* - Admin API'
         ]
     });
 });
@@ -40,11 +171,12 @@ app.get('/health', (req, res) => {
         status: 'OK',
         database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
         uptime: process.uptime(),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        adminPanel: '/admin'
     });
 });
 
-// ========== LOAD ROUTES ==========
+// ========== LOAD YOUR EXISTING ROUTES ==========
 
 // Auth routes
 try {
@@ -91,7 +223,10 @@ app.get('/api/test', (req, res) => {
             'GET /api/auth/me',
             'POST /api/auth/logout',
             'GET /api/drinks',
-            'GET /health'
+            '/health',
+            '/admin - Admin panel',
+            'GET /api/admin/users',
+            'GET /api/admin/stats'
         ]
     });
 });
@@ -139,7 +274,8 @@ app.use((req, res) => {
             'POST /api/auth/login',
             'GET /api/auth/me',
             'GET /api/drinks',
-            'GET /health'
+            '/health',
+            '/admin - Admin panel'
         ]
     });
 });
@@ -149,8 +285,9 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🌐 Local: http://localhost:${PORT}`);
     console.log(`📊 Health: http://localhost:${PORT}/health`);
+    console.log(`🔐 Admin Panel: http://localhost:${PORT}/admin`);
+    console.log(`👥 Admin API: http://localhost:${PORT}/api/admin/users`);
     console.log(`👤 Auth test: http://localhost:${PORT}/api/auth/test`);
     console.log(`🍹 Drinks: http://localhost:${PORT}/api/drinks`);
-    console.log(`🔄 Test endpoint: http://localhost:${PORT}/api/test`);
+    console.log(`🔧 Admin password: ${ADMIN_PASSWORD || 'Not set (default: admin123)'}`);
 });
-
