@@ -35,10 +35,10 @@ const pool = new Pool({
     
     // Add missing columns if they don't exist
     const columnsToAdd = [
-      { name: 'profile_image', type: 'TEXT DEFAULT ''''', check: 'profile_image' },
-      { name: 'is_active', type: 'BOOLEAN DEFAULT TRUE', check: 'is_active' },
-      { name: 'email_verified', type: 'BOOLEAN DEFAULT FALSE', check: 'email_verified' },
-      { name: 'last_login', type: 'TIMESTAMP', check: 'last_login' }
+      { name: 'profile_image', type: 'TEXT', defaultValue: "''", check: 'profile_image' },
+      { name: 'is_active', type: 'BOOLEAN', defaultValue: 'TRUE', check: 'is_active' },
+      { name: 'email_verified', type: 'BOOLEAN', defaultValue: 'FALSE', check: 'email_verified' },
+      { name: 'last_login', type: 'TIMESTAMP', defaultValue: 'NULL', check: 'last_login' }
     ];
     
     for (const column of columnsToAdd) {
@@ -48,7 +48,8 @@ const pool = new Pool({
         console.log(`✅ Column ${column.name} already exists`);
       } catch (err) {
         if (err.code === '42703') { // Column doesn't exist error
-          await pool.query(`ALTER TABLE users ADD COLUMN ${column.name} ${column.type}`);
+          const alterQuery = `ALTER TABLE users ADD COLUMN ${column.name} ${column.type} DEFAULT ${column.defaultValue}`;
+          await pool.query(alterQuery);
           console.log(`✅ Added column: ${column.name}`);
         } else {
           console.log(`⚠️  Column ${column.name}: ${err.message}`);
