@@ -371,6 +371,74 @@ app.post('/api/auth/logout', (req, res) => {
   });
 });
 
+// ========== ADD MISSING ROUTES FOR FLUTTER APP ==========
+
+// 1. /api/test endpoint (your Flutter app checks this)
+app.get('/api/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'API test endpoint',
+    working: true,
+    timestamp: new Date().toISOString(),
+    availableEndpoints: [
+      'POST /api/auth/register',
+      'POST /api/auth/login',
+      'GET /api/auth/me',
+      'POST /api/auth/logout',
+      'GET /api/drinks',
+      '/health',
+      '/admin'
+    ]
+  });
+});
+
+// 2. /api/drinks endpoint (your Flutter app needs this)
+app.get('/api/drinks', (req, res) => {
+  res.json({
+    success: true,
+    count: 4,
+    drinks: [
+      { 
+        id: 1, 
+        name: 'Mojito', 
+        category: 'Cocktail', 
+        price: 8.99,
+        ingredients: ['Rum', 'Mint', 'Lime', 'Sugar', 'Soda']
+      },
+      { 
+        id: 2, 
+        name: 'Margarita', 
+        category: 'Cocktail', 
+        price: 9.99,
+        ingredients: ['Tequila', 'Triple Sec', 'Lime Juice']
+      },
+      { 
+        id: 3, 
+        name: 'Beer', 
+        category: 'Beer', 
+        price: 5.99,
+        ingredients: ['Barley', 'Hops', 'Water', 'Yeast']
+      },
+      { 
+        id: 4, 
+        name: 'Wine', 
+        category: 'Wine', 
+        price: 7.99,
+        ingredients: ['Grapes', 'Yeast']
+      }
+    ]
+  });
+});
+
+// 3. Quick ping endpoint to wake up server
+app.get('/api/ping', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'pong',
+    timestamp: Date.now() 
+  });
+});
+
 // ========== BASIC ROUTES ==========
 
 // Home page
@@ -378,10 +446,17 @@ app.get('/', (req, res) => {
   res.json({ 
     success: true, 
     message: 'DrinkQuick API 🍹',
-    database: 'PostgreSQL on Render',
-    admin: '/admin',
-    register: 'POST /api/auth/register',
-    login: 'POST /api/auth/login'
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    endpoints: [
+      'POST /api/auth/register',
+      'POST /api/auth/login',
+      'GET /api/auth/me',
+      'POST /api/auth/logout',
+      'GET /api/drinks',
+      '/health',
+      '/admin'
+    ]
   });
 });
 
@@ -444,7 +519,10 @@ app.use((req, res) => {
       '/api/auth/register',
       '/api/auth/login',
       '/api/auth/me',
-      '/api/auth/logout'
+      '/api/auth/logout',
+      '/api/test',
+      '/api/drinks',
+      '/api/ping'
     ]
   });
 });
@@ -458,6 +536,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🔐 Admin: /admin (password: ${ADMIN_PASSWORD})`);
   console.log(`🔑 Login: POST /api/auth/login`);
   console.log(`👤 Register: POST /api/auth/register`);
+  console.log(`🍹 Drinks: GET /api/drinks`);
+  console.log(`🧪 Test: GET /api/test`);
   console.log(`🗄️  Database: PostgreSQL`);
   console.log('========================================\n');
 });
