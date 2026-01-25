@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
@@ -8,7 +7,7 @@ const app = express();
 
 // CORS Configuration
 const corsOptions = {
-    origin: '*', // Allow all for testing
+    origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true,
@@ -49,18 +48,97 @@ const verifyAdmin = (req, res, next) => {
   }
 };
 
-// Admin API routes
-app.get('/api/admin/users', verifyAdmin, async (req, res) => {
+// Mock user data
+const mockUsers = [
+  { 
+    _id: '1', 
+    username: 'Admin User',
+    name: 'Admin User',
+    email: 'admin@drinkquick.com', 
+    createdAt: new Date('2024-01-20T10:30:00Z'), 
+    updatedAt: new Date('2024-01-25T14:20:00Z'),
+    isAdmin: true,
+    role: 'Administrator',
+    isActive: true,
+    emailVerified: true,
+    lastLogin: new Date('2024-01-25T14:15:00Z'),
+    profileImage: 'https://i.pravatar.cc/150?img=1'
+  },
+  { 
+    _id: '2', 
+    username: 'John Doe',
+    name: 'John Doe',
+    email: 'john@example.com', 
+    createdAt: new Date('2024-01-22T11:45:00Z'), 
+    updatedAt: new Date('2024-01-24T09:10:00Z'),
+    isAdmin: false,
+    role: 'Customer',
+    isActive: true,
+    emailVerified: true,
+    lastLogin: new Date('2024-01-24T09:10:00Z'),
+    profileImage: 'https://i.pravatar.cc/150?img=2'
+  },
+  { 
+    _id: '3', 
+    username: 'Jane Smith',
+    name: 'Jane Smith',
+    email: 'jane@example.com', 
+    createdAt: new Date('2024-01-23T14:20:00Z'), 
+    updatedAt: new Date('2024-01-25T16:45:00Z'),
+    isAdmin: false,
+    role: 'Customer',
+    isActive: true,
+    emailVerified: false,
+    lastLogin: new Date('2024-01-25T16:45:00Z'),
+    profileImage: 'https://i.pravatar.cc/150?img=3'
+  },
+  { 
+    _id: '4', 
+    username: 'Manager Bob',
+    name: 'Manager Bob',
+    email: 'manager@drinkquick.com', 
+    createdAt: new Date('2024-01-24T08:15:00Z'), 
+    updatedAt: new Date('2024-01-25T12:30:00Z'),
+    isAdmin: false,
+    role: 'Manager',
+    isActive: true,
+    emailVerified: true,
+    lastLogin: new Date('2024-01-25T12:30:00Z'),
+    profileImage: 'https://i.pravatar.cc/150?img=4'
+  },
+  { 
+    _id: '5', 
+    username: 'Inactive User',
+    name: 'Inactive User',
+    email: 'inactive@example.com', 
+    createdAt: new Date('2024-01-10T09:00:00Z'), 
+    updatedAt: new Date('2024-01-20T11:00:00Z'),
+    isAdmin: false,
+    role: 'Customer',
+    isActive: false,
+    emailVerified: false,
+    lastLogin: new Date('2024-01-20T11:00:00Z'),
+    profileImage: ''
+  }
+];
+
+// Admin API routes with mock data
+app.get('/api/admin/users', verifyAdmin, (req, res) => {
   try {
-    // Assuming you have a User model
-    const User = require('./models/User'); // Adjust path as needed
-    
-    const users = await User.find({}, '-password -__v').sort({ createdAt: -1 });
+    // Optional: Filter by search query
+    const searchTerm = req.query.search?.toLowerCase() || '';
+    const filteredUsers = searchTerm 
+      ? mockUsers.filter(user => 
+          user.name.toLowerCase().includes(searchTerm) ||
+          user.email.toLowerCase().includes(searchTerm) ||
+          user.role.toLowerCase().includes(searchTerm)
+        )
+      : mockUsers;
     
     res.json({
       success: true,
-      count: users.length,
-      users: users
+      count: filteredUsers.length,
+      users: filteredUsers
     });
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -71,17 +149,20 @@ app.get('/api/admin/users', verifyAdmin, async (req, res) => {
   }
 });
 
-app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
+app.delete('/api/admin/users/:id', verifyAdmin, (req, res) => {
   try {
-    const User = require('./models/User');
-    const deletedUser = await User.findByIdAndDelete(req.params.id);
+    const userId = req.params.id;
+    const userIndex = mockUsers.findIndex(user => user._id === userId);
     
-    if (!deletedUser) {
+    if (userIndex === -1) {
       return res.status(404).json({ 
         success: false,
         message: 'User not found' 
       });
     }
+    
+    const deletedUser = mockUsers[userIndex];
+    mockUsers.splice(userIndex, 1);
     
     res.json({ 
       success: true,
@@ -89,7 +170,8 @@ app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
       deletedUser: {
         id: deletedUser._id,
         name: deletedUser.name,
-        email: deletedUser.email
+        email: deletedUser.email,
+        role: deletedUser.role
       }
     });
   } catch (error) {
@@ -101,23 +183,37 @@ app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
   }
 });
 
-// Admin stats endpoint
-app.get('/api/admin/stats', verifyAdmin, async (req, res) => {
+// Admin stats endpoint with mock data
+app.get('/api/admin/stats', verifyAdmin, (req, res) => {
   try {
-    const User = require('./models/User');
-    const totalUsers = await User.countDocuments();
-    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const newToday = await User.countDocuments({ createdAt: { $gte: today } });
+    
+    const newToday = mockUsers.filter(user => 
+      new Date(user.createdAt) >= today
+    ).length;
+    
+    // Count by role
+    const roleCounts = {};
+    mockUsers.forEach(user => {
+      roleCounts[user.role] = (roleCounts[user.role] || 0) + 1;
+    });
+    
+    // Count active/inactive
+    const activeUsers = mockUsers.filter(user => user.isActive).length;
+    const verifiedUsers = mockUsers.filter(user => user.emailVerified).length;
     
     res.json({
       success: true,
-      totalUsers,
+      totalUsers: mockUsers.length,
       newToday,
+      activeUsers,
+      verifiedUsers,
+      roleCounts,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
+    console.error('Error fetching stats:', error);
     res.status(500).json({ 
       success: false,
       message: 'Server error fetching stats' 
@@ -164,12 +260,12 @@ app.get('/', (req, res) => {
     });
 });
 
-// Health check
+// Health check (without MongoDB)
 app.get('/health', (req, res) => {
     res.status(200).json({ 
         success: true,
         status: 'OK',
-        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        database: 'mock_data_mode',
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
         adminPanel: '/admin'
@@ -178,34 +274,40 @@ app.get('/health', (req, res) => {
 
 // ========== LOAD YOUR EXISTING ROUTES ==========
 
-// Auth routes
+// Auth routes (mock version to avoid errors)
 try {
     const authRoutes = require('./routes/auth.routes');
     app.use('/api/auth', authRoutes);
     console.log('✅ Auth routes loaded successfully');
 } catch (error) {
     console.error('❌ Failed to load auth routes:', error.message);
-    // Provide a fallback auth route
+    // Provide a mock auth route
     app.use('/api/auth', (req, res) => {
-        res.status(503).json({ 
-            success: false,
-            message: 'Auth routes temporarily unavailable'
+        res.status(200).json({ 
+            success: true,
+            message: 'Auth API (mock mode)',
+            endpoints: ['/register', '/login', '/logout', '/me']
         });
     });
 }
 
-// Drink routes
+// Drink routes (mock version to avoid errors)
 try {
     const drinkRoutes = require('./routes/drink.routes');
     app.use('/api/drinks', drinkRoutes);
     console.log('✅ Drink routes loaded successfully');
 } catch (error) {
     console.error('❌ Failed to load drink routes:', error.message);
-    // Provide a fallback route
+    // Provide a mock drink route
     app.use('/api/drinks', (req, res) => {
-        res.status(503).json({ 
-            success: false,
-            message: 'Drink routes temporarily unavailable'
+        res.status(200).json({ 
+            success: true,
+            message: 'Drinks API (mock mode)',
+            drinks: [
+                { id: 1, name: 'Mojito', category: 'Cocktail', price: 8.99 },
+                { id: 2, name: 'Margarita', category: 'Cocktail', price: 9.99 },
+                { id: 3, name: 'Beer', category: 'Beer', price: 5.99 }
+            ]
         });
     });
 }
@@ -231,27 +333,6 @@ app.get('/api/test', (req, res) => {
     });
 });
 
-// MongoDB connection
-const connectDB = async () => {
-    try {
-        const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/drinkquick';
-        if (MONGODB_URI && !MONGODB_URI.includes('localhost')) {
-            await mongoose.connect(MONGODB_URI, {
-                useNewUrlParser: true,
-                useUnifiedTopology: true,
-            });
-            console.log('✅ MongoDB Connected');
-        } else {
-            console.log('⚠️  Running without MongoDB (test mode)');
-        }
-    } catch (error) {
-        console.error('❌ MongoDB Connection Failed:', error.message);
-        console.log('⚠️  Starting without database connection');
-    }
-};
-
-connectDB();
-
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('🚨 Server Error:', err.stack);
@@ -270,12 +351,11 @@ app.use((req, res) => {
         path: req.originalUrl,
         method: req.method,
         suggestions: [
-            'POST /api/auth/register',
-            'POST /api/auth/login',
-            'GET /api/auth/me',
-            'GET /api/drinks',
+            '/',
             '/health',
-            '/admin - Admin panel'
+            '/admin',
+            '/api/test',
+            '/api/admin/info'
         ]
     });
 });
@@ -290,4 +370,5 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`👤 Auth test: http://localhost:${PORT}/api/auth/test`);
     console.log(`🍹 Drinks: http://localhost:${PORT}/api/drinks`);
     console.log(`🔧 Admin password: ${ADMIN_PASSWORD || 'Not set (default: admin123)'}`);
+    console.log(`📱 Mode: Using mock data (no MongoDB connection)`);
 });
