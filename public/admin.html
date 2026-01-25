@@ -1,975 +1,322 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DrinkQuick - User Management Admin</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>DrinkQuick Admin</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            overflow: hidden;
-        }
-        
-        header {
-            background: linear-gradient(to right, #4a00e0, #8e2de2);
-            color: white;
-            padding: 25px 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        
-        .logo i {
-            font-size: 2em;
-        }
-        
-        .logo h1 {
-            font-size: 1.8em;
-            font-weight: 600;
-        }
-        
-        .logo .subtitle {
-            font-size: 0.9em;
-            opacity: 0.9;
-            margin-top: 5px;
-        }
-        
-        .stats {
-            display: flex;
-            gap: 20px;
-        }
-        
-        .stat-box {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 12px 20px;
-            border-radius: 10px;
-            text-align: center;
-            min-width: 120px;
-        }
-        
-        .stat-number {
-            font-size: 1.8em;
-            font-weight: 700;
-            margin-bottom: 5px;
-        }
-        
-        .stat-label {
-            font-size: 0.9em;
-            opacity: 0.9;
-        }
-        
-        .content {
-            padding: 30px;
-        }
-        
-        .auth-section {
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            border: 1px solid #eaeaea;
-        }
-        
-        .auth-section h2 {
-            color: #333;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .auth-section h2 i {
-            color: #4a00e0;
-        }
-        
-        .password-input {
-            display: flex;
-            gap: 10px;
-            max-width: 500px;
-        }
-        
-        .password-input input {
-            flex: 1;
-            padding: 14px 20px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 1em;
-            transition: border 0.3s;
-        }
-        
-        .password-input input:focus {
-            outline: none;
-            border-color: #4a00e0;
-        }
-        
-        .password-input button {
-            background: linear-gradient(to right, #4a00e0, #8e2de2);
-            color: white;
-            border: none;
-            padding: 0 30px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 1em;
-            transition: transform 0.2s;
-        }
-        
-        .password-input button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(74, 0, 224, 0.3);
-        }
-        
-        .controls {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        
-        .search-box {
-            padding: 12px 20px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            width: 300px;
-            font-size: 1em;
-        }
-        
-        .actions {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s;
-        }
-        
-        .btn-primary {
-            background: #4a00e0;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #3a00b0;
-            transform: translateY(-2px);
-        }
-        
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-        
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
-        
-        .btn-danger {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .btn-danger:hover {
-            background: #c82333;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        
-        th {
-            background: #f8f9fa;
-            padding: 18px 15px;
-            text-align: left;
-            font-weight: 600;
-            color: #495057;
-            border-bottom: 2px solid #dee2e6;
-        }
-        
-        td {
-            padding: 18px 15px;
-            border-bottom: 1px solid #eaeaea;
-            color: #333;
-        }
-        
-        tr:hover {
-            background: #f8f9fa;
-        }
-        
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-        }
-        
-        .actions-cell {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .delete-btn {
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9em;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            transition: background 0.3s;
-        }
-        
-        .delete-btn:hover {
-            background: #c82333;
-        }
-        
-        .view-btn {
-            background: #17a2b8;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9em;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            transition: background 0.3s;
-        }
-        
-        .view-btn:hover {
-            background: #138496;
-        }
-        
-        .message {
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-        
-        .success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-            display: none;
-        }
-        
-        .loading i {
-            font-size: 2em;
-            margin-bottom: 10px;
-            color: #4a00e0;
-        }
-        
-        .user-details {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin: 20px 0;
-            display: none;
-        }
-        
-        .user-details-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-        
-        .detail-item {
-            padding: 10px;
-            background: white;
-            border-radius: 8px;
-            border: 1px solid #eaeaea;
-        }
-        
-        .detail-label {
-            font-weight: 600;
-            color: #666;
-            font-size: 0.9em;
-            margin-bottom: 5px;
-        }
-        
-        .detail-value {
-            font-size: 1.1em;
-            color: #333;
-            word-break: break-all;
-        }
-        
-        footer {
-            text-align: center;
-            padding: 20px;
-            color: #666;
-            border-top: 1px solid #eaeaea;
-            margin-top: 30px;
-        }
-        
-        .api-info {
-            background: #e7f3ff;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-            font-size: 0.9em;
-        }
-        
-        .api-info code {
-            background: #d1e7ff;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: monospace;
-        }
-        
-        @media (max-width: 768px) {
-            header {
-                flex-direction: column;
-                gap: 20px;
-                text-align: center;
-            }
-            .stats {
-                flex-direction: column;
-                gap: 10px;
-                width: 100%;
-            }
-            .stat-box {
-                min-width: 100%;
-            }
-            .controls {
-                flex-direction: column;
-                gap: 15px;
-                align-items: stretch;
-            }
-            .search-box {
-                width: 100%;
-            }
-            .actions {
-                justify-content: center;
-            }
-            table {
-                display: block;
-                overflow-x: auto;
-            }
-            .password-input {
-                flex-direction: column;
-            }
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+        body { background: #f0f2f5; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        header { background: #4a00e0; color: white; padding: 20px; border-radius: 10px 10px 0 0; }
+        .content { padding: 30px; }
+        .auth-section { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #dee2e6; }
+        .password-input { display: flex; gap: 10px; margin-top: 10px; }
+        .password-input input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        .password-input button { padding: 10px 20px; background: #4a00e0; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .message { padding: 10px; margin: 10px 0; border-radius: 5px; display: none; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .loading { text-align: center; padding: 20px; display: none; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; }
+        .delete-btn { background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+        .stats { display: flex; gap: 20px; margin-bottom: 20px; }
+        .stat-box { flex: 1; background: white; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; text-align: center; }
+        .stat-number { font-size: 24px; font-weight: bold; }
     </style>
 </head>
-
 <body>
     <div class="container">
         <header>
-            <div class="logo">
-                <div>
-                    <i class="fas fa-beer"></i>
-                </div>
-                <div>
-                    <h1>DrinkQuick Admin</h1>
-                    <div class="subtitle">User Management Panel</div>
-                </div>
-            </div>
-            <div class="stats">
-                <div class="stat-box">
-                    <div class="stat-number" id="totalUsers">0</div>
-                    <div class="stat-label">Total Users</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-number" id="newToday">0</div>
-                    <div class="stat-label">New Today</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-number" id="apiStatus">✓</div>
-                    <div class="stat-label">API Status</div>
-                </div>
-            </div>
+            <h1>DrinkQuick Admin Panel</h1>
+            <p>Manage users and view statistics</p>
         </header>
-
+        
         <div class="content">
             <div class="auth-section">
-                <h2><i class="fas fa-lock"></i> Admin Authentication</h2>
-                <p style="margin-bottom: 15px; color: #666;">
-                    Enter your admin password to access user management features.
-                    <br><small>Set the ADMIN_PASSWORD environment variable in your Render dashboard.</small>
-                </p>
+                <h2>Admin Login</h2>
+                <p>Default password: <code>admin123</code> (or check Render environment variables)</p>
                 <div class="password-input">
-                    <input type="password" id="adminPassword" placeholder="Enter admin password">
-                    <button id="loginBtn">
-                        <i class="fas fa-sign-in-alt"></i> Authenticate
-                    </button>
+                    <input type="password" id="adminPassword" placeholder="Enter admin password" value="admin123">
+                    <button id="loginBtn">Login</button>
                 </div>
             </div>
-
+            
             <div id="message" class="message"></div>
-
-            <div class="loading" id="loading">
-                <i class="fas fa-spinner fa-spin"></i>
-                <p>Loading users...</p>
-            </div>
-
+            <div id="loading" class="loading">Loading...</div>
+            
             <div id="adminPanel" style="display: none;">
-                <div class="api-info">
-                    <i class="fas fa-info-circle"></i> API Endpoints:
-                    <code>GET /api/admin/users</code> •
-                    <code>DELETE /api/admin/users/:id</code> •
-                    <code>GET /api/admin/stats</code>
-                </div>
-
-                <div class="controls">
-                    <input type="text" class="search-box" id="searchInput" placeholder="Search by name, email, or ID...">
-                    <div class="actions">
-                        <button class="btn btn-secondary" id="refreshBtn" title="Refresh users">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
-                        <button class="btn btn-primary" id="loadUsersBtn">
-                            <i class="fas fa-users"></i> Load Users
-                        </button>
-                        <button class="btn btn-danger" id="logoutBtn" title="Logout from admin">
-                            <i class="fas fa-sign-out-alt"></i> Logout
-                        </button>
+                <div class="stats">
+                    <div class="stat-box">
+                        <div class="stat-number" id="totalUsers">0</div>
+                        <div>Total Users</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="newToday">0</div>
+                        <div>New Today</div>
                     </div>
                 </div>
-
-                <div id="userDetailsPanel" class="user-details">
-                    <h3><i class="fas fa-user"></i> User Details</h3>
-                    <div id="userDetailsContent" class="user-details-grid">
-                        <!-- User details will be loaded here -->
-                    </div>
-                    <button class="btn btn-secondary" id="closeDetailsBtn" style="margin-top: 15px;">
-                        <i class="fas fa-times"></i> Close Details
+                
+                <div style="margin: 20px 0;">
+                    <button id="loadUsersBtn" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Load Users
+                    </button>
+                    <button id="refreshBtn" style="padding: 10px 20px; background: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
+                        Refresh
                     </button>
                 </div>
-
-                <table>
+                
+                <table id="usersTable">
                     <thead>
                         <tr>
-                            <th>User</th>
+                            <th>Name</th>
                             <th>Email</th>
-                            <th>Joined Date</th>
-                            <th>Status</th>
+                            <th>Role</th>
+                            <th>Joined</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="usersTableBody">
-                        <!-- Users will be loaded here -->
+                        <!-- Users will appear here -->
                     </tbody>
                 </table>
-
-                <div id="noUsers" style="text-align: center; padding: 40px; color: #666; display: none;">
-                    <i class="fas fa-user-slash" style="font-size: 3em; margin-bottom: 15px; color: #ccc;"></i>
-                    <h3>No users found</h3>
-                    <p>Click "Load Users" to fetch user data</p>
-                </div>
-
-                <div id="pagination" style="text-align: center; margin-top: 20px; display: none;">
-                    <button class="btn btn-secondary" id="prevPageBtn">
-                        <i class="fas fa-chevron-left"></i> Previous
-                    </button>
-                    <span style="margin: 0 15px;" id="pageInfo">Page 1</span>
-                    <button class="btn btn-secondary" id="nextPageBtn">
-                        Next <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
             </div>
         </div>
-
-        <footer>
-            <p>DrinkQuick Admin Panel • Secure Access Only • <span id="apiUrl"></span></p>
-            <p style="font-size: 0.9em; margin-top: 10px; color: #999;">
-                <i class="fas fa-shield-alt"></i> All actions are logged and require authentication
-            </p>
-        </footer>
     </div>
 
     <script>
-        // Configuration
+        // Simple, reliable admin panel script
         const API_BASE = window.location.origin;
-        const API_ENDPOINTS = {
-            USERS: `${API_BASE}/api/admin/users`,
-            STATS: `${API_BASE}/api/admin/stats`
+        let adminPassword = 'admin123';
+        let usersData = [];
+
+        // DOM elements
+        const elements = {
+            passwordInput: document.getElementById('adminPassword'),
+            loginBtn: document.getElementById('loginBtn'),
+            adminPanel: document.getElementById('adminPanel'),
+            loadUsersBtn: document.getElementById('loadUsersBtn'),
+            refreshBtn: document.getElementById('refreshBtn'),
+            loading: document.getElementById('loading'),
+            message: document.getElementById('message'),
+            usersTableBody: document.getElementById('usersTableBody'),
+            totalUsers: document.getElementById('totalUsers'),
+            newToday: document.getElementById('newToday')
         };
 
-        let currentPassword = '';
-        let usersData = [];
-        let selectedUser = null;
-
-        // DOM Elements
-        const adminPasswordInput = document.getElementById('adminPassword');
-        const loginBtn = document.getElementById('loginBtn');
-        const adminPanel = document.getElementById('adminPanel');
-        const loadUsersBtn = document.getElementById('loadUsersBtn');
-        const refreshBtn = document.getElementById('refreshBtn');
-        const logoutBtn = document.getElementById('logoutBtn');
-        const searchInput = document.getElementById('searchInput');
-        const usersTableBody = document.getElementById('usersTableBody');
-        const loading = document.getElementById('loading');
-        const message = document.getElementById('message');
-        const noUsers = document.getElementById('noUsers');
-        const totalUsersEl = document.getElementById('totalUsers');
-        const newTodayEl = document.getElementById('newToday');
-        const apiStatusEl = document.getElementById('apiStatus');
-        const apiUrlEl = document.getElementById('apiUrl');
-        const userDetailsPanel = document.getElementById('userDetailsPanel');
-        const userDetailsContent = document.getElementById('userDetailsContent');
-        const closeDetailsBtn = document.getElementById('closeDetailsBtn');
-
         // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            apiUrlEl.textContent = API_BASE;
-            checkAPIStatus();
-
-            // Auto-login from URL parameter
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Admin panel loaded. API Base:', API_BASE);
+            
+            // Set up event listeners
+            elements.loginBtn.addEventListener('click', login);
+            elements.loadUsersBtn.addEventListener('click', loadUsers);
+            elements.refreshBtn.addEventListener('click', loadUsers);
+            
+            // Auto-login if token in URL
             const urlParams = new URLSearchParams(window.location.search);
             const token = urlParams.get('token');
-
             if (token) {
-                adminPasswordInput.value = token;
-                setTimeout(() => authenticate(), 500);
+                elements.passwordInput.value = token;
+                setTimeout(login, 500);
             }
-
-            // Clear token from URL for security
-            if (window.history.replaceState && token) {
-                const cleanUrl = window.location.pathname + window.location.search.replace(/token=[^&]*&?/, '').replace(/&$/, '').replace(/\?$/, '');
-                window.history.replaceState({}, document.title, cleanUrl);
-            }
+            
+            // Also allow Enter key to login
+            elements.passwordInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') login();
+            });
         });
 
-        // Event Listeners
-        loginBtn.addEventListener('click', authenticate);
-        adminPasswordInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') authenticate();
-        });
-
-        loadUsersBtn.addEventListener('click', loadUsers);
-        refreshBtn.addEventListener('click', loadUsers);
-
-        logoutBtn.addEventListener('click', () => {
-            currentPassword = '';
-            adminPasswordInput.value = '';
-            adminPanel.style.display = 'none';
-            showMessage('Logged out successfully', 'info');
-        });
-
-        closeDetailsBtn.addEventListener('click', () => {
-            userDetailsPanel.style.display = 'none';
-        });
-
-        // Check API status
-        async function checkAPIStatus() {
-            try {
-                const response = await fetch(`${API_BASE}/health`, {
-                    timeout: 5000
-                });
-                if (response.ok) {
-                    apiStatusEl.innerHTML = '✓';
-                    apiStatusEl.style.color = '#28a745';
-                } else {
-                    apiStatusEl.innerHTML = '✗';
-                    apiStatusEl.style.color = '#dc3545';
-                }
-            } catch (error) {
-                apiStatusEl.innerHTML = '✗';
-                apiStatusEl.style.color = '#dc3545';
-                console.warn('API status check failed:', error);
-            }
+        function showMessage(text, type = 'success') {
+            elements.message.textContent = text;
+            elements.message.className = 'message ' + type;
+            elements.message.style.display = 'block';
+            setTimeout(() => {
+                elements.message.style.display = 'none';
+            }, 5000);
         }
 
-        // Show message
-        function showMessage(text, type = 'success', duration = 5000) {
-            message.textContent = text;
-            message.className = `message ${type}`;
-            message.style.display = 'block';
-
-            if (duration > 0) {
-                setTimeout(() => {
-                    message.style.display = 'none';
-                }, duration);
-            }
+        function showLoading(show) {
+            elements.loading.style.display = show ? 'block' : 'none';
         }
 
-        // Login/Authenticate
-        function authenticate() {
-            currentPassword = adminPasswordInput.value.trim();
-
-            if (!currentPassword) {
+        async function login() {
+            adminPassword = elements.passwordInput.value.trim();
+            if (!adminPassword) {
                 showMessage('Please enter admin password', 'error');
                 return;
             }
-
-            // Test authentication by fetching stats
-            fetchStats();
-        }
-
-        // Fetch user statistics
-        async function fetchStats() {
+            
+            showMessage('Authenticating...', 'success');
+            
             try {
-                showMessage('Authenticating...', 'info', 0);
-
-                const response = await fetch(API_ENDPOINTS.STATS, {
+                // Test with stats endpoint first
+                const response = await fetch(API_BASE + '/api/admin/stats', {
                     headers: {
-                        'Authorization': `Bearer ${currentPassword}`,
+                        'Authorization': 'Bearer ' + adminPassword,
                         'Content-Type': 'application/json'
                     }
                 });
-
-                if (response.ok) {
-                    const stats = await response.json();
-                    totalUsersEl.textContent = stats.totalUsers || 0;
-                    newTodayEl.textContent = stats.newToday || 0;
-
-                    // Show admin panel
-                    adminPanel.style.display = 'block';
-                    showMessage('Authentication successful!', 'success');
-
-                    // Auto-load users after 1 second
-                    setTimeout(() => loadUsers(), 1000);
-
-                } else {
-                    const error = await response.json();
-                    showMessage(`Authentication failed: ${error.message || 'Invalid password'}`, 'error');
-                    adminPanel.style.display = 'none';
-                }
-            } catch (error) {
-                console.error('Auth error:', error);
-                showMessage('Connection error. Check your network and API URL.', 'error');
-            }
-        }
-
-        // Load users
-        async function loadUsers() {
-            loading.style.display = 'block';
-            usersTableBody.innerHTML = '';
-            noUsers.style.display = 'none';
-            userDetailsPanel.style.display = 'none';
-
-            try {
-                const response = await fetch(API_ENDPOINTS.USERS, {
-                    headers: {
-                        'Authorization': `Bearer ${currentPassword}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-
+                
+                console.log('Login response status:', response.status);
+                
                 if (response.ok) {
                     const data = await response.json();
-                    usersData = data.users || data || [];
-                    displayUsers(usersData);
-
-                    if (usersData.length === 0) {
-                        noUsers.style.display = 'block';
-                    }
-
-                    // Update stats
-                    fetchStats();
-
-                } else if (response.status === 401 || response.status === 403) {
-                    showMessage('Session expired. Please re-authenticate.', 'error');
-                    adminPanel.style.display = 'none';
+                    console.log('Stats data:', data);
+                    elements.totalUsers.textContent = data.totalUsers || 0;
+                    elements.newToday.textContent = data.newToday || 0;
+                    elements.adminPanel.style.display = 'block';
+                    showMessage('Login successful!', 'success');
+                    
+                    // Auto-load users after successful login
+                    setTimeout(loadUsers, 1000);
                 } else {
-                    const error = await response.json();
-                    showMessage(`Failed to load users: ${error.message}`, 'error');
+                    const error = await response.text();
+                    console.error('Login failed:', error);
+                    showMessage('Login failed. Check password.', 'error');
                 }
             } catch (error) {
-                console.error('Error loading users:', error);
-                showMessage('Error loading users. Check API connection.', 'error');
-            } finally {
-                loading.style.display = 'none';
+                console.error('Login error:', error);
+                showMessage('Network error. Is the server running?', 'error');
             }
         }
 
-        // Display users in table
-        function displayUsers(users) {
-            usersTableBody.innerHTML = '';
+        async function loadUsers() {
+            showLoading(true);
+            elements.usersTableBody.innerHTML = '';
+            
+            try {
+                console.log('Loading users with password:', adminPassword.substring(0, 3) + '...');
+                
+                const response = await fetch(API_BASE + '/api/admin/users', {
+                    headers: {
+                        'Authorization': 'Bearer ' + adminPassword,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                console.log('Users response status:', response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Users data received:', data);
+                    usersData = data.users || [];
+                    
+                    if (usersData.length === 0) {
+                        elements.usersTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">No users found</td></tr>';
+                        showMessage('No users in database', 'info');
+                    } else {
+                        displayUsers(usersData);
+                        showMessage('Loaded ' + usersData.length + ' users', 'success');
+                    }
+                    
+                    // Update stats
+                    updateStats();
+                } else {
+                    const error = await response.text();
+                    console.error('Failed to load users:', error);
+                    showMessage('Failed to load users', 'error');
+                }
+            } catch (error) {
+                console.error('Load users error:', error);
+                showMessage('Error loading users: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
 
+        function displayUsers(users) {
+            elements.usersTableBody.innerHTML = '';
+            
             users.forEach(user => {
                 const row = document.createElement('tr');
-                const initials = user.name ? user.name.charAt(0).toUpperCase() : 'U';
-                const joinDate = user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                }) : 'N/A';
-
-                // Calculate account age
-                let accountAge = 'N/A';
+                
+                // Format date
+                let joinDate = 'N/A';
                 if (user.createdAt) {
-                    const created = new Date(user.createdAt);
-                    const now = new Date();
-                    const diffTime = Math.abs(now - created);
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    accountAge = `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+                    const date = new Date(user.createdAt);
+                    joinDate = date.toLocaleDateString();
                 }
-
+                
+                // Get user initials for avatar
+                const initials = user.name ? user.name.charAt(0).toUpperCase() : 'U';
+                
                 row.innerHTML = `
                     <td>
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <div class="user-avatar" style="background: linear-gradient(135deg, #${user._id ? user._id.substr(-6) : '667eea'} 0%, #${user._id ? user._id.substr(-3) : '764ba2'} 100%);">
+                            <div style="width: 40px; height: 40px; background: #4a00e0; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">
                                 ${initials}
                             </div>
                             <div>
-                                <strong>${user.name || 'Unnamed User'}</strong>
-                                <div style="font-size: 0.8em; color: #666;">
-                                    ID: ${user._id ? user._id.substring(0, 8) + '...' : 'N/A'}
-                                </div>
+                                <strong>${user.name || 'Unknown'}</strong>
+                                ${user.isAdmin ? '<br><small style="color: #4a00e0;">Admin</small>' : ''}
                             </div>
                         </div>
                     </td>
+                    <td>${user.email || 'No email'}</td>
+                    <td>${user.role || 'Customer'}</td>
+                    <td>${joinDate}</td>
                     <td>
-                        ${user.email || 'No email'}
-                        ${user.emailVerified ? '<br><small style="color: #28a745;"><i class="fas fa-check-circle"></i> Verified</small>' : ''}
-                    </td>
-                    <td>
-                        ${joinDate}
-                        <br><small style="color: #666;">${accountAge} ago</small>
-                    </td>
-                    <td>
-                        ${user.isAdmin ? 
-                            '<span style="background: #4a00e0; color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.8em;"><i class="fas fa-crown"></i> Admin</span>' : 
-                            '<span style="background: #28a745; color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.8em;"><i class="fas fa-user"></i> User</span>'}
-                        ${user.isActive === false ? '<br><small style="color: #dc3545;"><i class="fas fa-ban"></i> Inactive</small>' : ''}
-                    </td>
-                    <td class="actions-cell">
-                        <button class="view-btn" onclick="viewUserDetails('${user._id}')" title="View details">
-                            <i class="fas fa-eye"></i> View
-                        </button>
-                        <button class="delete-btn" onclick="deleteUser('${user._id}', '${(user.name || user.email).replace(/'/g, "\\'")}')" title="Delete user">
-                            <i class="fas fa-trash"></i> Delete
+                        <button class="delete-btn" onclick="deleteUser('${user._id}', '${(user.name || user.email).replace(/'/g, "\\'")}')">
+                            Delete
                         </button>
                     </td>
                 `;
-
-                usersTableBody.appendChild(row);
+                
+                elements.usersTableBody.appendChild(row);
             });
         }
 
-        // View user details
-        async function viewUserDetails(userId) {
-            const user = usersData.find(u => u._id === userId);
-            if (!user) return;
-
-            selectedUser = user;
-            userDetailsContent.innerHTML = '';
-
-            // Format dates
-            const formatDate = (dateString) => {
-                if (!dateString) return 'N/A';
-                const date = new Date(dateString);
-                return date.toLocaleString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                });
-            };
-
-            // Create detail items
-            const details = [{
-                label: 'User ID',
-                value: user._id || 'N/A'
-            }, {
-                label: 'Full Name',
-                value: user.name || 'Not provided'
-            }, {
-                label: 'Email',
-                value: user.email || 'Not provided'
-            }, {
-                label: 'Account Created',
-                value: formatDate(user.createdAt)
-            }, {
-                label: 'Last Updated',
-                value: formatDate(user.updatedAt)
-            }, {
-                label: 'Admin Status',
-                value: user.isAdmin ? 'Administrator' : 'Regular User'
-            }, {
-                label: 'Account Status',
-                value: user.isActive === false ? 'Inactive' : 'Active'
-            }, {
-                label: 'Email Verified',
-                value: user.emailVerified ? 'Verified' : 'Not Verified'
-            }];
-
-            // Add any additional fields
-            Object.keys(user).forEach(key => {
-                if (!['_id', 'name', 'email', 'password', 'createdAt', 'updatedAt', 'isAdmin', 'isActive', 'emailVerified', '__v'].includes(key)) {
-                    if (typeof user[key] === 'object') {
-                        details.push({
-                            label: key,
-                            value: JSON.stringify(user[key], null, 2)
-                        });
-                    } else {
-                        details.push({
-                            label: key,
-                            value: String(user[key])
-                        });
-                    }
-                }
-            });
-
-            // Render details
-            details.forEach(detail => {
-                const detailItem = document.createElement('div');
-                detailItem.className = 'detail-item';
-                detailItem.innerHTML = `
-                    <div class="detail-label">${detail.label}</div>
-                    <div class="detail-value">${detail.value}</div>
-                `;
-                userDetailsContent.appendChild(detailItem);
-            });
-
-            userDetailsPanel.style.display = 'block';
-            userDetailsPanel.scrollIntoView({
-                behavior: 'smooth'
-            });
-        }
-
-        // Delete user
-        async function deleteUser(userId, userName) {
-            if (!confirm(`🚨 ARE YOU SURE?\n\nYou are about to delete user:\n"${userName}"\n\nThis action cannot be undone!`)) {
-                return;
-            }
-
+        async function updateStats() {
             try {
-                const response = await fetch(`${API_BASE}/api/admin/users/${userId}`, {
-                    method: 'DELETE',
+                const response = await fetch(API_BASE + '/api/admin/stats', {
                     headers: {
-                        'Authorization': `Bearer ${currentPassword}`,
+                        'Authorization': 'Bearer ' + adminPassword,
                         'Content-Type': 'application/json'
                     }
                 });
-
+                
                 if (response.ok) {
-                    const result = await response.json();
-                    showMessage(`User "${userName}" deleted successfully`, 'success');
-
-                    // Refresh the list
-                    loadUsers();
-                    fetchStats(); // Update stats
-
-                } else {
-                    const error = await response.json();
-                    showMessage(`Failed to delete: ${error.message}`, 'error');
+                    const data = await response.json();
+                    elements.totalUsers.textContent = data.totalUsers || 0;
+                    elements.newToday.textContent = data.newToday || 0;
                 }
             } catch (error) {
-                showMessage('Error deleting user. Check connection.', 'error');
+                console.error('Update stats error:', error);
             }
         }
 
-        // Search functionality
-        searchInput.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase().trim();
-
-            if (!searchTerm) {
-                displayUsers(usersData);
+        async function deleteUser(userId, userName) {
+            if (!confirm('Are you sure you want to delete user: ' + userName + '?')) {
                 return;
             }
-
-            const filteredUsers = usersData.filter(user =>
-                (user.name && user.name.toLowerCase().includes(searchTerm)) ||
-                (user.email && user.email.toLowerCase().includes(searchTerm)) ||
-                (user._id && user._id.toLowerCase().includes(searchTerm))
-            );
-
-            displayUsers(filteredUsers);
-
-            if (filteredUsers.length === 0 && usersData.length > 0) {
-                noUsers.style.display = 'block';
-                noUsers.innerHTML = `
-                    <i class="fas fa-search" style="font-size: 3em; margin-bottom: 15px; color: #ccc;"></i>
-                    <h3>No matching users found</h3>
-                    <p>No users match "${searchTerm}"</p>
-                `;
-            } else {
-                noUsers.style.display = 'none';
+            
+            try {
+                const response = await fetch(API_BASE + '/api/admin/users/' + userId, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': 'Bearer ' + adminPassword,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    showMessage('User deleted successfully', 'success');
+                    // Reload users
+                    loadUsers();
+                } else {
+                    const error = await response.text();
+                    showMessage('Delete failed: ' + error, 'error');
+                }
+            } catch (error) {
+                showMessage('Delete error: ' + error.message, 'error');
             }
-        });
+        }
 
-        // Export functions to global scope for onclick events
-        window.viewUserDetails = viewUserDetails;
+        // Make deleteUser available globally
         window.deleteUser = deleteUser;
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            // Ctrl/Cmd + L to focus password field
-            if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
-                e.preventDefault();
-                adminPasswordInput.focus();
-                adminPasswordInput.select();
-            }
-
-            // Ctrl/Cmd + R to refresh
-            if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
-                e.preventDefault();
-                loadUsers();
-            }
-
-            // Escape to close details
-            if (e.key === 'Escape') {
-                userDetailsPanel.style.display = 'none';
-            }
-        });
     </script>
 </body>
-
 </html>
