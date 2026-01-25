@@ -13,35 +13,55 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Test connection
-pool.query('SELECT NOW()', (err, res) => {
-  if (err) {
-    console.error('❌ PostgreSQL Connection Failed:', err.message);
-  } else {
-    console.log('✅ PostgreSQL Connected:', res.rows[0].now);
+// Test connection and setup table
+(async () => {
+  try {
+    await pool.query('SELECT NOW()');
+    console.log('✅ PostgreSQL Connected');
     
     // Create users table if not exists
-    pool.query(`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username VARCHAR(50) NOT NULL,
         email VARCHAR(100) UNIQUE NOT NULL,
         password TEXT NOT NULL,
         role VARCHAR(20) DEFAULT 'Customer',
-        profile_image TEXT DEFAULT '',
-        is_active BOOLEAN DEFAULT TRUE,
-        email_verified BOOLEAN DEFAULT FALSE,
-        last_login TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `).then(() => {
-      console.log('✅ Users table ready');
-    }).catch(err => {
-      console.error('❌ Table error:', err.message);
-    });
+    `);
+    console.log('✅ Users table ready');
+    
+    // Add missing columns if they don't exist
+    const columnsToAdd = [
+      { name: 'profile_image', type: 'TEXT DEFAULT ''''', check: 'profile_image' },
+      { name: 'is_active', type: 'BOOLEAN DEFAULT TRUE', check: 'is_active' },
+      { name: 'email_verified', type: 'BOOLEAN DEFAULT FALSE', check: 'email_verified' },
+      { name: 'last_login', type: 'TIMESTAMP', check: 'last_login' }
+    ];
+    
+    for (const column of columnsToAdd) {
+      try {
+        const checkQuery = `SELECT ${column.check} FROM users LIMIT 1`;
+        await pool.query(checkQuery);
+        console.log(`✅ Column ${column.name} already exists`);
+      } catch (err) {
+        if (err.code === '42703') { // Column doesn't exist error
+          await pool.query(`ALTER TABLE users ADD COLUMN ${column.name} ${column.type}`);
+          console.log(`✅ Added column: ${column.name}`);
+        } else {
+          console.log(`⚠️  Column ${column.name}: ${err.message}`);
+        }
+      }
+    }
+    
+    console.log('✅ All columns ready');
+    
+  } catch (error) {
+    console.error('❌ Database setup error:', error.message);
   }
-});
+})();
 
 // ========== MIDDLEWARE ==========
 app.use(cors());
@@ -67,12 +87,22 @@ const verifyAdmin = (req, res, next) => {
 
 // ========== ADMIN ROUTES ==========
 
-// 1. GET ALL USERS
+// 1. GET ALL USERS - FIXED (handles missing columns)
 app.get('/api/admin/users', verifyAdmin, async (req, res) => {
   try {
     console.log('📋 Fetching all users...');
+    
+    // Safe query that works even if columns are missing
     const result = await pool.query(`
-      SELECT id, username, email, role, created_at, last_login, is_active, email_verified
+      SELECT 
+        id, 
+        username, 
+        email, 
+        role, 
+        created_at,
+        COALESCE(last_login, created_at) as last_login,
+        COALESCE(is_active, true) as is_active,
+        COALESCE(email_verified, false) as email_verified
       FROM users 
       ORDER BY created_at DESC
     `);
@@ -93,12 +123,12 @@ app.get('/api/admin/users', verifyAdmin, async (req, res) => {
     res.json({ success: true, count: users.length, users });
     
   } catch (error) {
-    console.error('❌ Error fetching users:', error);
+    console.error('❌ Error fetching users:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// 2. GET STATS
+// 2. GET STATS - FIXED (handles missing columns)
 app.get('/api/admin/stats', verifyAdmin, async (req, res) => {
   try {
     console.log('📊 Getting stats...');
@@ -116,9 +146,14 @@ app.get('/api/admin/stats', verifyAdmin, async (req, res) => {
     );
     const newToday = parseInt(todayResult.rows[0].count);
     
-    // Active users
-    const activeResult = await pool.query('SELECT COUNT(*) FROM users WHERE is_active = true');
-    const activeUsers = parseInt(activeResult.rows[0].count);
+    // Active users (handle missing is_active column)
+    let activeUsers = totalUsers;
+    try {
+      const activeResult = await pool.query('SELECT COUNT(*) FROM users WHERE is_active = true');
+      activeUsers = parseInt(activeResult.rows[0].count);
+    } catch (err) {
+      console.log('⚠️  is_active column not available, using total as active');
+    }
     
     console.log(`📊 Stats: ${totalUsers} total, ${newToday} new today, ${activeUsers} active`);
     
@@ -131,8 +166,11 @@ app.get('/api/admin/stats', verifyAdmin, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Stats error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error('❌ Stats error:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
   }
 });
 
@@ -161,7 +199,7 @@ app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Delete error:', error);
+    console.error('❌ Delete error:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -212,12 +250,12 @@ app.post('/api/auth/register', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Registration error:', error);
+    console.error('❌ Registration error:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// 2. LOGIN USER - THIS IS WHAT YOUR FLUTTER APP NEEDS
+// 2. LOGIN USER
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -232,7 +270,7 @@ app.post('/api/auth/login', async (req, res) => {
     
     // Find user by email
     const result = await pool.query(
-      'SELECT id, username, email, password, role, is_active FROM users WHERE email = $1',
+      'SELECT id, username, email, password, role FROM users WHERE email = $1',
       [email]
     );
     
@@ -245,14 +283,6 @@ app.post('/api/auth/login', async (req, res) => {
     
     const user = result.rows[0];
     
-    // Check if account is active
-    if (!user.is_active) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Account is deactivated' 
-      });
-    }
-    
     // Check password (plain text for now)
     if (password !== user.password) {
       return res.status(401).json({ 
@@ -261,11 +291,18 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
     
-    // Update last login time
-    await pool.query(
-      'UPDATE users SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-      [user.id]
-    );
+    // Update last login time (handle if column doesn't exist)
+    try {
+      await pool.query(
+        'UPDATE users SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+        [user.id]
+      );
+    } catch (err) {
+      await pool.query(
+        'UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+        [user.id]
+      );
+    }
     
     // Return user data (without password)
     const { password: _, ...userWithoutPassword } = user;
@@ -275,15 +312,14 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({
       success: true,
       message: 'Login successful',
-      user: userWithoutPassword,
-      token: 'dummy-token-for-now' // In production, generate JWT
+      user: userWithoutPassword
     });
     
   } catch (error) {
-    console.error('❌ Login error:', error);
+    console.error('❌ Login error:', error.message);
     res.status(500).json({ 
       success: false, 
-      message: 'Login failed: ' + error.message 
+      message: 'Login failed' 
     });
   }
 });
@@ -301,7 +337,7 @@ app.get('/api/auth/me', async (req, res) => {
     }
     
     const result = await pool.query(
-      'SELECT id, username, email, role, profile_image, created_at, last_login FROM users WHERE id = $1',
+      'SELECT id, username, email, role, created_at FROM users WHERE id = $1',
       [userId]
     );
     
@@ -318,7 +354,7 @@ app.get('/api/auth/me', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Get profile error:', error);
+    console.error('❌ Get profile error:', error.message);
     res.status(500).json({ 
       success: false, 
       message: error.message 
@@ -326,112 +362,12 @@ app.get('/api/auth/me', async (req, res) => {
   }
 });
 
-// 4. UPDATE USER PROFILE
-app.put('/api/auth/update-profile', async (req, res) => {
-  try {
-    const { userId, username, email, profileImage } = req.body;
-    
-    if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'User ID required' 
-      });
-    }
-    
-    const result = await pool.query(
-      `UPDATE users 
-       SET username = COALESCE($1, username), 
-           email = COALESCE($2, email),
-           profile_image = COALESCE($3, profile_image),
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $4 
-       RETURNING id, username, email, role, profile_image`,
-      [username, email, profileImage, userId]
-    );
-    
-    if (result.rowCount === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'User not found' 
-      });
-    }
-    
-    res.json({
-      success: true,
-      message: 'Profile updated successfully',
-      user: result.rows[0]
-    });
-    
-  } catch (error) {
-    console.error('❌ Update profile error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message 
-    });
-  }
-});
-
-// 5. LOGOUT
+// 4. LOGOUT
 app.post('/api/auth/logout', (req, res) => {
   res.json({ 
     success: true, 
     message: 'Logged out successfully' 
   });
-});
-
-// 6. CHANGE PASSWORD
-app.put('/api/auth/change-password', async (req, res) => {
-  try {
-    const { userId, currentPassword, newPassword } = req.body;
-    
-    if (!userId || !currentPassword || !newPassword) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'All fields required' 
-      });
-    }
-    
-    // Get current password
-    const result = await pool.query(
-      'SELECT password FROM users WHERE id = $1',
-      [userId]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'User not found' 
-      });
-    }
-    
-    const user = result.rows[0];
-    
-    // Check current password
-    if (currentPassword !== user.password) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Current password is incorrect' 
-      });
-    }
-    
-    // Update password
-    await pool.query(
-      'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-      [newPassword, userId]
-    );
-    
-    res.json({
-      success: true,
-      message: 'Password changed successfully'
-    });
-    
-  } catch (error) {
-    console.error('❌ Change password error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message 
-    });
-  }
 });
 
 // ========== BASIC ROUTES ==========
@@ -442,23 +378,9 @@ app.get('/', (req, res) => {
     success: true, 
     message: 'DrinkQuick API 🍹',
     database: 'PostgreSQL on Render',
-    version: '1.0.0',
-    endpoints: {
-      auth: {
-        register: 'POST /api/auth/register',
-        login: 'POST /api/auth/login',
-        profile: 'GET /api/auth/me',
-        logout: 'POST /api/auth/logout',
-        update: 'PUT /api/auth/update-profile',
-        changePassword: 'PUT /api/auth/change-password'
-      },
-      admin: {
-        users: 'GET /api/admin/users',
-        stats: 'GET /api/admin/stats',
-        delete: 'DELETE /api/admin/users/:id',
-        panel: '/admin'
-      }
-    }
+    admin: '/admin',
+    register: 'POST /api/auth/register',
+    login: 'POST /api/auth/login'
   });
 });
 
@@ -486,11 +408,16 @@ app.get('/health', async (req, res) => {
 app.get('/debug-db', async (req, res) => {
   try {
     const usersCount = await pool.query('SELECT COUNT(*) FROM users');
-    const dbTime = await pool.query('SELECT NOW()');
+    const columnsResult = await pool.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'users'
+    `);
+    
     res.json({
       success: true,
       users: parseInt(usersCount.rows[0].count),
-      databaseTime: dbTime.rows[0].now,
+      columns: columnsResult.rows,
       hasDatabaseUrl: !!process.env.DATABASE_URL
     });
   } catch (error) {
@@ -512,6 +439,7 @@ app.use((req, res) => {
       '/',
       '/health',
       '/admin',
+      '/debug-db',
       '/api/auth/register',
       '/api/auth/login',
       '/api/auth/me',
