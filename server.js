@@ -153,3 +153,4 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`🍹 Drinks: http://localhost:${PORT}/api/drinks`);
     console.log(`🔄 Test endpoint: http://localhost:${PORT}/api/test`);
 });
+
