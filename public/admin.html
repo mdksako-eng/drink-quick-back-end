@@ -40,7 +40,7 @@
             .stats { grid-template-columns: repeat(2, 1fr); }
         }
         @media (min-width: 768px) {
-            .stats { grid-template-columns: repeat(4, 1fr); }
+            .stats { grid-template-columns: repeat(3, 1fr); }
         }
         .stat-box { background: white; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; text-align: center; }
         .stat-number { font-size: 28px; font-weight: bold; margin-bottom: 5px; }
@@ -136,10 +136,6 @@
                         <div class="stat-number" id="onlineUsers">0</div>
                         <div>Online Now</div>
                     </div>
-                    <div class="stat-box">
-                        <div class="stat-number" id="activeToday">0</div>
-                        <div>Active Today</div>
-                    </div>
                 </div>
                 
                 <div class="auto-refresh">
@@ -170,7 +166,7 @@
                                 <th>User</th>
                                 <th>Email</th>
                                 <th>Status</th>
-                                <th>Last Active</th>
+                                <th>Joined</th>
                                 <th>Role</th>
                                 <th class="actions-cell">Actions</th>
                             </tr>
@@ -191,6 +187,7 @@
         let usersData = [];
         let autoRefreshInterval = null;
         let isOnlineOnlyView = false;
+        let onlineUsers = new Set(); // Track user IDs that are currently online
 
         // DOM elements
         const elements = {
@@ -207,8 +204,7 @@
             usersTableBody: document.getElementById('usersTableBody'),
             totalUsers: document.getElementById('totalUsers'),
             newToday: document.getElementById('newToday'),
-            onlineUsers: document.getElementById('onlineUsers'),
-            activeToday: document.getElementById('activeToday')
+            onlineUsers: document.getElementById('onlineUsers')
         };
 
         // Initialize
@@ -237,6 +233,9 @@
             
             // Update last update time
             updateLastUpdateTime();
+            
+            // Listen for online users from server (if using WebSockets)
+            setupOnlineStatusTracking();
         });
 
         function showMessage(text, type = 'success') {
@@ -321,14 +320,21 @@
                 if (response.ok) {
                     const data = await response.json();
                     console.log('Users data received:', data);
-                    usersData = data.users || [];
+                    usersData = data.users || data || [];
+                    
+                    // If data is not an array but an object with users property
+                    if (!Array.isArray(usersData) && usersData.users) {
+                        usersData = usersData.users;
+                    }
+                    
+                    console.log('Processed users data:', usersData);
                     
                     if (usersData.length === 0) {
                         elements.usersTableBody.innerHTML = '<tr><td colspan="6" class="no-data">No users found</td></tr>';
                         showMessage('No users in database', 'info');
                     } else {
                         // Process and display users
-                        processUserStatus(usersData);
+                        processUserStatus();
                         updateLastUpdateTime();
                         showMessage('Loaded ' + usersData.length + ' users', 'success');
                     }
@@ -350,18 +356,20 @@
 
         async function refreshUsers() {
             await loadUsers();
-            // Update online status specifically
-            await updateOnlineStatus();
         }
 
-        function processUserStatus(users) {
-            // Add status properties to users
-            users.forEach(user => {
-                // Check if user is online (within last 5 minutes)
-                const now = new Date();
-                const lastActive = user.lastActive ? new Date(user.lastActive) : null;
+        function processUserStatus() {
+            // Determine user status based on available data
+            usersData.forEach(user => {
+                // Default status is offline
+                user.status = 'offline';
+                user.statusColor = 'status-offline';
+                user.statusIcon = 'offline';
                 
-                if (lastActive) {
+                // If we have lastActive property, use it
+                if (user.lastActive) {
+                    const now = new Date();
+                    const lastActive = new Date(user.lastActive);
                     const minutesAgo = (now - lastActive) / (1000 * 60);
                     
                     if (minutesAgo < 2) {
@@ -372,10 +380,6 @@
                         user.status = 'idle';
                         user.statusColor = 'status-idle';
                         user.statusIcon = 'idle';
-                    } else {
-                        user.status = 'offline';
-                        user.statusColor = 'status-offline';
-                        user.statusIcon = 'offline';
                     }
                     
                     // Format last active time
@@ -388,24 +392,47 @@
                     } else {
                         user.lastSeenText = lastActive.toLocaleDateString();
                     }
+                } else if (user.lastLogin) {
+                    // Fallback to lastLogin if available
+                    const now = new Date();
+                    const lastLogin = new Date(user.lastLogin);
+                    const minutesAgo = (now - lastLogin) / (1000 * 60);
+                    
+                    if (minutesAgo < 2) {
+                        user.status = 'online';
+                        user.statusColor = 'status-online';
+                        user.statusIcon = 'online';
+                    }
+                    
+                    user.lastSeenText = `Last login: ${lastLogin.toLocaleDateString()}`;
                 } else {
-                    user.status = 'offline';
-                    user.statusColor = 'status-offline';
-                    user.statusIcon = 'offline';
-                    user.lastSeenText = 'Never';
+                    user.lastSeenText = 'Never active';
+                }
+                
+                // Check if user is in onlineUsers Set (from real-time tracking)
+                if (onlineUsers.has(user._id) || onlineUsers.has(user.email)) {
+                    user.status = 'online';
+                    user.statusColor = 'status-online';
+                    user.statusIcon = 'online';
+                    user.lastSeenText = 'Online now';
+                }
+                
+                // If we have no activity info at all
+                if (!user.lastActive && !user.lastLogin && !onlineUsers.has(user._id) && !onlineUsers.has(user.email)) {
+                    user.lastSeenText = 'No activity data';
                 }
             });
             
             // Filter if online-only view is active
             const usersToDisplay = isOnlineOnlyView 
-                ? users.filter(user => user.status === 'online' || user.status === 'idle')
-                : users;
+                ? usersData.filter(user => user.status === 'online' || user.status === 'idle')
+                : usersData;
             
             displayUsers(usersToDisplay);
             
             // Update online count
-            const onlineCount = users.filter(user => user.status === 'online').length;
-            const idleCount = users.filter(user => user.status === 'idle').length;
+            const onlineCount = usersData.filter(user => user.status === 'online').length;
+            const idleCount = usersData.filter(user => user.status === 'idle').length;
             elements.onlineUsers.textContent = onlineCount + idleCount;
         }
 
@@ -424,12 +451,16 @@
                 const row = document.createElement('tr');
                 
                 // Get user initials for avatar
-                const initials = user.name ? user.name.charAt(0).toUpperCase() : 'U';
+                const initials = user.name ? user.name.charAt(0).toUpperCase() : 
+                               user.email ? user.email.charAt(0).toUpperCase() : 'U';
                 
                 // Format join date
                 let joinDate = 'N/A';
                 if (user.createdAt) {
                     const date = new Date(user.createdAt);
+                    joinDate = date.toLocaleDateString();
+                } else if (user.joined) {
+                    const date = new Date(user.joined);
                     joinDate = date.toLocaleDateString();
                 }
                 
@@ -441,7 +472,7 @@
                                 <div class="online-status ${user.statusIcon}"></div>
                             </div>
                             <div>
-                                <strong>${user.name || 'Unknown'}</strong>
+                                <strong>${user.name || user.email || 'Unknown User'}</strong>
                                 ${user.isAdmin ? '<br><small style="color: #4a00e0;">Admin</small>' : ''}
                             </div>
                         </div>
@@ -454,7 +485,7 @@
                     <td>${joinDate}</td>
                     <td>${user.role || 'Customer'}</td>
                     <td class="actions-cell">
-                        <button class="delete-btn" onclick="deleteUser('${user._id}', '${(user.name || user.email).replace(/'/g, "\\'")}')">
+                        <button class="delete-btn" onclick="deleteUser('${user._id || user.id}', '${(user.name || user.email || 'user').replace(/'/g, "\\'")}')">
                             Delete
                         </button>
                     </td>
@@ -485,45 +516,19 @@
         function updateStats(data) {
             elements.totalUsers.textContent = data.totalUsers || 0;
             elements.newToday.textContent = data.newToday || 0;
-            elements.onlineUsers.textContent = data.onlineUsers || 0;
-            elements.activeToday.textContent = data.activeToday || 0;
-        }
-
-        async function updateOnlineStatus() {
-            try {
-                // This would call a specific endpoint for online status
-                // For now, we'll reload users with their lastActive timestamps
-                const response = await fetch(API_BASE + '/api/admin/users?online=true', {
-                    headers: {
-                        'Authorization': 'Bearer ' + adminPassword,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.users) {
-                        usersData.forEach(user => {
-                            const updatedUser = data.users.find(u => u._id === user._id);
-                            if (updatedUser) {
-                                user.lastActive = updatedUser.lastActive;
-                            }
-                        });
-                        processUserStatus(usersData);
-                        updateLastUpdateTime();
-                    }
-                }
-            } catch (error) {
-                console.error('Update online status error:', error);
+            // Update online count from stats if available
+            if (data.onlineUsers !== undefined) {
+                elements.onlineUsers.textContent = data.onlineUsers;
             }
         }
 
         function toggleOnlineView() {
             isOnlineOnlyView = !isOnlineOnlyView;
             elements.viewOnlineBtn.textContent = isOnlineOnlyView ? 'Show All Users' : 'Show Online Only';
+            elements.viewOnlineBtn.style.background = isOnlineOnlyView ? '#28a745' : '#ffc107';
             
             if (usersData.length > 0) {
-                processUserStatus(usersData);
+                processUserStatus();
             }
         }
 
@@ -542,8 +547,8 @@
                 clearInterval(autoRefreshInterval);
             }
             autoRefreshInterval = setInterval(async () => {
-                await updateOnlineStatus();
-                await updateAllStats();
+                await refreshUsers();
+                updateLastUpdateTime();
             }, 30000); // 30 seconds
         }
 
@@ -552,6 +557,63 @@
                 clearInterval(autoRefreshInterval);
                 autoRefreshInterval = null;
             }
+        }
+
+        // Setup WebSocket or polling for real-time online status
+        function setupOnlineStatusTracking() {
+            // Method 1: WebSocket (if your server supports it)
+            try {
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${wsProtocol}//${window.location.host}/ws/admin/online`;
+                const ws = new WebSocket(wsUrl);
+                
+                ws.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'online_users') {
+                        onlineUsers = new Set(data.userIds || []);
+                        processUserStatus();
+                    } else if (data.type === 'user_online') {
+                        onlineUsers.add(data.userId);
+                        processUserStatus();
+                    } else if (data.type === 'user_offline') {
+                        onlineUsers.delete(data.userId);
+                        processUserStatus();
+                    }
+                };
+                
+                ws.onerror = function(error) {
+                    console.log('WebSocket error, using polling instead');
+                    // Fallback to polling
+                    startPollingOnlineStatus();
+                };
+            } catch (error) {
+                console.log('WebSocket not available, using polling');
+                startPollingOnlineStatus();
+            }
+        }
+
+        function startPollingOnlineStatus() {
+            // Poll every 10 seconds for online users
+            setInterval(async () => {
+                if (adminPassword && elements.adminPanel.style.display !== 'none') {
+                    try {
+                        const response = await fetch(API_BASE + '/api/admin/online-users', {
+                            headers: {
+                                'Authorization': 'Bearer ' + adminPassword,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            onlineUsers = new Set(data.onlineUsers || []);
+                            processUserStatus();
+                        }
+                    } catch (error) {
+                        console.error('Polling online status error:', error);
+                    }
+                }
+            }, 10000);
         }
 
         async function deleteUser(userId, userName) {
@@ -570,6 +632,8 @@
                 
                 if (response.ok) {
                     showMessage('User deleted successfully', 'success');
+                    // Remove from online users set
+                    onlineUsers.delete(userId);
                     // Reload users
                     loadUsers();
                 } else {
