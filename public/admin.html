@@ -24,7 +24,7 @@
         
         /* Responsive table */
         .table-container { overflow-x: auto; margin-top: 20px; -webkit-overflow-scrolling: touch; }
-        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        table { width: 100%; border-collapse: collapse; min-width: 700px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background: #f8f9fa; white-space: nowrap; }
         
@@ -40,7 +40,7 @@
             .stats { grid-template-columns: repeat(2, 1fr); }
         }
         @media (min-width: 768px) {
-            .stats { display: flex; gap: 20px; }
+            .stats { grid-template-columns: repeat(4, 1fr); }
         }
         .stat-box { background: white; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; text-align: center; }
         .stat-number { font-size: 28px; font-weight: bold; margin-bottom: 5px; }
@@ -60,10 +60,21 @@
         
         /* User avatar in table */
         .user-cell { display: flex; align-items: center; gap: 10px; }
-        .user-avatar { width: 36px; height: 36px; background: #4a00e0; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+        .user-avatar { width: 36px; height: 36px; background: #4a00e0; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; position: relative; }
         @media (max-width: 768px) {
             .user-avatar { width: 32px; height: 32px; font-size: 14px; }
         }
+        
+        /* Online status indicator */
+        .online-status { position: absolute; bottom: -2px; right: -2px; width: 10px; height: 10px; background: #28a745; border: 2px solid white; border-radius: 50%; }
+        .online-status.offline { background: #6c757d; }
+        .online-status.idle { background: #ffc107; }
+        
+        /* Online status text */
+        .status-text { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .status-online { background: #d4edda; color: #155724; }
+        .status-offline { background: #f8f9fa; color: #6c757d; }
+        .status-idle { background: #fff3cd; color: #856404; }
         
         /* Header responsive */
         header h1 { font-size: 24px; margin-bottom: 5px; }
@@ -78,13 +89,25 @@
         
         /* Action buttons */
         .actions-cell { white-space: nowrap; }
+        
+        /* Last seen text */
+        .last-seen { font-size: 12px; color: #6c757d; margin-top: 2px; }
+        
+        /* Auto-refresh toggle */
+        .auto-refresh { display: flex; align-items: center; gap: 10px; margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 5px; }
+        .switch { position: relative; display: inline-block; width: 50px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #28a745; }
+        input:checked + .slider:before { transform: translateX(26px); }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>DrinkQuick Admin Panel</h1>
-            <p>Manage users and view statistics</p>
+            <p>Manage users and view real-time statistics</p>
         </header>
         
         <div class="content">
@@ -109,14 +132,34 @@
                         <div class="stat-number" id="newToday">0</div>
                         <div>New Today</div>
                     </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="onlineUsers">0</div>
+                        <div>Online Now</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="activeToday">0</div>
+                        <div>Active Today</div>
+                    </div>
+                </div>
+                
+                <div class="auto-refresh">
+                    <label class="switch">
+                        <input type="checkbox" id="autoRefreshToggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span>Auto-refresh online status (30s)</span>
+                    <span id="lastUpdate" style="margin-left: auto; font-size: 12px; color: #6c757d;"></span>
                 </div>
                 
                 <div class="button-container">
                     <button id="loadUsersBtn" style="background: #28a745;">
-                        Load Users
+                        Load All Users
                     </button>
                     <button id="refreshBtn" style="background: #17a2b8;">
-                        Refresh
+                        Refresh Now
+                    </button>
+                    <button id="viewOnlineBtn" style="background: #ffc107; color: #212529;">
+                        Show Online Only
                     </button>
                 </div>
                 
@@ -124,10 +167,11 @@
                     <table id="usersTable">
                         <thead>
                             <tr>
-                                <th>Name</th>
+                                <th>User</th>
                                 <th>Email</th>
+                                <th>Status</th>
+                                <th>Last Active</th>
                                 <th>Role</th>
-                                <th>Joined</th>
                                 <th class="actions-cell">Actions</th>
                             </tr>
                         </thead>
@@ -145,6 +189,8 @@
         const API_BASE = window.location.origin;
         let adminPassword = 'admin123';
         let usersData = [];
+        let autoRefreshInterval = null;
+        let isOnlineOnlyView = false;
 
         // DOM elements
         const elements = {
@@ -153,11 +199,16 @@
             adminPanel: document.getElementById('adminPanel'),
             loadUsersBtn: document.getElementById('loadUsersBtn'),
             refreshBtn: document.getElementById('refreshBtn'),
+            viewOnlineBtn: document.getElementById('viewOnlineBtn'),
+            autoRefreshToggle: document.getElementById('autoRefreshToggle'),
+            lastUpdate: document.getElementById('lastUpdate'),
             loading: document.getElementById('loading'),
             message: document.getElementById('message'),
             usersTableBody: document.getElementById('usersTableBody'),
             totalUsers: document.getElementById('totalUsers'),
-            newToday: document.getElementById('newToday')
+            newToday: document.getElementById('newToday'),
+            onlineUsers: document.getElementById('onlineUsers'),
+            activeToday: document.getElementById('activeToday')
         };
 
         // Initialize
@@ -166,8 +217,10 @@
             
             // Set up event listeners
             elements.loginBtn.addEventListener('click', login);
-            elements.loadUsersBtn.addEventListener('click', loadUsers);
-            elements.refreshBtn.addEventListener('click', loadUsers);
+            elements.loadUsersBtn.addEventListener('click', () => loadUsers());
+            elements.refreshBtn.addEventListener('click', refreshUsers);
+            elements.viewOnlineBtn.addEventListener('click', toggleOnlineView);
+            elements.autoRefreshToggle.addEventListener('change', toggleAutoRefresh);
             
             // Auto-login if token in URL
             const urlParams = new URLSearchParams(window.location.search);
@@ -181,6 +234,9 @@
             elements.passwordInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') login();
             });
+            
+            // Update last update time
+            updateLastUpdateTime();
         });
 
         function showMessage(text, type = 'success') {
@@ -194,6 +250,12 @@
 
         function showLoading(show) {
             elements.loading.style.display = show ? 'block' : 'none';
+        }
+
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            elements.lastUpdate.textContent = `Last updated: ${timeString}`;
         }
 
         async function login() {
@@ -219,13 +281,17 @@
                 if (response.ok) {
                     const data = await response.json();
                     console.log('Stats data:', data);
-                    elements.totalUsers.textContent = data.totalUsers || 0;
-                    elements.newToday.textContent = data.newToday || 0;
+                    updateStats(data);
                     elements.adminPanel.style.display = 'block';
                     showMessage('Login successful!', 'success');
                     
                     // Auto-load users after successful login
                     setTimeout(loadUsers, 1000);
+                    
+                    // Start auto-refresh if enabled
+                    if (elements.autoRefreshToggle.checked) {
+                        startAutoRefresh();
+                    }
                 } else {
                     const error = await response.text();
                     console.error('Login failed:', error);
@@ -239,7 +305,6 @@
 
         async function loadUsers() {
             showLoading(true);
-            elements.usersTableBody.innerHTML = '';
             
             try {
                 console.log('Loading users with password:', adminPassword.substring(0, 3) + '...');
@@ -259,15 +324,17 @@
                     usersData = data.users || [];
                     
                     if (usersData.length === 0) {
-                        elements.usersTableBody.innerHTML = '<tr><td colspan="5" class="no-data">No users found</td></tr>';
+                        elements.usersTableBody.innerHTML = '<tr><td colspan="6" class="no-data">No users found</td></tr>';
                         showMessage('No users in database', 'info');
                     } else {
-                        displayUsers(usersData);
+                        // Process and display users
+                        processUserStatus(usersData);
+                        updateLastUpdateTime();
                         showMessage('Loaded ' + usersData.length + ' users', 'success');
                     }
                     
                     // Update stats
-                    updateStats();
+                    updateAllStats();
                 } else {
                     const error = await response.text();
                     console.error('Failed to load users:', error);
@@ -281,27 +348,97 @@
             }
         }
 
+        async function refreshUsers() {
+            await loadUsers();
+            // Update online status specifically
+            await updateOnlineStatus();
+        }
+
+        function processUserStatus(users) {
+            // Add status properties to users
+            users.forEach(user => {
+                // Check if user is online (within last 5 minutes)
+                const now = new Date();
+                const lastActive = user.lastActive ? new Date(user.lastActive) : null;
+                
+                if (lastActive) {
+                    const minutesAgo = (now - lastActive) / (1000 * 60);
+                    
+                    if (minutesAgo < 2) {
+                        user.status = 'online';
+                        user.statusColor = 'status-online';
+                        user.statusIcon = 'online';
+                    } else if (minutesAgo < 5) {
+                        user.status = 'idle';
+                        user.statusColor = 'status-idle';
+                        user.statusIcon = 'idle';
+                    } else {
+                        user.status = 'offline';
+                        user.statusColor = 'status-offline';
+                        user.statusIcon = 'offline';
+                    }
+                    
+                    // Format last active time
+                    if (minutesAgo < 1) {
+                        user.lastSeenText = 'Just now';
+                    } else if (minutesAgo < 60) {
+                        user.lastSeenText = `${Math.floor(minutesAgo)} min ago`;
+                    } else if (minutesAgo < 1440) {
+                        user.lastSeenText = `${Math.floor(minutesAgo / 60)} hours ago`;
+                    } else {
+                        user.lastSeenText = lastActive.toLocaleDateString();
+                    }
+                } else {
+                    user.status = 'offline';
+                    user.statusColor = 'status-offline';
+                    user.statusIcon = 'offline';
+                    user.lastSeenText = 'Never';
+                }
+            });
+            
+            // Filter if online-only view is active
+            const usersToDisplay = isOnlineOnlyView 
+                ? users.filter(user => user.status === 'online' || user.status === 'idle')
+                : users;
+            
+            displayUsers(usersToDisplay);
+            
+            // Update online count
+            const onlineCount = users.filter(user => user.status === 'online').length;
+            const idleCount = users.filter(user => user.status === 'idle').length;
+            elements.onlineUsers.textContent = onlineCount + idleCount;
+        }
+
         function displayUsers(users) {
             elements.usersTableBody.innerHTML = '';
+            
+            if (users.length === 0) {
+                const message = isOnlineOnlyView 
+                    ? 'No online users found'
+                    : 'No users found';
+                elements.usersTableBody.innerHTML = `<tr><td colspan="6" class="no-data">${message}</td></tr>`;
+                return;
+            }
             
             users.forEach(user => {
                 const row = document.createElement('tr');
                 
-                // Format date
+                // Get user initials for avatar
+                const initials = user.name ? user.name.charAt(0).toUpperCase() : 'U';
+                
+                // Format join date
                 let joinDate = 'N/A';
                 if (user.createdAt) {
                     const date = new Date(user.createdAt);
                     joinDate = date.toLocaleDateString();
                 }
                 
-                // Get user initials for avatar
-                const initials = user.name ? user.name.charAt(0).toUpperCase() : 'U';
-                
                 row.innerHTML = `
                     <td>
                         <div class="user-cell">
                             <div class="user-avatar">
                                 ${initials}
+                                <div class="online-status ${user.statusIcon}"></div>
                             </div>
                             <div>
                                 <strong>${user.name || 'Unknown'}</strong>
@@ -310,8 +447,12 @@
                         </div>
                     </td>
                     <td>${user.email || 'No email'}</td>
-                    <td>${user.role || 'Customer'}</td>
+                    <td>
+                        <span class="status-text ${user.statusColor}">${user.status.toUpperCase()}</span>
+                        <div class="last-seen">${user.lastSeenText}</div>
+                    </td>
                     <td>${joinDate}</td>
+                    <td>${user.role || 'Customer'}</td>
                     <td class="actions-cell">
                         <button class="delete-btn" onclick="deleteUser('${user._id}', '${(user.name || user.email).replace(/'/g, "\\'")}')">
                             Delete
@@ -323,7 +464,7 @@
             });
         }
 
-        async function updateStats() {
+        async function updateAllStats() {
             try {
                 const response = await fetch(API_BASE + '/api/admin/stats', {
                     headers: {
@@ -334,11 +475,82 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    elements.totalUsers.textContent = data.totalUsers || 0;
-                    elements.newToday.textContent = data.newToday || 0;
+                    updateStats(data);
                 }
             } catch (error) {
                 console.error('Update stats error:', error);
+            }
+        }
+
+        function updateStats(data) {
+            elements.totalUsers.textContent = data.totalUsers || 0;
+            elements.newToday.textContent = data.newToday || 0;
+            elements.onlineUsers.textContent = data.onlineUsers || 0;
+            elements.activeToday.textContent = data.activeToday || 0;
+        }
+
+        async function updateOnlineStatus() {
+            try {
+                // This would call a specific endpoint for online status
+                // For now, we'll reload users with their lastActive timestamps
+                const response = await fetch(API_BASE + '/api/admin/users?online=true', {
+                    headers: {
+                        'Authorization': 'Bearer ' + adminPassword,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.users) {
+                        usersData.forEach(user => {
+                            const updatedUser = data.users.find(u => u._id === user._id);
+                            if (updatedUser) {
+                                user.lastActive = updatedUser.lastActive;
+                            }
+                        });
+                        processUserStatus(usersData);
+                        updateLastUpdateTime();
+                    }
+                }
+            } catch (error) {
+                console.error('Update online status error:', error);
+            }
+        }
+
+        function toggleOnlineView() {
+            isOnlineOnlyView = !isOnlineOnlyView;
+            elements.viewOnlineBtn.textContent = isOnlineOnlyView ? 'Show All Users' : 'Show Online Only';
+            
+            if (usersData.length > 0) {
+                processUserStatus(usersData);
+            }
+        }
+
+        function toggleAutoRefresh() {
+            if (elements.autoRefreshToggle.checked) {
+                startAutoRefresh();
+                showMessage('Auto-refresh enabled (30s interval)', 'success');
+            } else {
+                stopAutoRefresh();
+                showMessage('Auto-refresh disabled', 'info');
+            }
+        }
+
+        function startAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+            autoRefreshInterval = setInterval(async () => {
+                await updateOnlineStatus();
+                await updateAllStats();
+            }, 30000); // 30 seconds
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
             }
         }
 
@@ -369,7 +581,7 @@
             }
         }
 
-        // Make deleteUser available globally
+        // Make functions available globally
         window.deleteUser = deleteUser;
     </script>
 </body>
