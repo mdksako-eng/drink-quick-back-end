@@ -8,9 +8,18 @@ const app = express();
 
 // ========== POSTGRESQL SETUP ==========
 console.log('🔌 Connecting to PostgreSQL...');
+console.log('📝 Database URL exists:', !!process.env.DATABASE_URL);
+console.log('🔍 Database URL starts with:', process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 20) + '...' : 'Not set');
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { 
+    rejectUnauthorized: false 
+  },
+  // Neon-specific optimizations
+  connectionTimeoutMillis: 10000, // 10 seconds
+  idleTimeoutMillis: 30000,
+  max: 20
 });
 
 // Test connection and setup table
@@ -19,7 +28,7 @@ const pool = new Pool({
     await pool.query('SELECT NOW()');
     console.log('✅ PostgreSQL Connected');
     
-    // Create users table if not exists
+    // Create users table if not exists (Neon compatible)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -28,39 +37,23 @@ const pool = new Pool({
         password TEXT NOT NULL,
         role VARCHAR(20) DEFAULT 'Customer',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        profile_image TEXT DEFAULT '',
+        is_active BOOLEAN DEFAULT TRUE,
+        email_verified BOOLEAN DEFAULT FALSE,
+        last_login TIMESTAMP
       )
     `);
     console.log('✅ Users table ready');
     
-    // Add missing columns if they don't exist
-    const columnsToAdd = [
-      { name: 'profile_image', type: 'TEXT', defaultValue: "''", check: 'profile_image' },
-      { name: 'is_active', type: 'BOOLEAN', defaultValue: 'TRUE', check: 'is_active' },
-      { name: 'email_verified', type: 'BOOLEAN', defaultValue: 'FALSE', check: 'email_verified' },
-      { name: 'last_login', type: 'TIMESTAMP', defaultValue: 'NULL', check: 'last_login' }
-    ];
-    
-    for (const column of columnsToAdd) {
-      try {
-        const checkQuery = `SELECT ${column.check} FROM users LIMIT 1`;
-        await pool.query(checkQuery);
-        console.log(`✅ Column ${column.name} already exists`);
-      } catch (err) {
-        if (err.code === '42703') { // Column doesn't exist error
-          const alterQuery = `ALTER TABLE users ADD COLUMN ${column.name} ${column.type} DEFAULT ${column.defaultValue}`;
-          await pool.query(alterQuery);
-          console.log(`✅ Added column: ${column.name}`);
-        } else {
-          console.log(`⚠️  Column ${column.name}: ${err.message}`);
-        }
-      }
-    }
-    
-    console.log('✅ All columns ready');
+    // Check for existing data
+    const countResult = await pool.query('SELECT COUNT(*) FROM users');
+    const userCount = parseInt(countResult.rows[0].count);
+    console.log(`📊 Database has ${userCount} users`);
     
   } catch (error) {
     console.error('❌ Database setup error:', error.message);
+    console.error('🔧 Hint: Check DATABASE_URL environment variable');
   }
 })();
 
@@ -86,14 +79,203 @@ const verifyAdmin = (req, res, next) => {
   }
 };
 
+// ========== MIGRATION BACKUP ROUTE ==========
+// IMPORTANT: Remove this route after migration is complete!
+app.get('/api/backup-data', async (req, res) => {
+  try {
+    console.log('💾 Creating backup for migration to Neon...');
+    
+    // Get all users
+    const usersResult = await pool.query(`
+      SELECT 
+        id, 
+        username, 
+        email, 
+        password, 
+        role, 
+        created_at,
+        updated_at,
+        COALESCE(profile_image, '') as profile_image,
+        COALESCE(is_active, true) as is_active,
+        COALESCE(email_verified, false) as email_verified,
+        COALESCE(last_login, created_at) as last_login
+      FROM users
+      ORDER BY id
+    `);
+    
+    // Get table structure
+    const columnsResult = await pool.query(`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND table_schema = 'public'
+      ORDER BY ordinal_position
+    `);
+    
+    const userCount = usersResult.rows.length;
+    console.log(`✅ Found ${userCount} users to backup`);
+    
+    // Generate SQL for Neon import
+    let sqlImport = `-- DrinkQuick Migration to Neon SQL
+-- Generated: ${new Date().toISOString()}
+-- Total users: ${userCount}
+
+-- Drop table if exists (for clean import)
+DROP TABLE IF EXISTS users CASCADE;
+
+-- Create users table with all columns
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  username VARCHAR(50) NOT NULL,
+  email VARCHAR(100) UNIQUE NOT NULL,
+  password TEXT NOT NULL,
+  role VARCHAR(20) DEFAULT 'Customer',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  profile_image TEXT DEFAULT '',
+  is_active BOOLEAN DEFAULT TRUE,
+  email_verified BOOLEAN DEFAULT FALSE,
+  last_login TIMESTAMP
+);
+
+-- Insert user data
+`;
+    
+    // Add INSERT statements for each user
+    usersResult.rows.forEach((user) => {
+      // Escape single quotes in strings
+      const safeUsername = user.username.replace(/'/g, "''");
+      const safeEmail = user.email.replace(/'/g, "''");
+      const safePassword = user.password.replace(/'/g, "''");
+      const safeProfileImage = user.profile_image.replace(/'/g, "''");
+      
+      sqlImport += `INSERT INTO users (id, username, email, password, role, created_at, updated_at, profile_image, is_active, email_verified, last_login) VALUES (
+  ${user.id},
+  '${safeUsername}',
+  '${safeEmail}',
+  '${safePassword}',
+  '${user.role || 'Customer'}',
+  '${user.created_at}',
+  '${user.updated_at || user.created_at}',
+  '${safeProfileImage}',
+  ${user.is_active},
+  ${user.email_verified},
+  ${user.last_login ? `'${user.last_login}'` : 'NULL'}
+);\n`;
+    });
+    
+    sqlImport += `\n-- Reset sequence for future inserts
+SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));`;
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      table_structure: columnsResult.rows,
+      users: usersResult.rows,
+      total_users: userCount,
+      sql_import: sqlImport,
+      migration_instructions: `
+        ============================================
+        🚀 DRINKQUICK MIGRATION TO NEON INSTRUCTIONS
+        ============================================
+        
+        1. CREATE NEON ACCOUNT:
+           - Go to https://neon.tech
+           - Sign up with GitHub
+           - Create project: drinkquick-migrated
+           - Region: US East (N. Virginia)
+           
+        2. IMPORT DATA:
+           - Copy the 'sql_import' content above
+           - Go to Neon SQL Editor
+           - Paste and run ALL SQL commands
+           
+        3. UPDATE RENDER:
+           - Get Neon connection string
+           - Add ?pgbouncer=true&sslmode=require
+           - Update Render DATABASE_URL environment variable
+           
+        4. VERIFY:
+           - Check /health endpoint
+           - Check /api/verify-migration
+           
+        5. REMOVE THIS BACKUP ROUTE after migration!
+        ============================================
+      `
+    });
+    
+  } catch (error) {
+    console.error('❌ Backup error:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      hint: 'Make sure users table exists. If not, your app will create it automatically on first use.'
+    });
+  }
+});
+
+// ========== MIGRATION VERIFICATION ROUTE ==========
+app.get('/api/verify-migration', async (req, res) => {
+  try {
+    // Check database connection
+    await pool.query('SELECT NOW()');
+    
+    // Get database info
+    const dbInfo = await pool.query(`
+      SELECT 
+        current_database() as db_name,
+        version() as db_version,
+        inet_server_addr() as db_host,
+        inet_server_port() as db_port
+    `);
+    
+    // Get user stats
+    const usersCount = await pool.query('SELECT COUNT(*) FROM users');
+    const recentUsers = await pool.query(
+      'SELECT id, username, email, created_at FROM users ORDER BY created_at DESC LIMIT 5'
+    );
+    
+    // Check if we're connected to Neon
+    const isNeon = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech');
+    
+    res.json({
+      success: true,
+      migration_status: isNeon ? '✅ MIGRATED TO NEON' : '⚠️ STILL ON RENDER POSTGRES',
+      timestamp: new Date().toISOString(),
+      database: {
+        name: dbInfo.rows[0].db_name,
+        version: dbInfo.rows[0].db_version,
+        host: dbInfo.rows[0].db_host,
+        port: dbInfo.rows[0].db_port,
+        provider: isNeon ? 'Neon' : 'Render'
+      },
+      users: {
+        total: parseInt(usersCount.rows[0].count),
+        recent: recentUsers.rows
+      },
+      connection_string_preview: process.env.DATABASE_URL 
+        ? process.env.DATABASE_URL.substring(0, 50) + '...' 
+        : 'Not set',
+      instructions: isNeon 
+        ? 'Migration complete! You can remove /api/backup-data route.'
+        : 'Visit /api/backup-data to get migration SQL for Neon.'
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Database connection failed'
+    });
+  }
+});
+
 // ========== ADMIN ROUTES ==========
 
-// 1. GET ALL USERS - FIXED (handles missing columns)
+// 1. GET ALL USERS
 app.get('/api/admin/users', verifyAdmin, async (req, res) => {
   try {
     console.log('📋 Fetching all users...');
     
-    // Safe query that works even if columns are missing
     const result = await pool.query(`
       SELECT 
         id, 
@@ -101,9 +283,11 @@ app.get('/api/admin/users', verifyAdmin, async (req, res) => {
         email, 
         role, 
         created_at,
+        updated_at,
         COALESCE(last_login, created_at) as last_login,
         COALESCE(is_active, true) as is_active,
-        COALESCE(email_verified, false) as email_verified
+        COALESCE(email_verified, false) as email_verified,
+        COALESCE(profile_image, '') as profile_image
       FROM users 
       ORDER BY created_at DESC
     `);
@@ -114,9 +298,11 @@ app.get('/api/admin/users', verifyAdmin, async (req, res) => {
       email: user.email,
       role: user.role,
       createdAt: user.created_at,
+      updatedAt: user.updated_at,
       lastLogin: user.last_login,
       isActive: user.is_active,
       emailVerified: user.email_verified,
+      profileImage: user.profile_image,
       isAdmin: user.role === 'Administrator'
     }));
     
@@ -129,7 +315,7 @@ app.get('/api/admin/users', verifyAdmin, async (req, res) => {
   }
 });
 
-// 2. GET STATS - FIXED (handles missing columns)
+// 2. GET STATS
 app.get('/api/admin/stats', verifyAdmin, async (req, res) => {
   try {
     console.log('📊 Getting stats...');
@@ -147,22 +333,22 @@ app.get('/api/admin/stats', verifyAdmin, async (req, res) => {
     );
     const newToday = parseInt(todayResult.rows[0].count);
     
-    // Active users (handle missing is_active column)
-    let activeUsers = totalUsers;
-    try {
-      const activeResult = await pool.query('SELECT COUNT(*) FROM users WHERE is_active = true');
-      activeUsers = parseInt(activeResult.rows[0].count);
-    } catch (err) {
-      console.log('⚠️  is_active column not available, using total as active');
-    }
+    // Active users
+    const activeResult = await pool.query('SELECT COUNT(*) FROM users WHERE is_active = true');
+    const activeUsers = parseInt(activeResult.rows[0].count);
     
-    console.log(`📊 Stats: ${totalUsers} total, ${newToday} new today, ${activeUsers} active`);
+    // Verified users
+    const verifiedResult = await pool.query('SELECT COUNT(*) FROM users WHERE email_verified = true');
+    const verifiedUsers = parseInt(verifiedResult.rows[0].count);
+    
+    console.log(`📊 Stats: ${totalUsers} total, ${newToday} new today, ${activeUsers} active, ${verifiedUsers} verified`);
     
     res.json({
       success: true,
       totalUsers,
       newToday,
       activeUsers,
+      verifiedUsers,
       timestamp: new Date().toISOString()
     });
     
@@ -170,7 +356,8 @@ app.get('/api/admin/stats', verifyAdmin, async (req, res) => {
     console.error('❌ Stats error:', error.message);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error' 
+      message: 'Server error',
+      error: error.message
     });
   }
 });
@@ -233,6 +420,19 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
     
+    // Check if username exists
+    const existingUsername = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [username]
+    );
+    
+    if (existingUsername.rows.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Username already taken' 
+      });
+    }
+    
     // Insert new user
     const result = await pool.query(
       `INSERT INTO users (username, email, password) 
@@ -256,7 +456,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// 2. LOGIN USER - UPDATED: Accepts username OR email
+// 2. LOGIN USER
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, email, password } = req.body;
@@ -277,13 +477,13 @@ app.post('/api/auth/login', async (req, res) => {
     if (email) {
       queryField = 'email';
       result = await pool.query(
-        'SELECT id, username, email, password, role FROM users WHERE email = $1',
+        'SELECT id, username, email, password, role, is_active FROM users WHERE email = $1',
         [email]
       );
     } else {
       queryField = 'username';
       result = await pool.query(
-        'SELECT id, username, email, password, role FROM users WHERE username = $1',
+        'SELECT id, username, email, password, role, is_active FROM users WHERE username = $1',
         [username]
       );
     }
@@ -299,6 +499,14 @@ app.post('/api/auth/login', async (req, res) => {
     
     const user = result.rows[0];
     
+    // Check if user is active
+    if (user.is_active === false) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Account is deactivated' 
+      });
+    }
+    
     // Check password (plain text for now)
     if (password !== user.password) {
       return res.status(401).json({ 
@@ -307,18 +515,11 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
     
-    // Update last login time (handle if column doesn't exist)
-    try {
-      await pool.query(
-        'UPDATE users SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-        [user.id]
-      );
-    } catch (err) {
-      await pool.query(
-        'UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-        [user.id]
-      );
-    }
+    // Update last login time
+    await pool.query(
+      'UPDATE users SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [user.id]
+    );
     
     // Return user data (without password)
     const { password: _, ...userWithoutPassword } = user;
@@ -335,7 +536,8 @@ app.post('/api/auth/login', async (req, res) => {
     console.error('❌ Login error:', error.message);
     res.status(500).json({ 
       success: false, 
-      message: 'Login failed' 
+      message: 'Login failed',
+      error: error.message
     });
   }
 });
@@ -353,7 +555,9 @@ app.get('/api/auth/me', async (req, res) => {
     }
     
     const result = await pool.query(
-      'SELECT id, username, email, role, created_at FROM users WHERE id = $1',
+      `SELECT id, username, email, role, created_at, updated_at, 
+              profile_image, is_active, email_verified, last_login 
+       FROM users WHERE id = $1`,
       [userId]
     );
     
@@ -388,26 +592,30 @@ app.post('/api/auth/logout', (req, res) => {
 
 // ========== ADD MISSING ROUTES FOR FLUTTER APP ==========
 
-// 1. /api/test endpoint (your Flutter app checks this)
+// 1. /api/test endpoint
 app.get('/api/test', (req, res) => {
   res.json({
     success: true,
-    message: 'API test endpoint',
+    message: 'DrinkQuick API v2.0',
     working: true,
     timestamp: new Date().toISOString(),
+    migration_ready: true,
     availableEndpoints: [
       'POST /api/auth/register',
       'POST /api/auth/login',
       'GET /api/auth/me',
       'POST /api/auth/logout',
       'GET /api/drinks',
+      'GET /api/backup-data (MIGRATION)',
+      'GET /api/verify-migration (MIGRATION)',
       '/health',
-      '/admin'
+      '/admin',
+      '/debug-db'
     ]
   });
 });
 
-// 2. /api/drinks endpoint (your Flutter app needs this)
+// 2. /api/drinks endpoint
 app.get('/api/drinks', (req, res) => {
   res.json({
     success: true,
@@ -418,30 +626,35 @@ app.get('/api/drinks', (req, res) => {
         name: 'Mojito', 
         category: 'Cocktail', 
         price: 8.99,
-        ingredients: ['Rum', 'Mint', 'Lime', 'Sugar', 'Soda']
+        ingredients: ['Rum', 'Mint', 'Lime', 'Sugar', 'Soda'],
+        popular: true
       },
       { 
         id: 2, 
         name: 'Margarita', 
         category: 'Cocktail', 
         price: 9.99,
-        ingredients: ['Tequila', 'Triple Sec', 'Lime Juice']
+        ingredients: ['Tequila', 'Triple Sec', 'Lime Juice'],
+        popular: true
       },
       { 
         id: 3, 
         name: 'Beer', 
         category: 'Beer', 
         price: 5.99,
-        ingredients: ['Barley', 'Hops', 'Water', 'Yeast']
+        ingredients: ['Barley', 'Hops', 'Water', 'Yeast'],
+        popular: true
       },
       { 
         id: 4, 
         name: 'Wine', 
         category: 'Wine', 
         price: 7.99,
-        ingredients: ['Grapes', 'Yeast']
+        ingredients: ['Grapes', 'Yeast'],
+        popular: false
       }
-    ]
+    ],
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -450,7 +663,10 @@ app.get('/api/ping', (req, res) => {
   res.json({ 
     success: true, 
     message: 'pong',
-    timestamp: Date.now() 
+    timestamp: Date.now(),
+    server: 'DrinkQuick API',
+    version: '2.0',
+    migration_support: true
   });
 });
 
@@ -461,16 +677,26 @@ app.get('/', (req, res) => {
   res.json({ 
     success: true, 
     message: 'DrinkQuick API 🍹',
-    version: '1.0.0',
+    version: '2.0',
     timestamp: new Date().toISOString(),
+    status: '🟢 ONLINE',
+    migration: {
+      supported: true,
+      backup_route: '/api/backup-data',
+      verify_route: '/api/verify-migration',
+      instructions: 'Visit /api/backup-data for migration SQL'
+    },
     endpoints: [
       'POST /api/auth/register',
       'POST /api/auth/login',
       'GET /api/auth/me',
       'POST /api/auth/logout',
       'GET /api/drinks',
+      'GET /api/backup-data',
+      'GET /api/verify-migration',
       '/health',
-      '/admin'
+      '/admin',
+      '/debug-db'
     ]
   });
 });
@@ -478,19 +704,24 @@ app.get('/', (req, res) => {
 // Health check
 app.get('/health', async (req, res) => {
   try {
-    await pool.query('SELECT 1');
+    await pool.query('SELECT NOW()');
+    const usersCount = await pool.query('SELECT COUNT(*) FROM users');
+    
     res.json({ 
       success: true, 
       status: '✅ ONLINE', 
       database: '✅ CONNECTED',
-      time: new Date().toISOString()
+      users: parseInt(usersCount.rows[0].count),
+      time: new Date().toISOString(),
+      migration_ready: true
     });
   } catch (error) {
     res.json({ 
       success: true, 
       status: '⚠️ ONLINE', 
       database: '❌ DISCONNECTED',
-      error: error.message 
+      error: error.message,
+      migration_instructions: 'Fix database connection first'
     });
   }
 });
@@ -500,19 +731,44 @@ app.get('/debug-db', async (req, res) => {
   try {
     const usersCount = await pool.query('SELECT COUNT(*) FROM users');
     const columnsResult = await pool.query(`
-      SELECT column_name, data_type 
+      SELECT column_name, data_type, is_nullable, column_default
       FROM information_schema.columns 
-      WHERE table_name = 'users'
+      WHERE table_name = 'users' AND table_schema = 'public'
+      ORDER BY ordinal_position
+    `);
+    
+    const dbInfo = await pool.query(`
+      SELECT 
+        current_database() as db_name,
+        version() as db_version
     `);
     
     res.json({
       success: true,
-      users: parseInt(usersCount.rows[0].count),
+      database: {
+        name: dbInfo.rows[0].db_name,
+        version: dbInfo.rows[0].db_version,
+        provider: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech') ? 'Neon' : 'Render'
+      },
+      users: {
+        total: parseInt(usersCount.rows[0].count)
+      },
       columns: columnsResult.rows,
-      hasDatabaseUrl: !!process.env.DATABASE_URL
+      hasDatabaseUrl: !!process.env.DATABASE_URL,
+      url_preview: process.env.DATABASE_URL 
+        ? process.env.DATABASE_URL.substring(0, 30) + '...' 
+        : 'Not set',
+      migration: {
+        backup_available: true,
+        endpoint: '/api/backup-data'
+      }
     });
   } catch (error) {
-    res.json({ success: false, error: error.message });
+    res.json({ 
+      success: false, 
+      error: error.message,
+      hint: 'Check DATABASE_URL environment variable'
+    });
   }
 });
 
@@ -537,7 +793,11 @@ app.use((req, res) => {
       '/api/auth/logout',
       '/api/test',
       '/api/drinks',
-      '/api/ping'
+      '/api/ping',
+      '/api/backup-data',
+      '/api/verify-migration',
+      '/api/admin/users',
+      '/api/admin/stats'
     ]
   });
 });
@@ -545,14 +805,27 @@ app.use((req, res) => {
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log('\n🚀🚀🚀 DRINKQUICK SERVER STARTED 🚀🚀🚀');
-  console.log(`📍 Port: ${PORT}`);
-  console.log(`🌐 URL: https://drink-quick-cal-kja1.onrender.com`);
-  console.log(`🔐 Admin: /admin (password: ${ADMIN_PASSWORD})`);
-  console.log(`🔑 Login: POST /api/auth/login (accepts username OR email)`);
-  console.log(`👤 Register: POST /api/auth/register`);
-  console.log(`🍹 Drinks: GET /api/drinks`);
-  console.log(`🧪 Test: GET /api/test`);
-  console.log(`🗄️  Database: PostgreSQL`);
+  console.log('\n🚀🚀🚀 DRINKQUICK SERVER v2.0 🚀🚀🚀');
+  console.log('📍 Port:', PORT);
+  console.log('🌐 URL: https://drink-quick-cal-kja1.onrender.com');
+  console.log('📊 Database: PostgreSQL (Ready for Neon migration)');
+  console.log('\n📋 MIGRATION ENDPOINTS:');
+  console.log('   🔧 /api/backup-data - Get SQL for Neon import');
+  console.log('   ✅ /api/verify-migration - Check migration status');
+  console.log('\n🔑 AUTH ENDPOINTS:');
+  console.log('   👤 POST /api/auth/register');
+  console.log('   🔑 POST /api/auth/login (email OR username)');
+  console.log('   👁️  GET /api/auth/me');
+  console.log('\n🍹 APP ENDPOINTS:');
+  console.log('   🍸 GET /api/drinks');
+  console.log('   🧪 GET /api/test');
+  console.log('   ❤️  GET /health');
+  console.log('\n👑 ADMIN:');
+  console.log('   📋 GET /api/admin/users (Bearer token: admin123)');
+  console.log('   📊 GET /api/admin/stats');
+  console.log('   🗑️  DELETE /api/admin/users/:id');
+  console.log('========================================\n');
+  console.log('🚨 IMPORTANT: Backup your data before Render DB expires!');
+  console.log('   Visit: https://drink-quick-cal-kja1.onrender.com/api/backup-data');
   console.log('========================================\n');
 });
