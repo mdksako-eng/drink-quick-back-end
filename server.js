@@ -80,28 +80,7 @@ const verifyAdmin = (req, res, next) => {
 };
 
 // ========== MIGRATION BACKUP ROUTE ==========
-// IMPORTANT: Remove this route after migration is complete!
-app.get('/api/backup-data', async (req, res) => {
-  try {
-    console.log('💾 Creating backup for migration to Neon...');
-    
-    // Get all users
-    const usersResult = await pool.query(`
-      SELECT 
-        id, 
-        username, 
-        email, 
-        password, 
-        role, 
-        created_at,
-        updated_at,
-        COALESCE(profile_image, '') as profile_image,
-        COALESCE(is_active, true) as is_active,
-        COALESCE(email_verified, false) as email_verified,
-        COALESCE(last_login, created_at) as last_login
-      FROM users
-      ORDER BY id
-    `);
+
     
     // Get table structure
     const columnsResult = await pool.query(`
@@ -829,3 +808,4 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('   Visit: https://drink-quick-cal-kja1.onrender.com/api/backup-data');
   console.log('========================================\n');
 });
+
