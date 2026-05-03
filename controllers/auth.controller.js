@@ -4,6 +4,10 @@ const { sanitizeUser } = require('../utils/helpers');
 const { sendPasswordResetEmail, sendPasswordResetSuccessEmail, sendWelcomeEmail } = require('../utils/email.service');
 const crypto = require('crypto');
 
+// ============================================================
+// AUTHENTICATION FUNCTIONS
+// ============================================================
+
 // @desc    Register user
 // @route   POST /api/auth/register
 // @access  Public
@@ -11,7 +15,6 @@ const register = async(req, res) => {
     try {
         const { username, email, password, securityQuestions } = req.body;
 
-        // Check if user exists
         const userExists = await User.findOne({
             $or: [{ username }, { email }]
         });
@@ -23,7 +26,6 @@ const register = async(req, res) => {
             });
         }
 
-        // Create user
         const user = await User.create({
             username,
             email,
@@ -31,22 +33,18 @@ const register = async(req, res) => {
             securityQuestions
         });
 
-        // Generate tokens
         const token = generateToken(user._id);
         const refreshToken = generateRefreshToken(user._id);
 
-        // Save refresh token
         user.refreshToken = refreshToken;
         await user.save();
 
-        // Send welcome email
         try {
             await sendWelcomeEmail(user);
         } catch (emailError) {
             console.log('Welcome email failed:', emailError.message);
         }
 
-        // Sanitize user data
         const userData = sanitizeUser(user);
 
         res.status(201).json({
@@ -74,7 +72,6 @@ const login = async(req, res) => {
     try {
         const { username, password } = req.body;
 
-        // Check if user exists with password
         const user = await User.findOne({ username }).select('+password +loginAttempts +lockUntil');
 
         if (!user) {
@@ -84,7 +81,6 @@ const login = async(req, res) => {
             });
         }
 
-        // Check if account is locked
         if (user.isLocked()) {
             const remainingTime = Math.ceil((user.lockUntil - Date.now()) / 60000);
             return res.status(423).json({
@@ -93,42 +89,30 @@ const login = async(req, res) => {
             });
         }
 
-        // Check if account is active
         if (!user.isActive) {
             return res.status(401).json({
                 status: 'error',
-                message: 'Account is deactivated. Contact your manager.'
+                message: 'Account is deactivated. Contact your administrator.'
             });
         }
 
-        // Check password
         const isPasswordMatch = await user.comparePassword(password);
         if (!isPasswordMatch) {
-            // Increment login attempts
             await user.incrementLoginAttempts();
-
             return res.status(401).json({
                 status: 'error',
                 message: 'Invalid credentials'
             });
         }
 
-        // Reset login attempts on successful login
         await user.resetLoginAttempts();
-
-        // Update last login
         user.lastLogin = Date.now();
-        await user.save();
 
-        // Generate tokens
         const token = generateToken(user._id);
         const refreshToken = generateRefreshToken(user._id);
-
-        // Save refresh token
         user.refreshToken = refreshToken;
         await user.save();
 
-        // Sanitize user data
         const userData = sanitizeUser(user);
 
         res.json({
@@ -155,12 +139,10 @@ const login = async(req, res) => {
 const logout = async(req, res) => {
     try {
         const user = await User.findById(req.user._id);
-
         if (user) {
             user.refreshToken = null;
             await user.save();
         }
-
         res.json({
             status: 'success',
             message: 'Logged out successfully'
@@ -180,31 +162,23 @@ const logout = async(req, res) => {
 const refreshToken = async(req, res) => {
     try {
         const { refreshToken } = req.body;
-
         if (!refreshToken) {
             return res.status(401).json({
                 status: 'error',
                 message: 'Refresh token required'
             });
         }
-
         const user = await User.findOne({ refreshToken }).select('+refreshToken');
-
         if (!user) {
             return res.status(401).json({
                 status: 'error',
                 message: 'Invalid refresh token'
             });
         }
-
-        // Generate new tokens
         const newToken = generateToken(user._id);
         const newRefreshToken = generateRefreshToken(user._id);
-
-        // Update refresh token
         user.refreshToken = newRefreshToken;
         await user.save();
-
         res.json({
             status: 'success',
             data: {
@@ -227,24 +201,16 @@ const refreshToken = async(req, res) => {
 const forgotPassword = async(req, res) => {
     try {
         const { email } = req.body;
-
-        // Find user by email
         const user = await User.findOne({ email });
-
         if (!user) {
             return res.json({
                 status: 'success',
                 message: 'If your email exists, you will receive a password reset link'
             });
         }
-
-        // Generate reset token
         const resetToken = user.generatePasswordResetToken();
         await user.save();
-
-        // Create reset URL
-        const resetUrl = `${process.env.PASSWORD_RESET_URL}/${resetToken}`;
-
+        const resetUrl = `${process.env.PASSWORD_RESET_URL || 'http://localhost:3000/reset-password'}/${resetToken}`;
         try {
             await sendPasswordResetEmail(user, resetUrl);
             res.json({
@@ -273,27 +239,22 @@ const resetPassword = async(req, res) => {
     try {
         const { token } = req.params;
         const { newPassword } = req.body;
-
         const user = await User.findByResetToken(token);
-
         if (!user) {
             return res.status(400).json({
                 status: 'error',
                 message: 'Invalid or expired reset token'
             });
         }
-
         user.password = newPassword;
         user.resetPasswordToken = undefined;
         user.resetPasswordExpire = undefined;
         await user.save();
-
         try {
             await sendPasswordResetSuccessEmail(user);
         } catch (emailError) {
             console.log('Success email failed:', emailError.message);
         }
-
         res.json({
             status: 'success',
             message: 'Password reset successfully'
@@ -313,16 +274,13 @@ const resetPassword = async(req, res) => {
 const resetPasswordWithSecurity = async(req, res) => {
     try {
         const { username, email, securityAnswers, newPassword } = req.body;
-
         const user = await User.findOne({ username, email });
-
         if (!user) {
             return res.status(404).json({
                 status: 'error',
                 message: 'User not found'
             });
         }
-
         if (
             user.securityQuestions.question1 !== securityAnswers.question1 ||
             user.securityQuestions.question2 !== securityAnswers.question2
@@ -332,16 +290,13 @@ const resetPasswordWithSecurity = async(req, res) => {
                 message: 'Security answers are incorrect'
             });
         }
-
         user.password = newPassword;
         await user.save();
-
         try {
             await sendPasswordResetSuccessEmail(user);
         } catch (emailError) {
             console.log('Success email failed:', emailError.message);
         }
-
         res.json({
             status: 'success',
             message: 'Password reset successfully'
@@ -361,16 +316,13 @@ const resetPasswordWithSecurity = async(req, res) => {
 const getMe = async(req, res) => {
     try {
         const user = await User.findById(req.user._id);
-
         if (!user) {
             return res.status(404).json({
                 status: 'error',
                 message: 'User not found'
             });
         }
-
         const userData = sanitizeUser(user);
-
         res.json({
             status: 'success',
             data: { user: userData }
@@ -390,16 +342,13 @@ const getMe = async(req, res) => {
 const verifyResetToken = async(req, res) => {
     try {
         const { token } = req.params;
-
         const user = await User.findByResetToken(token);
-
         if (!user) {
             return res.status(400).json({
                 status: 'error',
                 message: 'Invalid or expired reset token'
             });
         }
-
         res.json({
             status: 'success',
             message: 'Token is valid',
@@ -424,16 +373,13 @@ const changePassword = async(req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
         const userId = req.user._id;
-
         const user = await User.findById(userId).select('+password');
-
         if (!user) {
             return res.status(404).json({
                 status: 'error',
                 message: 'User not found'
             });
         }
-
         const isPasswordMatch = await user.comparePassword(currentPassword);
         if (!isPasswordMatch) {
             return res.status(401).json({
@@ -441,10 +387,8 @@ const changePassword = async(req, res) => {
                 message: 'Current password is incorrect'
             });
         }
-
         user.password = newPassword;
         await user.save();
-
         res.json({
             status: 'success',
             message: 'Password changed successfully'
@@ -464,16 +408,13 @@ const changePassword = async(req, res) => {
 const verifySecurityQuestions = async(req, res) => {
     try {
         const { username, email, securityAnswers } = req.body;
-
         const user = await User.findOne({ username, email });
-
         if (!user) {
             return res.status(404).json({
                 status: 'error',
                 message: 'User not found'
             });
         }
-
         if (
             user.securityQuestions.question1 !== securityAnswers.question1 ||
             user.securityQuestions.question2 !== securityAnswers.question2
@@ -483,7 +424,6 @@ const verifySecurityQuestions = async(req, res) => {
                 message: 'Security answers are incorrect'
             });
         }
-
         res.json({
             status: 'success',
             message: 'Security questions verified successfully'
@@ -498,17 +438,16 @@ const verifySecurityQuestions = async(req, res) => {
 };
 
 // ============================================================
-// STAFF MANAGEMENT FUNCTIONS (NEW)
+// USER MANAGEMENT FUNCTIONS (Admin & Manager)
 // ============================================================
 
-// @desc    Create staff (Admin or Manager only)
+// @desc    Create staff (Admin or Manager)
 // @route   POST /api/auth/create-staff
 // @access  Private (Admin and Manager)
 const createStaff = async(req, res) => {
     try {
         const { username, email, password, securityQuestions } = req.body;
 
-        // Only Admin or Manager can create staff
         if (req.user.role !== 'Administrator' && req.user.role !== 'Manager') {
             return res.status(403).json({
                 status: 'error',
@@ -516,7 +455,6 @@ const createStaff = async(req, res) => {
             });
         }
 
-        // Manager must have a company
         if (req.user.role === 'Manager' && !req.user.companyId) {
             return res.status(400).json({
                 status: 'error',
@@ -524,7 +462,6 @@ const createStaff = async(req, res) => {
             });
         }
 
-        // Check if user already exists
         const userExists = await User.findOne({
             $or: [{ username }, { email }]
         });
@@ -536,7 +473,6 @@ const createStaff = async(req, res) => {
             });
         }
 
-        // Create staff user with same company as creator
         const user = await User.create({
             username,
             email,
@@ -546,7 +482,7 @@ const createStaff = async(req, res) => {
                 question1: securityQuestions?.question1 || securityQuestions?.answer1 || '',
                 question2: securityQuestions?.question2 || securityQuestions?.answer2 || ''
             },
-            companyId: req.user.companyId || null // Same company as creator
+            companyId: req.user.companyId || null
         });
 
         const userData = sanitizeUser(user);
@@ -570,20 +506,19 @@ const createStaff = async(req, res) => {
     }
 };
 
-// @desc    Block staff (Admin or Manager - same company)
-// @route   POST /api/auth/block-staff/:id
+// @desc    Block any user (Admin: anyone except self/admins, Manager: only Staff in their company)
+// @route   POST /api/auth/block-user/:id
 // @access  Private (Admin and Manager)
-const blockStaff = async(req, res) => {
+const blockUser = async(req, res) => {
     try {
-        const staffId = req.params.id;
+        const userId = req.params.id;
 
-        // Find the staff user
-        const staff = await User.findById(staffId);
+        const user = await User.findById(userId);
 
-        if (!staff) {
+        if (!user) {
             return res.status(404).json({
                 status: 'error',
-                message: 'Staff not found'
+                message: 'User not found'
             });
         }
 
@@ -591,79 +526,102 @@ const blockStaff = async(req, res) => {
         if (req.user.role !== 'Administrator' && req.user.role !== 'Manager') {
             return res.status(403).json({
                 status: 'error',
-                message: 'Not authorized to block staff'
+                message: 'Not authorized to block users'
             });
         }
 
-        // Manager can only block staff from their own company
+        // Cannot block yourself
+        if (userId === req.user._id.toString()) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'You cannot block your own account'
+            });
+        }
+
+        // Cannot block another Admin
+        if (user.role === 'Administrator') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Cannot block an Administrator account'
+            });
+        }
+
+        // Manager restrictions
         if (req.user.role === 'Manager') {
+            // Manager cannot block other Managers
+            if (user.role === 'Manager') {
+                return res.status(403).json({
+                    status: 'error',
+                    message: 'Managers cannot block other Managers'
+                });
+            }
+
+            // Manager can only block users from their company
             if (!req.user.companyId) {
                 return res.status(400).json({
                     status: 'error',
                     message: 'Manager must belong to a company'
                 });
             }
-            
-            // Compare company IDs
-            const creatorCompanyId = req.user.companyId.toString();
-            const staffCompanyId = staff.companyId ? staff.companyId.toString() : null;
-            
-            if (staffCompanyId !== creatorCompanyId) {
+
+            const managerCompanyId = req.user.companyId.toString();
+            const userCompanyId = user.companyId ? user.companyId.toString() : null;
+
+            if (userCompanyId !== managerCompanyId) {
                 return res.status(403).json({
                     status: 'error',
-                    message: 'You can only manage staff from your own company'
+                    message: 'You can only manage users from your own company'
+                });
+            }
+
+            // Manager can only block Staff, not other roles
+            if (user.role !== 'Staff' && user.role !== 'Customer') {
+                return res.status(403).json({
+                    status: 'error',
+                    message: 'Manager can only block Staff or Customer accounts'
                 });
             }
         }
 
-        // Only allow blocking Staff role (not Admin or Manager)
-        if (staff.role !== 'Staff') {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Can only block staff accounts, not admin or manager accounts'
-            });
-        }
-
-        // Block the staff
-        staff.isActive = false;
-        await staff.save();
+        user.isActive = false;
+        await user.save();
 
         res.json({
             status: 'success',
-            message: `${staff.username} has been blocked successfully`,
+            message: `${user.role} '${user.username}' has been blocked successfully`,
             data: {
                 user: {
-                    id: staff._id,
-                    username: staff.username,
-                    email: staff.email,
-                    role: staff.role,
-                    isActive: false
+                    id: user._id,
+                    username: user.username,
+                    email: user.email,
+                    role: user.role,
+                    isActive: false,
+                    companyId: user.companyId
                 }
             }
         });
     } catch (error) {
-        console.error('Block staff error:', error);
+        console.error('Block user error:', error);
         res.status(500).json({
             status: 'error',
-            message: 'Server error while blocking staff'
+            message: 'Server error while blocking user'
         });
     }
 };
 
-// @desc    Unblock staff (Admin or Manager - same company)
-// @route   POST /api/auth/unblock-staff/:id
+// @desc    Unblock any user (Admin: anyone, Manager: only Staff in their company)
+// @route   POST /api/auth/unblock-user/:id
 // @access  Private (Admin and Manager)
-const unblockStaff = async(req, res) => {
+const unblockUser = async(req, res) => {
     try {
-        const staffId = req.params.id;
+        const userId = req.params.id;
 
-        // Find the staff user
-        const staff = await User.findById(staffId);
+        const user = await User.findById(userId);
 
-        if (!staff) {
+        if (!user) {
             return res.status(404).json({
                 status: 'error',
-                message: 'Staff not found'
+                message: 'User not found'
             });
         }
 
@@ -671,11 +629,32 @@ const unblockStaff = async(req, res) => {
         if (req.user.role !== 'Administrator' && req.user.role !== 'Manager') {
             return res.status(403).json({
                 status: 'error',
-                message: 'Not authorized to unblock staff'
+                message: 'Not authorized to unblock users'
             });
         }
 
-        // Manager can only unblock staff from their own company
+        // Admin can unblock anyone
+        if (req.user.role === 'Administrator') {
+            user.isActive = true;
+            await user.save();
+
+            return res.json({
+                status: 'success',
+                message: `${user.role} '${user.username}' has been unblocked successfully`,
+                data: {
+                    user: {
+                        id: user._id,
+                        username: user.username,
+                        email: user.email,
+                        role: user.role,
+                        isActive: true,
+                        companyId: user.companyId
+                    }
+                }
+            });
+        }
+
+        // Manager restrictions
         if (req.user.role === 'Manager') {
             if (!req.user.companyId) {
                 return res.status(400).json({
@@ -683,87 +662,108 @@ const unblockStaff = async(req, res) => {
                     message: 'Manager must belong to a company'
                 });
             }
-            
-            const creatorCompanyId = req.user.companyId.toString();
-            const staffCompanyId = staff.companyId ? staff.companyId.toString() : null;
-            
-            if (staffCompanyId !== creatorCompanyId) {
+
+            const managerCompanyId = req.user.companyId.toString();
+            const userCompanyId = user.companyId ? user.companyId.toString() : null;
+
+            if (userCompanyId !== managerCompanyId) {
                 return res.status(403).json({
                     status: 'error',
-                    message: 'You can only manage staff from your own company'
+                    message: 'You can only manage users from your own company'
                 });
             }
         }
 
-        // Unblock the staff
-        staff.isActive = true;
-        await staff.save();
+        user.isActive = true;
+        await user.save();
 
         res.json({
             status: 'success',
-            message: `${staff.username} has been unblocked successfully`,
+            message: `${user.role} '${user.username}' has been unblocked successfully`,
             data: {
                 user: {
-                    id: staff._id,
-                    username: staff.username,
-                    email: staff.email,
-                    role: staff.role,
-                    isActive: true
+                    id: user._id,
+                    username: user.username,
+                    email: user.email,
+                    role: user.role,
+                    isActive: true,
+                    companyId: user.companyId
                 }
             }
         });
     } catch (error) {
-        console.error('Unblock staff error:', error);
+        console.error('Unblock user error:', error);
         res.status(500).json({
             status: 'error',
-            message: 'Server error while unblocking staff'
+            message: 'Server error while unblocking user'
         });
     }
 };
 
-// @desc    Delete staff permanently (Admin only)
-// @route   DELETE /api/auth/delete-staff/:id
+// @desc    Delete any user permanently (Admin only)
+// @route   DELETE /api/auth/users/:id
 // @access  Private (Admin only)
-const deleteStaff = async(req, res) => {
+const deleteUser = async(req, res) => {
     try {
-        const staffId = req.params.id;
+        const userId = req.params.id;
 
-        // Only Admin can permanently delete
+        // Only Admin can delete users
         if (req.user.role !== 'Administrator') {
             return res.status(403).json({
                 status: 'error',
-                message: 'Only Administrator can permanently delete staff accounts'
+                message: 'Only Administrator can delete user accounts'
             });
         }
 
-        const staff = await User.findById(staffId);
-
-        if (!staff) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Staff not found'
-            });
-        }
-
-        // Only allow deleting Staff role
-        if (staff.role !== 'Staff') {
+        // Prevent admin from deleting themselves
+        if (userId === req.user._id.toString()) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Can only delete staff accounts'
+                message: 'You cannot delete your own account'
             });
         }
 
-        await User.findByIdAndDelete(staffId);
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'User not found'
+            });
+        }
+
+        // Prevent deleting another Admin
+        if (user.role === 'Administrator') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Cannot delete another Administrator account'
+            });
+        }
+
+        const deletedUsername = user.username;
+        const deletedRole = user.role;
+        const deletedCompanyId = user.companyId;
+
+        // Permanent delete
+        await User.findByIdAndDelete(userId);
 
         res.json({
             status: 'success',
-            message: `${staff.username} has been permanently deleted`
+            message: `${deletedRole} '${deletedUsername}' has been permanently deleted`,
+            data: {
+                deletedUser: {
+                    id: userId,
+                    username: deletedUsername,
+                    role: deletedRole,
+                    companyId: deletedCompanyId
+                }
+            }
         });
     } catch (error) {
-        console.error('Delete staff error:', error);
+        console.error('Delete user error:', error);
         res.status(500).json({
             status: 'error',
-            message: 'Server error while deleting staff'
+            message: 'Server error while deleting user'
         });
     }
 };
@@ -781,7 +781,7 @@ module.exports = {
     changePassword,
     verifySecurityQuestions,
     createStaff,
-    blockStaff,
-    unblockStaff,
-    deleteStaff
+    blockUser,
+    unblockUser,
+    deleteUser
 };
