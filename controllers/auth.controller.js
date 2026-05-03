@@ -97,7 +97,7 @@ const login = async(req, res) => {
         if (!user.isActive) {
             return res.status(401).json({
                 status: 'error',
-                message: 'Account is deactivated'
+                message: 'Account is deactivated. Contact your manager.'
             });
         }
 
@@ -232,7 +232,6 @@ const forgotPassword = async(req, res) => {
         const user = await User.findOne({ email });
 
         if (!user) {
-            // For security, don't reveal if user exists
             return res.json({
                 status: 'success',
                 message: 'If your email exists, you will receive a password reset link'
@@ -247,19 +246,15 @@ const forgotPassword = async(req, res) => {
         const resetUrl = `${process.env.PASSWORD_RESET_URL}/${resetToken}`;
 
         try {
-            // Send email
             await sendPasswordResetEmail(user, resetUrl);
-
             res.json({
                 status: 'success',
                 message: 'Password reset email sent'
             });
         } catch (emailError) {
-            // Remove reset token if email fails
             user.resetPasswordToken = undefined;
             user.resetPasswordExpire = undefined;
             await user.save();
-
             throw emailError;
         }
     } catch (error) {
@@ -279,7 +274,6 @@ const resetPassword = async(req, res) => {
         const { token } = req.params;
         const { newPassword } = req.body;
 
-        // Find user by reset token
         const user = await User.findByResetToken(token);
 
         if (!user) {
@@ -289,13 +283,11 @@ const resetPassword = async(req, res) => {
             });
         }
 
-        // Update password
         user.password = newPassword;
         user.resetPasswordToken = undefined;
         user.resetPasswordExpire = undefined;
         await user.save();
 
-        // Send success email
         try {
             await sendPasswordResetSuccessEmail(user);
         } catch (emailError) {
@@ -322,7 +314,6 @@ const resetPasswordWithSecurity = async(req, res) => {
     try {
         const { username, email, securityAnswers, newPassword } = req.body;
 
-        // Find user
         const user = await User.findOne({ username, email });
 
         if (!user) {
@@ -332,7 +323,6 @@ const resetPasswordWithSecurity = async(req, res) => {
             });
         }
 
-        // Verify security answers
         if (
             user.securityQuestions.question1 !== securityAnswers.question1 ||
             user.securityQuestions.question2 !== securityAnswers.question2
@@ -343,11 +333,9 @@ const resetPasswordWithSecurity = async(req, res) => {
             });
         }
 
-        // Update password
         user.password = newPassword;
         await user.save();
 
-        // Send success email
         try {
             await sendPasswordResetSuccessEmail(user);
         } catch (emailError) {
@@ -385,9 +373,7 @@ const getMe = async(req, res) => {
 
         res.json({
             status: 'success',
-            data: {
-                user: userData
-            }
+            data: { user: userData }
         });
     } catch (error) {
         console.error('Get me error:', error);
@@ -405,7 +391,6 @@ const verifyResetToken = async(req, res) => {
     try {
         const { token } = req.params;
 
-        // Find user by reset token
         const user = await User.findByResetToken(token);
 
         if (!user) {
@@ -440,7 +425,6 @@ const changePassword = async(req, res) => {
         const { currentPassword, newPassword } = req.body;
         const userId = req.user._id;
 
-        // Get user with password
         const user = await User.findById(userId).select('+password');
 
         if (!user) {
@@ -450,7 +434,6 @@ const changePassword = async(req, res) => {
             });
         }
 
-        // Check current password
         const isPasswordMatch = await user.comparePassword(currentPassword);
         if (!isPasswordMatch) {
             return res.status(401).json({
@@ -459,7 +442,6 @@ const changePassword = async(req, res) => {
             });
         }
 
-        // Update password
         user.password = newPassword;
         await user.save();
 
@@ -483,7 +465,6 @@ const verifySecurityQuestions = async(req, res) => {
     try {
         const { username, email, securityAnswers } = req.body;
 
-        // Find user
         const user = await User.findOne({ username, email });
 
         if (!user) {
@@ -493,7 +474,6 @@ const verifySecurityQuestions = async(req, res) => {
             });
         }
 
-        // Verify security answers
         if (
             user.securityQuestions.question1 !== securityAnswers.question1 ||
             user.securityQuestions.question2 !== securityAnswers.question2
@@ -517,6 +497,277 @@ const verifySecurityQuestions = async(req, res) => {
     }
 };
 
+// ============================================================
+// STAFF MANAGEMENT FUNCTIONS (NEW)
+// ============================================================
+
+// @desc    Create staff (Admin or Manager only)
+// @route   POST /api/auth/create-staff
+// @access  Private (Admin and Manager)
+const createStaff = async(req, res) => {
+    try {
+        const { username, email, password, securityQuestions } = req.body;
+
+        // Only Admin or Manager can create staff
+        if (req.user.role !== 'Administrator' && req.user.role !== 'Manager') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Only Administrator or Manager can create staff accounts'
+            });
+        }
+
+        // Manager must have a company
+        if (req.user.role === 'Manager' && !req.user.companyId) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Manager must belong to a company to create staff'
+            });
+        }
+
+        // Check if user already exists
+        const userExists = await User.findOne({
+            $or: [{ username }, { email }]
+        });
+
+        if (userExists) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Username or email already exists'
+            });
+        }
+
+        // Create staff user with same company as creator
+        const user = await User.create({
+            username,
+            email,
+            password,
+            role: 'Staff',
+            securityQuestions: {
+                question1: securityQuestions?.question1 || securityQuestions?.answer1 || '',
+                question2: securityQuestions?.question2 || securityQuestions?.answer2 || ''
+            },
+            companyId: req.user.companyId || null // Same company as creator
+        });
+
+        const userData = sanitizeUser(user);
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Staff account created successfully',
+            data: {
+                user: userData,
+                createdBy: req.user.username,
+                createdByRole: req.user.role,
+                companyId: user.companyId
+            }
+        });
+    } catch (error) {
+        console.error('Create staff error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Server error during staff creation'
+        });
+    }
+};
+
+// @desc    Block staff (Admin or Manager - same company)
+// @route   POST /api/auth/block-staff/:id
+// @access  Private (Admin and Manager)
+const blockStaff = async(req, res) => {
+    try {
+        const staffId = req.params.id;
+
+        // Find the staff user
+        const staff = await User.findById(staffId);
+
+        if (!staff) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Staff not found'
+            });
+        }
+
+        // Only Admin or Manager can block
+        if (req.user.role !== 'Administrator' && req.user.role !== 'Manager') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Not authorized to block staff'
+            });
+        }
+
+        // Manager can only block staff from their own company
+        if (req.user.role === 'Manager') {
+            if (!req.user.companyId) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'Manager must belong to a company'
+                });
+            }
+            
+            // Compare company IDs
+            const creatorCompanyId = req.user.companyId.toString();
+            const staffCompanyId = staff.companyId ? staff.companyId.toString() : null;
+            
+            if (staffCompanyId !== creatorCompanyId) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: 'You can only manage staff from your own company'
+                });
+            }
+        }
+
+        // Only allow blocking Staff role (not Admin or Manager)
+        if (staff.role !== 'Staff') {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Can only block staff accounts, not admin or manager accounts'
+            });
+        }
+
+        // Block the staff
+        staff.isActive = false;
+        await staff.save();
+
+        res.json({
+            status: 'success',
+            message: `${staff.username} has been blocked successfully`,
+            data: {
+                user: {
+                    id: staff._id,
+                    username: staff.username,
+                    email: staff.email,
+                    role: staff.role,
+                    isActive: false
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Block staff error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Server error while blocking staff'
+        });
+    }
+};
+
+// @desc    Unblock staff (Admin or Manager - same company)
+// @route   POST /api/auth/unblock-staff/:id
+// @access  Private (Admin and Manager)
+const unblockStaff = async(req, res) => {
+    try {
+        const staffId = req.params.id;
+
+        // Find the staff user
+        const staff = await User.findById(staffId);
+
+        if (!staff) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Staff not found'
+            });
+        }
+
+        // Only Admin or Manager can unblock
+        if (req.user.role !== 'Administrator' && req.user.role !== 'Manager') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Not authorized to unblock staff'
+            });
+        }
+
+        // Manager can only unblock staff from their own company
+        if (req.user.role === 'Manager') {
+            if (!req.user.companyId) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'Manager must belong to a company'
+                });
+            }
+            
+            const creatorCompanyId = req.user.companyId.toString();
+            const staffCompanyId = staff.companyId ? staff.companyId.toString() : null;
+            
+            if (staffCompanyId !== creatorCompanyId) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: 'You can only manage staff from your own company'
+                });
+            }
+        }
+
+        // Unblock the staff
+        staff.isActive = true;
+        await staff.save();
+
+        res.json({
+            status: 'success',
+            message: `${staff.username} has been unblocked successfully`,
+            data: {
+                user: {
+                    id: staff._id,
+                    username: staff.username,
+                    email: staff.email,
+                    role: staff.role,
+                    isActive: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Unblock staff error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Server error while unblocking staff'
+        });
+    }
+};
+
+// @desc    Delete staff permanently (Admin only)
+// @route   DELETE /api/auth/delete-staff/:id
+// @access  Private (Admin only)
+const deleteStaff = async(req, res) => {
+    try {
+        const staffId = req.params.id;
+
+        // Only Admin can permanently delete
+        if (req.user.role !== 'Administrator') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Only Administrator can permanently delete staff accounts'
+            });
+        }
+
+        const staff = await User.findById(staffId);
+
+        if (!staff) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Staff not found'
+            });
+        }
+
+        // Only allow deleting Staff role
+        if (staff.role !== 'Staff') {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Can only delete staff accounts'
+            });
+        }
+
+        await User.findByIdAndDelete(staffId);
+
+        res.json({
+            status: 'success',
+            message: `${staff.username} has been permanently deleted`
+        });
+    } catch (error) {
+        console.error('Delete staff error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Server error while deleting staff'
+        });
+    }
+};
+
 module.exports = {
     register,
     login,
@@ -528,5 +779,9 @@ module.exports = {
     getMe,
     verifyResetToken,
     changePassword,
-    verifySecurityQuestions
+    verifySecurityQuestions,
+    createStaff,
+    blockStaff,
+    unblockStaff,
+    deleteStaff
 };
