@@ -6,6 +6,9 @@ require('dotenv').config();
 
 const app = express();
 
+// ========== EMAIL SERVICE ==========
+const { sendResetCodeEmail } = require('./utils/email.service');
+
 // ========== POSTGRESQL SETUP ==========
 console.log('🔌 Connecting to PostgreSQL (Neon)...');
 
@@ -122,6 +125,72 @@ const verifyAdmin = (req, res, next) => {
     res.status(403).json({ success: false, message: 'Wrong admin password' });
   }
 };
+
+// ========== PASSWORD RESET WITH EMAIL CODE ==========
+const resetCodes = {};
+const generateResetCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+// SEND RESET CODE TO EMAIL
+app.post('/api/auth/send-reset-code', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ status: 'error', message: 'Email required' });
+    
+    const result = await pool.query('SELECT id, username, email FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      return res.json({ status: 'success', message: 'If your email exists, a reset code has been sent' });
+    }
+    
+    const user = result.rows[0];
+    const code = generateResetCode();
+    resetCodes[email] = { code, userId: user.id, expiresAt: Date.now() + 10 * 60 * 1000 };
+    
+    await sendResetCodeEmail(email, code, user.username);
+    console.log(`📧 Reset code sent to ${email}`);
+    
+    res.json({ status: 'success', message: 'Reset code sent to your email' });
+  } catch (error) {
+    console.error('Send code error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to send code' });
+  }
+});
+
+// VERIFY RESET CODE
+app.post('/api/auth/verify-reset-code', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) return res.status(400).json({ status: 'error', message: 'Email and code required' });
+    
+    const stored = resetCodes[email];
+    if (!stored) return res.status(400).json({ status: 'error', message: 'No reset code found' });
+    if (Date.now() > stored.expiresAt) { delete resetCodes[email]; return res.status(400).json({ status: 'error', message: 'Code expired' }); }
+    if (stored.code !== code) return res.status(400).json({ status: 'error', message: 'Invalid code' });
+    
+    res.json({ status: 'success', message: 'Code verified' });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// RESET PASSWORD WITH CODE
+app.post('/api/auth/reset-password-code', async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+    if (!email || !code || !newPassword) return res.status(400).json({ status: 'error', message: 'All fields required' });
+    
+    const stored = resetCodes[email];
+    if (!stored || stored.code !== code || Date.now() > stored.expiresAt) {
+      return res.status(400).json({ status: 'error', message: 'Invalid or expired code' });
+    }
+    
+    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [newPassword, stored.userId]);
+    delete resetCodes[email];
+    
+    res.json({ status: 'success', message: 'Password reset successfully!' });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
 
 // ========== AUTH ROUTES ==========
 
@@ -432,17 +501,30 @@ app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
 
 // ========== OTHER ROUTES ==========
 
-app.get('/api/drinks', (req, res) => {
-  res.json({ success: true, count: 4, drinks: [
-    { id: 1, name: 'Mojito', category: 'Cocktail', price: 8.99 },
-    { id: 2, name: 'Margarita', category: 'Cocktail', price: 9.99 },
-    { id: 3, name: 'Beer', category: 'Beer', price: 5.99 },
-    { id: 4, name: 'Wine', category: 'Wine', price: 7.99 }
-  ]});
+// GET DRINKS FROM DATABASE
+app.get('/api/drinks', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM drinks WHERE is_active = true ORDER BY name ASC'
+    );
+    
+    res.json({
+      success: true,
+      count: result.rows.length,
+      drinks: result.rows
+    });
+  } catch (error) {
+    // If drinks table doesn't exist yet, return empty array
+    res.json({ 
+      success: true, 
+      count: 0, 
+      drinks: [],
+      message: 'No drinks table yet. Create one or use the app to add drinks.'
+    });
+  }
 });
-
 app.get('/api/test', (req, res) => {
-  res.json({ success: true, message: 'DrinkQuick API v2.0', working: true, database: 'Neon PostgreSQL' });
+  res.json({ success: true, message: 'DrinkQuick API v3.0', working: true, database: 'Neon PostgreSQL', email: 'Enabled' });
 });
 
 app.get('/api/ping', (req, res) => {
@@ -487,5 +569,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 DRINKQUICK SERVER v2.0 🚀`);
   console.log(`📍 Port: ${PORT}`);
-  console.log('🗄️  Database: Neon PostgreSQL\n');
+  console.log('🗄️  Database: Neon PostgreSQL');
+  console.log('📧 Email: Password Reset Codes Enabled\n');
 });
