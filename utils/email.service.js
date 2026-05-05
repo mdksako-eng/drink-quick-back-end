@@ -1,359 +1,64 @@
-// utils/email.service.js
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 const winston = require('winston');
 
 const logger = winston.createLogger({
     level: 'info',
-    format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-    ),
-    transports: [
-        new winston.transports.File({ filename: 'logs/email.log' }),
-    ],
+    format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
+    transports: [new winston.transports.File({ filename: 'logs/email.log' })],
 });
 
-// Create transporter
-const createTransporter = () => {
-    return nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 587,
-        secure: false,
-        requireTLS: true,
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
-        tls: {
-            ciphers: 'SSLv3',
-            rejectUnauthorized: false,
-            minVersion: 'TLSv1'
-        },
-        connectionTimeout: 30000,
-        greetingTimeout: 30000,
-        socketTimeout: 30000,
-        debug: true,
-        logger: true
-    });
-};
-
-// Email templates
-const emailTemplates = {
-        passwordReset: (name, resetLink) => ({
-            subject: 'Drinks Calculator - Password Reset',
-            html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; }
-          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
-          .logo { font-size: 24px; font-weight: bold; color: white; }
-          .code { background: #f0f0f0; padding: 10px; border-radius: 5px; font-family: monospace; word-break: break-all; margin: 20px 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <div class="logo">🍻 Drinks Calculator</div>
-            <h1>Password Reset Request</h1>
-          </div>
-          <div class="content">
-            <h2>Hello ${name},</h2>
-            <p>We received a request to reset your password for your Drinks Calculator account.</p>
-            <p>Click the button below to reset your password:</p>
-            <p style="text-align: center;">
-              <a href="${resetLink}" class="button">Reset Password</a>
-            </p>
-            <p>This link will expire in 1 hour. If you didn't request a password reset, please ignore this email.</p>
-            <p>If the button doesn't work, copy and paste this link into your browser:</p>
-            <div class="code">${resetLink}</div>
-            <div class="footer">
-              <p>This email was sent by Drinks Calculator. Please do not reply to this email.</p>
-              <p>If you need assistance, contact our support team.</p>
-            </div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `,
-        }),
-
-        passwordResetSuccess: (name) => ({
-            subject: 'Drinks Calculator - Password Reset Successful',
-            html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #38b000 0%, #16a753 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .success-icon { font-size: 48px; color: #38b000; text-align: center; }
-          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>✅ Password Reset Successful</h1>
-          </div>
-          <div class="content">
-            <div class="success-icon">✓</div>
-            <h2>Hello ${name},</h2>
-            <p>Your password has been successfully reset.</p>
-            <p>If you did not initiate this password reset, please contact our support team immediately.</p>
-            <p>For security reasons, we recommend:</p>
-            <ul>
-              <li>Using a strong, unique password</li>
-              <li>Enabling two-factor authentication if available</li>
-              <li>Not sharing your password with anyone</li>
-            </ul>
-            <div class="footer">
-              <p>This email was sent by Drinks Calculator.</p>
-            </div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `,
-        }),
-
-        welcome: (name, username) => ({
-            subject: 'Welcome to Drinks Calculator! 🍻',
-            html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .feature { background: white; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #667eea; }
-          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>Welcome to Drinks Calculator! 🍻</h1>
-          </div>
-          <div class="content">
-            <h2>Hello ${name},</h2>
-            <p>Thank you for registering with Drinks Calculator. We're excited to have you on board!</p>
-            <p>Your account details:</p>
-            <ul>
-              <li><strong>Username:</strong> ${username}</li>
-              <li><strong>Account Type:</strong> Customer</li>
-              <li><strong>Registration Date:</strong> ${new Date().toLocaleDateString()}</li>
-            </ul>
-            <p>Get started with these features:</p>
-            <div class="feature"><strong>📊 Drink Management</strong><p>Add, edit, and organize your drinks inventory</p></div>
-            <div class="feature"><strong>💰 Order Processing</strong><p>Process orders and generate invoices</p></div>
-            <div class="feature"><strong>📈 Sales Analytics</strong><p>Track your sales and performance</p></div>
-            <div class="feature"><strong>📱 Offline Support</strong><p>Work without internet connection</p></div>
-            <p>Need help? Check out our documentation or contact support.</p>
-            <div class="footer"><p>Cheers,<br>The Drinks Calculator Team</p></div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `,
-        }),
-
-        // ============================================================
-        // NEW: PASSWORD RESET CODE EMAIL (6-digit code)
-        // ============================================================
-        resetCode: (name, code, userEmail) => ({
-            subject: '🔑 Password Reset Code - Drinks Calculator',
-            html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-          .container { max-width: 500px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .code-box { background: #667eea; color: white; font-size: 36px; font-weight: bold; text-align: center; padding: 20px; border-radius: 10px; letter-spacing: 12px; margin: 20px 0; }
-          .timer { text-align: center; color: #888; font-size: 13px; margin-bottom: 15px; }
-          .warning { background: #FFF8E1; border-left: 4px solid #FFA000; padding: 12px; border-radius: 5px; margin-top: 20px; font-size: 12px; color: #8B6914; }
-          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>🍻 Drinks Calculator</h1>
-            <p>Password Reset Code</p>
-          </div>
-          <div class="content">
-            <h2>Hello ${name},</h2>
-            <p>You requested to reset your password. Use the code below:</p>
-            <div class="code-box">${code}</div>
-            <div class="timer">⏰ This code expires in <strong>10 minutes</strong></div>
-            <p>Enter this 6-digit code in the app to reset your password.</p>
-            <div class="warning">
-              <strong>⚠️ Security Notice:</strong> If you didn't request this, please ignore this email. Your account remains secure.
-            </div>
-            <p style="margin-top: 15px; font-size: 12px; color: #888;">📧 Sent to: ${userEmail}</p>
-            <div class="footer"><p>Drinks Calculator - Professional Drink Ordering & Management</p></div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `,
-        }),
-
-        orderConfirmation: (name, orderNumber, total, items) => ({
-                    subject: `Order Confirmation #${orderNumber}`,
-                    html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .order-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-          .order-table th { background: #4361ee; color: white; padding: 10px; text-align: left; }
-          .order-table td { padding: 10px; border-bottom: 1px solid #ddd; }
-          .total { font-size: 18px; font-weight: bold; color: #4361ee; text-align: right; }
-          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header"><h1>Order Confirmation 🧾</h1><p>Order #${orderNumber}</p></div>
-          <div class="content">
-            <h2>Hello ${name},</h2><p>Thank you for your order! Here are your order details:</p>
-            <table class="order-table">
-              <thead><tr><th>Item</th><th>Quantity</th><th>Price</th><th>Total</th></tr></thead>
-              <tbody>${items.map(item => `<tr><td>${item.name}</td><td>${item.quantity}</td><td>${item.price} Frs</td><td>${item.total} Frs</td></tr>`).join('')}</tbody>
-            </table>
-            <p class="total">Total Amount: ${total} Frs</p>
-            <p>Your order has been processed successfully.</p>
-            <div class="footer"><p>Thank you for choosing Drinks Calculator!</p></div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `,
-  }),
-
-  passwordChanged: (name) => ({
-    subject: 'Drinks Calculator - Password Changed',
-    html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }
-          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header"><h1>🔒 Password Changed</h1></div>
-          <div class="content">
-            <h2>Hello ${name},</h2><p>Your password has been successfully changed.</p>
-            <div class="warning"><strong>Important Security Notice:</strong><p>If you did not make this change, please contact our support team immediately.</p></div>
-            <p>For your security:</p><ul><li>Use a strong, unique password</li><li>Never share your password</li><li>Log out from shared devices</li></ul>
-            <div class="footer"><p>This email was sent by Drinks Calculator.</p></div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `,
-  }),
-};
-
-// Send email function
-const sendEmail = async (to, subject, html, text = '') => {
+const sendEmail = async (to, subject, html) => {
   try {
-    const transporter = createTransporter();
-    const mailOptions = {
-      from: process.env.EMAIL_FROM,
+    const msg = {
       to,
+      from: process.env.EMAIL_FROM || 'noreply@drinkquickcal.com',
       subject,
       html,
-      text: text || subject,
     };
-    const info = await transporter.sendMail(mailOptions);
-    logger.info('Email sent successfully', { to, subject, messageId: info.messageId });
-    return { success: true, messageId: info.messageId };
+    await sgMail.send(msg);
+    logger.info('Email sent', { to, subject });
+    return { success: true };
   } catch (error) {
-    logger.error('Failed to send email', { to, subject, error: error.message });
-    throw new Error(`Failed to send email: ${error.message}`);
+    logger.error('Email failed', { to, error: error.message });
+    throw new Error('Failed to send email: ' + error.message);
   }
 };
 
-// Password reset email (link)
-const sendPasswordResetEmail = async (user, resetToken) => {
-  const resetUrl = `${process.env.PASSWORD_RESET_URL}/${resetToken}`;
-  const template = emailTemplates.passwordReset(user.username, resetUrl);
-  return await sendEmail(user.email, template.subject, template.html);
-};
-
-// Password reset success email
-const sendPasswordResetSuccessEmail = async (user) => {
-  const template = emailTemplates.passwordResetSuccess(user.username);
-  return await sendEmail(user.email, template.subject, template.html);
+// Reset code email
+const sendResetCodeEmail = async (userEmail, code, username) => {
+  const html = `
+    <div style="font-family:Arial;max-width:500px;margin:0 auto;background:white;border-radius:15px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,0.1);">
+      <div style="background:linear-gradient(135deg,#667EEA,#764BA2);padding:30px;text-align:center;">
+        <h1 style="color:white;margin:0;">🍹 Drink Quick Cal</h1>
+        <p style="color:rgba(255,255,255,0.8);">Password Reset Code</p>
+      </div>
+      <div style="padding:30px;">
+        <h2>Hello ${username || 'there'}!</h2>
+        <p>Use this code to reset your password:</p>
+        <div style="background:#667EEA;color:white;font-size:36px;font-weight:bold;text-align:center;padding:20px;border-radius:10px;letter-spacing:12px;margin:20px 0;">${code}</div>
+        <p style="text-align:center;color:#888;">⏰ Expires in 10 minutes</p>
+        <div style="background:#FFF8E1;border-left:4px solid #FFA000;padding:12px;border-radius:5px;font-size:12px;color:#8B6914;">
+          ⚠️ If you didn't request this, ignore this email.
+        </div>
+      </div>
+    </div>`;
+  return await sendEmail(userEmail, '🔑 Password Reset Code', html);
 };
 
 // Welcome email
-const sendWelcomeEmail = async (user) => {
-  const template = emailTemplates.welcome(user.username, user.username);
-  return await sendEmail(user.email, template.subject, template.html);
+const sendWelcomeEmail = async (userEmail, username) => {
+  const html = `
+    <div style="font-family:Arial;max-width:500px;margin:0 auto;background:white;border-radius:15px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,0.1);">
+      <div style="background:linear-gradient(135deg,#38b000,#16a753);padding:30px;text-align:center;">
+        <h1 style="color:white;margin:0;">🍹 Welcome!</h1>
+      </div>
+      <div style="padding:30px;">
+        <h2>Hello ${username}! 🎉</h2>
+        <p>Your Drink Quick Cal account is ready!</p>
+      </div>
+    </div>`;
+  return await sendEmail(userEmail, '🎉 Welcome to Drink Quick Cal!', html);
 };
 
-// ============================================================
-// NEW: Send Password Reset Code (6-digit)
-// ============================================================
-const sendResetCodeEmail = async (userEmail, code, username) => {
-  try {
-    const template = emailTemplates.resetCode(username || 'User', code, userEmail);
-    return await sendEmail(userEmail, template.subject, template.html);
-  } catch (error) {
-    throw error;
-  }
-};
-
-// Order confirmation email
-const sendOrderConfirmationEmail = async (user, order) => {
-  const items = order.items.map(item => ({
-    name: item.drinkName,
-    quantity: item.quantity,
-    price: item.pricePerUnit,
-    total: item.totalPrice,
-  }));
-  const template = emailTemplates.orderConfirmation(user.username, order.orderNumber, order.totalAmount, items);
-  return await sendEmail(user.email, template.subject, template.html);
-};
-
-// Password changed email
-const sendPasswordChangedEmail = async (user) => {
-  const template = emailTemplates.passwordChanged(user.username);
-  return await sendEmail(user.email, template.subject, template.html);
-};
-
-module.exports = {
-  sendEmail,
-  sendPasswordResetEmail,
-  sendPasswordResetSuccessEmail,
-  sendWelcomeEmail,
-  sendResetCodeEmail,  // NEW
-  sendOrderConfirmationEmail,
-  sendPasswordChangedEmail,
-};
+module.exports = { sendResetCodeEmail, sendWelcomeEmail };
