@@ -17,7 +17,7 @@ const logger = winston.createLogger({
 const createTransporter = () => {
     return nodemailer.createTransport({
         host: 'smtp.gmail.com',
-        port: 2525,
+        port: 587,
         secure: false,
         requireTLS: true,
         auth: {
@@ -26,8 +26,14 @@ const createTransporter = () => {
         },
         tls: {
             ciphers: 'SSLv3',
-            rejectUnauthorized: false
-        }
+            rejectUnauthorized: false,
+            minVersion: 'TLSv1'
+        },
+        connectionTimeout: 30000,
+        greetingTimeout: 30000,
+        socketTimeout: 30000,
+        debug: true,
+        logger: true
     });
 };
 
