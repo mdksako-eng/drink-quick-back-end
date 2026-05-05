@@ -16,9 +16,7 @@ const logger = winston.createLogger({
 // Create transporter
 const createTransporter = () => {
     return nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
-        port: process.env.EMAIL_PORT,
-        secure: parseInt(process.env.EMAIL_PORT) === 465,
+        service: 'gmail',
         auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS,
