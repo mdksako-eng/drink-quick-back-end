@@ -330,21 +330,30 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 // CREATE STAFF (Admin & Manager)
+
+// CREATE STAFF (Admin & Manager)
 app.post('/api/auth/create-staff', async (req, res) => {
   try {
     const { username, email, password, securityQuestions } = req.body;
     const creatorId = req.headers['user-id'];
-    console.log(`👤 Creating staff: ${username}`);
+    console.log(`👤 Creating staff: ${username} by user ID: ${creatorId}`);
     
     const existing = await pool.query('SELECT id FROM users WHERE username = $1 OR email = $2', [username, email]);
     if (existing.rows.length > 0) {
       return res.status(400).json({ status: 'error', message: 'Username or email already exists' });
     }
     
+    // FIX: Parse creatorId to integer
     let companyId = null;
     if (creatorId) {
-      const creator = await pool.query('SELECT company_id FROM users WHERE id = $1', [creatorId]);
-      if (creator.rows.length > 0) companyId = creator.rows[0].company_id;
+      const creator = await pool.query(
+        'SELECT company_id, role FROM users WHERE id = $1', 
+        [parseInt(creatorId)]  // Convert string to integer!
+      );
+      if (creator.rows.length > 0) {
+        companyId = creator.rows[0].company_id;
+        console.log(`🏢 Creator company_id: ${companyId}`);
+      }
     }
     
     const result = await pool.query(
@@ -353,6 +362,8 @@ app.post('/api/auth/create-staff', async (req, res) => {
        RETURNING id, username, email, role, company_id, is_active, created_at`,
       [username, email, password, companyId, securityQuestions?.question1 || '', securityQuestions?.question2 || '']
     );
+    
+    console.log(`✅ Staff created: ${username} with company_id: ${result.rows[0].company_id}`);
     
     res.status(201).json({
       status: 'success',
@@ -367,10 +378,10 @@ app.post('/api/auth/create-staff', async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('❌ Create staff error:', error.message);
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
-
 // BLOCK USER
 app.post('/api/auth/block-user/:id', async (req, res) => {
   try {
