@@ -441,13 +441,27 @@ app.delete('/api/auth/users/:id', verifyAdmin, async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     const { role, search } = req.query;
+    const requesterId = req.headers['user-id'];
     let query = 'SELECT id, username, email, role, company_id, is_active, created_at, last_login FROM users WHERE 1=1';
     const params = [];
     let p = 1;
     
     if (role) { query += ` AND role = $${p}`; params.push(role); p++; }
     if (search) { query += ` AND (username ILIKE $${p} OR email ILIKE $${p})`; params.push(`%${search}%`); p++; }
-    
+        if (requesterId) {
+      const requester = await pool.query('SELECT role, company_id FROM users WHERE id = $1', [parseInt(requesterId)]);
+      if (requester.rows.length > 0 && requester.rows[0].role === 'Manager') {
+        const managerCompanyId = requester.rows[0].company_id;
+        if (managerCompanyId) {
+          query += ` AND company_id = $${p}`;
+          params.push(managerCompanyId);
+          p++;
+          console.log(`🔒 Filtering by company_id: ${managerCompanyId}`);
+        }
+      }
+      // Admin sees all users
+    }
+
     query += ' ORDER BY created_at DESC';
     const result = await pool.query(query, params);
     
