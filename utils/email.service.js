@@ -12,7 +12,10 @@ const sendEmail = async (to, subject, html) => {
   try {
     const msg = {
       to,
-      from: process.env.EMAIL_FROM || 'noreply@drinkquickcal.com',
+      from: {
+        email: process.env.EMAIL_FROM || 'm.derick@africet.org',
+        name: 'Drink Quick Cal'
+      },
       subject,
       html,
     };
