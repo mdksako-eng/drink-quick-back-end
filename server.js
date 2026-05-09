@@ -623,35 +623,92 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 // CONFIRM EMAIL (clicked from email link)
+// CONFIRM EMAIL (clicked from email link)
 app.get('/api/auth/confirm-email', async (req, res) => {
   try {
     const { email, code } = req.query;
     
     if (!email || !code) {
-      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Arial;text-align:center;padding:50px;background:#f0f2f5;}.card{max-width:400px;margin:0 auto;background:white;padding:40px;border-radius:20px;}h1{color:#e74c3c;}p{color:#666;}</style></head><body><div class="card"><h1>❌ Invalid Link</h1><p>The verification link is invalid.</p></div></body></html>`);
+      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#e74c3c;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">❌</div><h1>Invalid Link</h1><p>The verification link is invalid or incomplete.</p></div></body></html>`);
     }
     
     const stored = resetCodes[email];
     if (!stored || stored.type !== 'verify') {
-      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Arial;text-align:center;padding:50px;background:#f0f2f5;}.card{max-width:400px;margin:0 auto;background:white;padding:40px;border-radius:20px;}h1{color:#e74c3c;}p{color:#666;}</style></head><body><div class="card"><h1>❌ Not Found</h1><p>No verification found. Please register again.</p></div></body></html>`);
+      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#e74c3c;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">❌</div><h1>Not Found</h1><p>No verification found. Please register again.</p></div></body></html>`);
     }
     
     if (Date.now() > stored.expiresAt) {
       delete resetCodes[email];
-      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Arial;text-align:center;padding:50px;background:#f0f2f5;}.card{max-width:400px;margin:0 auto;background:white;padding:40px;border-radius:20px;}h1{color:#ff9800;}p{color:#666;}</style></head><body><div class="card"><h1>⏰ Expired</h1><p>Link expired. Please register again.</p></div></body></html>`);
+      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#ff9800;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">⏰</div><h1>Link Expired</h1><p>This verification link has expired. Please register again.</p></div></body></html>`);
     }
     
     if (stored.code !== code) {
-      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Arial;text-align:center;padding:50px;background:#f0f2f5;}.card{max-width:400px;margin:0 auto;background:white;padding:40px;border-radius:20px;}h1{color:#e74c3c;}p{color:#666;}</style></head><body><div class="card"><h1>❌ Invalid</h1><p>Verification code is incorrect.</p></div></body></html>`);
+      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#e74c3c;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">❌</div><h1>Invalid Code</h1><p>The verification code is incorrect.</p></div></body></html>`);
     }
     
     await pool.query('UPDATE users SET email_verified = true WHERE id = $1', [stored.userId]);
     delete resetCodes[email];
     
-    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Verified</title><style>body{font-family:Arial;text-align:center;padding:50px;background:#f0f2f5;}.card{max-width:400px;margin:0 auto;background:white;padding:40px;border-radius:20px;}h1{color:#38b000;}p{color:#666;}.icon{font-size:60px;}</style></head><body><div class="card"><div class="icon">✅</div><h1>Email Verified!</h1><p>Your email has been verified successfully.</p><p>You can now return to the app and login.</p></div></body></html>`);
+    // ✅ Beautiful success page
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Email Verified</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: Arial, sans-serif; 
+            min-height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            background: linear-gradient(135deg, #667EEA, #764BA2);
+            padding: 20px;
+          }
+          .card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 400px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+          }
+          .icon { font-size: 60px; margin-bottom: 15px; }
+          h1 { color: #38b000; font-size: 24px; margin-bottom: 10px; }
+          p { color: #666; font-size: 14px; margin-bottom: 15px; }
+          .btn {
+            display: inline-block;
+            background: #667EEA;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: bold;
+            margin-top: 10px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="icon">✅</div>
+          <h1>Email Verified!</h1>
+          <p>Your email <strong>${email}</strong> has been verified successfully.</p>
+          <p>You can now return to the app and login to your account.</p>
+        </div>
+        <script>
+          setTimeout(function() {
+            window.close();
+          }, 3000);
+        </script>
+      </body>
+      </html>
+    `);
     
   } catch (error) {
-    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Arial;text-align:center;padding:50px;}</style></head><body><h1>❌ Server Error</h1><p>Please try again later.</p></body></html>`);
+    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#e74c3c;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">❌</div><h1>Server Error</h1><p>Please try again later.</p></div></body></html>`);
   }
 });
 // ========== 404 ==========
