@@ -215,26 +215,28 @@ app.post('/api/auth/register', async (req, res) => {
     }
     
     const result = await pool.query(
-      `INSERT INTO users (username, email, password, role, security_question1, security_question2) 
-       VALUES ($1, $2, $3, 'Customer', $4, $5) 
+      `INSERT INTO users (username, email, password, role, security_question1, security_question2, email_verified) 
+       VALUES ($1, $2, $3, 'Customer', $4, $5, false) 
        RETURNING id, username, email, role, company_id, is_active, created_at`,
       [username, email, password, securityQuestions?.question1 || '', securityQuestions?.question2 || '']
     );
     
-    const newUser = result.rows[0];
+    const newUser = result.rows[0];  // ✅ Variable is newUser
+    
+    // ✅ Use newUser
     const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
-    resetCodes[email] = { code: verifyCode, userId: user.id, expiresAt: Date.now() + 30 * 60 * 1000, type: 'verify' };
+    resetCodes[email] = { code: verifyCode, userId: newUser.id, expiresAt: Date.now() + 30 * 60 * 1000, type: 'verify' };
     await sendVerificationEmail(email, verifyCode, username);
     console.log(`📧 Verification email sent to ${email}`);
     
     res.status(201).json({
       status: 'success',
-      message: 'Registration successful',
+      message: 'Registration successful! Check your email to verify.',
       data: {
         user: {
           id: newUser.id, _id: newUser.id, username: newUser.username,
           email: newUser.email, role: newUser.role, companyId: newUser.company_id,
-          isActive: newUser.is_active
+          isActive: newUser.is_active, emailVerified: false
         },
         token: 'token_' + newUser.id
       }
