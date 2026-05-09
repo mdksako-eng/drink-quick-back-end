@@ -7,7 +7,7 @@ require('dotenv').config();
 const app = express();
 
 // ========== EMAIL SERVICE ==========
-const { sendResetCodeEmail } = require('./utils/email.service');
+const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail } = require('./utils/email.service');
 
 // ========== POSTGRESQL SETUP ==========
 console.log('🔌 Connecting to PostgreSQL (Neon)...');
@@ -222,6 +222,10 @@ app.post('/api/auth/register', async (req, res) => {
     );
     
     const newUser = result.rows[0];
+    const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
+    resetCodes[email] = { code: verifyCode, userId: user.id, expiresAt: Date.now() + 30 * 60 * 1000, type: 'verify' };
+    await sendVerificationEmail(email, verifyCode, username);
+    console.log(`📧 Verification email sent to ${email}`);
     
     res.status(201).json({
       status: 'success',
@@ -583,7 +587,38 @@ app.get('/debug-db', async (req, res) => {
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
-
+// CONFIRM EMAIL (clicked from email link)
+app.get('/api/auth/confirm-email', async (req, res) => {
+  try {
+    const { email, code } = req.query;
+    
+    if (!email || !code) {
+      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Arial;text-align:center;padding:50px;background:#f0f2f5;}.card{max-width:400px;margin:0 auto;background:white;padding:40px;border-radius:20px;}h1{color:#e74c3c;}p{color:#666;}</style></head><body><div class="card"><h1>❌ Invalid Link</h1><p>The verification link is invalid.</p></div></body></html>`);
+    }
+    
+    const stored = resetCodes[email];
+    if (!stored || stored.type !== 'verify') {
+      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Arial;text-align:center;padding:50px;background:#f0f2f5;}.card{max-width:400px;margin:0 auto;background:white;padding:40px;border-radius:20px;}h1{color:#e74c3c;}p{color:#666;}</style></head><body><div class="card"><h1>❌ Not Found</h1><p>No verification found. Please register again.</p></div></body></html>`);
+    }
+    
+    if (Date.now() > stored.expiresAt) {
+      delete resetCodes[email];
+      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Arial;text-align:center;padding:50px;background:#f0f2f5;}.card{max-width:400px;margin:0 auto;background:white;padding:40px;border-radius:20px;}h1{color:#ff9800;}p{color:#666;}</style></head><body><div class="card"><h1>⏰ Expired</h1><p>Link expired. Please register again.</p></div></body></html>`);
+    }
+    
+    if (stored.code !== code) {
+      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Arial;text-align:center;padding:50px;background:#f0f2f5;}.card{max-width:400px;margin:0 auto;background:white;padding:40px;border-radius:20px;}h1{color:#e74c3c;}p{color:#666;}</style></head><body><div class="card"><h1>❌ Invalid</h1><p>Verification code is incorrect.</p></div></body></html>`);
+    }
+    
+    await pool.query('UPDATE users SET email_verified = true WHERE id = $1', [stored.userId]);
+    delete resetCodes[email];
+    
+    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Verified</title><style>body{font-family:Arial;text-align:center;padding:50px;background:#f0f2f5;}.card{max-width:400px;margin:0 auto;background:white;padding:40px;border-radius:20px;}h1{color:#38b000;}p{color:#666;}.icon{font-size:60px;}</style></head><body><div class="card"><div class="icon">✅</div><h1>Email Verified!</h1><p>Your email has been verified successfully.</p><p>You can now return to the app and login.</p></div></body></html>`);
+    
+  } catch (error) {
+    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Arial;text-align:center;padding:50px;}</style></head><body><h1>❌ Server Error</h1><p>Please try again later.</p></body></html>`);
+  }
+});
 // ========== 404 ==========
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
