@@ -260,11 +260,11 @@ app.post('/api/auth/login', async (req, res) => {
     let result;
     if (email) {
       result = await pool.query(
-        'SELECT id, username, email, password, role, company_id, is_active FROM users WHERE email = $1', [email]
+        'SELECT id, username, email, password, role, email_verified, company_id, is_active FROM users WHERE email = $1', [email]
       );
     } else {
       result = await pool.query(
-        'SELECT id, username, email, password, role, company_id, is_active FROM users WHERE username = $1', [username]
+        'SELECT id, username, email, password, role, email_verified, company_id, is_active FROM users WHERE username = $1', [username]
       );
     }
     
@@ -274,8 +274,16 @@ app.post('/api/auth/login', async (req, res) => {
     
     const user = result.rows[0];
     
-    if (user.is_active === false) {
-      return res.status(403).json({ status: 'error', message: 'Account is deactivated. Contact your manager.' });
+    if (!user.is_active) {
+      return res.status(403).json({ status: 'error', message: 'Account is deactivated.' });
+    }
+    
+    // ✅ BLOCK unverified users
+    if (!user.email_verified) {
+      return res.status(403).json({ 
+        status: 'error', 
+        message: 'Please verify your email first. Check your inbox for the verification link.' 
+      });
     }
     
     if (password !== user.password) {
@@ -291,7 +299,7 @@ app.post('/api/auth/login', async (req, res) => {
         user: {
           id: user.id, _id: user.id, username: user.username,
           email: user.email, role: user.role, companyId: user.company_id,
-          isActive: user.is_active
+          isActive: user.is_active, emailVerified: user.email_verified
         },
         token: 'token_' + user.id
       }
@@ -301,7 +309,32 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({ status: 'error', message: 'Login failed' });
   }
 });
-
+// RESEND VERIFICATION EMAIL
+app.post('/api/auth/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ status: 'error', message: 'Email required' });
+    
+    const result = await pool.query('SELECT id, username, email_verified FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      return res.json({ status: 'success', message: 'If email exists, verification sent' });
+    }
+    
+    const user = result.rows[0];
+    if (user.email_verified) {
+      return res.json({ status: 'success', message: 'Email already verified' });
+    }
+    
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    resetCodes[email] = { code, userId: user.id, expiresAt: Date.now() + 30 * 60 * 1000, type: 'verify' };
+    await sendVerificationEmail(email, code, user.username);
+    console.log(`📧 Verification email resent to ${email}`);
+    
+    res.json({ status: 'success', message: 'Verification email sent!' });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
 // GET PROFILE
 app.get('/api/auth/me', async (req, res) => {
   try {
