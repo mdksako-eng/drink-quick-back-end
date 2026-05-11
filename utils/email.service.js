@@ -82,7 +82,7 @@ const sendVerificationEmail = async (userEmail, code, username) => {
         <div style="text-align:center;margin:30px 0;">
           <a href="${verifyUrl}" style="background:#667EEA;color:white;padding:15px 40px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:16px;display:inline-block;">✅ Verify Email</a>
         </div>
-        <p style="color:#888;font-size:12px;">This link expires in 30 minutes.</p>
+        <p style="color:#888;font-size:12px;">This link expires in 10 minutes.</p>
         <div style="background:#FFF8E1;border-left:4px solid #FFA000;padding:12px;border-radius:5px;font-size:12px;color:#8B6914;">
           ⚠️ If you didn't create this account, please ignore this email.
         </div>
