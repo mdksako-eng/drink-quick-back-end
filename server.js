@@ -216,6 +216,7 @@ app.post('/api/auth/register', async (req, res) => {
      let finalCompanyId = null;
      let userRole = 'Customer'; 
     if (registerAsManager) {
+      userRole = 'Manager';
       if (companyId) {
         // Joining existing company
         finalCompanyId = companyId;
