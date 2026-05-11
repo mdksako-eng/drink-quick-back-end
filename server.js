@@ -197,7 +197,7 @@ app.post('/api/auth/reset-password-code', async (req, res) => {
 // REGISTER
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, email, password, securityQuestions } = req.body;
+    const { username, email, password, phone, securityQuestions, registerAsManager, companyId, companyName, companyCode } = req.body;
     console.log(`👤 New registration: ${username}`);
     
     if (!username || !email || !password) {
@@ -213,12 +213,36 @@ app.post('/api/auth/register', async (req, res) => {
     if (existingUsername.rows.length > 0) {
       return res.status(400).json({ status: 'error', message: 'Username already taken' });
     }
-    
+     let finalCompanyId = null;
+     let userRole = 'Customer'; 
+    if (registerAsManager) {
+      if (companyId) {
+        // Joining existing company
+        finalCompanyId = companyId;
+        // Update company contact if null
+        await pool.query(
+          'UPDATE companies SET email = COALESCE(email, $1), phone = COALESCE(phone, $2) WHERE id = $3',
+          [email, phone || null, companyId]
+        );
+      } else if (companyName && companyCode) {
+        // Creating new company
+        const companyResult = await pool.query(
+          `INSERT INTO companies (name, code, invite_code, email, phone) 
+           VALUES ($1, $2, $2, $3, $4) 
+           ON CONFLICT (code) DO NOTHING
+           RETURNING id`,
+          [companyName, companyCode.toUpperCase(), email, phone || null]
+        );
+        if (companyResult.rows.length > 0) {
+          finalCompanyId = companyResult.rows[0].id;
+        }
+      }
+    }
     const result = await pool.query(
-      `INSERT INTO users (username, email, password, role, security_question1, security_question2, email_verified) 
-       VALUES ($1, $2, $3, 'Customer', $4, $5, false) 
-       RETURNING id, username, email, role, company_id, is_active, created_at`,
-      [username, email, password, securityQuestions?.question1 || '', securityQuestions?.question2 || '']
+      `INSERT INTO users (username, email, password, phone, role, company_id, security_question1, security_question2, email_verified) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false) 
+       RETURNING id, username, email, phone, role, company_id, is_active, created_at`,
+      [username, email, password, phone || null,userRole, finalCompanyId, securityQuestions?.question1 || '', securityQuestions?.question2 || '']
     );
     
     const newUser = result.rows[0];  // ✅ Variable is newUser
@@ -228,19 +252,24 @@ app.post('/api/auth/register', async (req, res) => {
     resetCodes[email] = { code: verifyCode, userId: newUser.id, expiresAt: Date.now() + 30 * 60 * 1000, type: 'verify' };
     await sendVerificationEmail(email, verifyCode, username);
     console.log(`📧 Verification email sent to ${email}`);
-    
-    res.status(201).json({
-      status: 'success',
-      message: 'Registration successful! Check your email to verify.',
-      data: {
-        user: {
-          id: newUser.id, _id: newUser.id, username: newUser.username,
-          email: newUser.email, role: newUser.role, companyId: newUser.company_id,
-          isActive: newUser.is_active, emailVerified: false
-        },
-        token: 'token_' + newUser.id
-      }
-    });
+    try {
+      await sendVerificationEmail(email, verifyCode, username);
+      console.log(`📧 Verification sent to ${email}`);
+    } catch (e) {
+      console.log('⚠️ Verification email failed:', e.message);
+    }
+   res.status(201).json({
+  status: 'success',
+  message: registerAsManager ? 'Business account created! Check email to verify.' : 'Account created! Check email to verify.',
+  data: {
+    user: {
+      id: newUser.id, _id: newUser.id, username: newUser.username,
+      email: newUser.email, phone: newUser.phone, role: newUser.role,
+      companyId: newUser.company_id, isActive: newUser.is_active, emailVerified: false
+    },
+    token: 'token_' + newUser.id
+  }
+});
   } catch (error) {
     console.error('❌ Registration error:', error.message);
     res.status(500).json({ status: 'error', message: error.message });
@@ -367,8 +396,6 @@ app.get('/api/auth/me', async (req, res) => {
 app.post('/api/auth/logout', (req, res) => {
   res.json({ status: 'success', message: 'Logged out successfully' });
 });
-
-// CREATE STAFF (Admin & Manager)
 
 // CREATE STAFF (Admin & Manager)
 app.post('/api/auth/create-staff', async (req, res) => {
@@ -623,7 +650,7 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 // CONFIRM EMAIL (clicked from email link)
-// CONFIRM EMAIL (clicked from email link)
+
 app.get('/api/auth/confirm-email', async (req, res) => {
   try {
     const { email, code } = req.query;
@@ -709,6 +736,26 @@ app.get('/api/auth/confirm-email', async (req, res) => {
     
   } catch (error) {
     res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#e74c3c;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">❌</div><h1>Server Error</h1><p>Please try again later.</p></div></body></html>`);
+  }
+});
+// VERIFY COMPANY INVITE CODE
+app.post('/api/companies/verify-code', async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ status: 'error', message: 'Invite code required' });
+    
+    const result = await pool.query(
+      'SELECT id, name, code FROM companies WHERE (invite_code = $1 OR code = $1) AND is_active = true',
+      [code.toUpperCase()]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Invalid invite code. Company not found.' });
+    }
+    
+    res.json({ status: 'success', data: { company: result.rows[0] } });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
   }
 });
 // ========== 404 ==========
