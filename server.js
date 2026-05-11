@@ -356,7 +356,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     }
     
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    resetCodes[email] = { code, userId: user.id, expiresAt: Date.now() + 30 * 60 * 1000, type: 'verify' };
+    resetCodes[email] = { code, userId: user.id, expiresAt: Date.now() + 10 * 60 * 1000, type: 'verify' };
     await sendVerificationEmail(email, code, user.username);
     console.log(`📧 Verification email resent to ${email}`);
     
@@ -666,7 +666,7 @@ app.get('/api/auth/confirm-email', async (req, res) => {
     }
     
     if (Date.now() > stored.expiresAt) {
-      delete resetCodes[email];
+      //delete resetCodes[email];   //to delete code after email is verifed
       return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#ff9800;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">⏰</div><h1>Link Expired</h1><p>This verification link has expired. Please register again.</p></div></body></html>`);
     }
     
