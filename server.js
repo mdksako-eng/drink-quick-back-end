@@ -15,7 +15,6 @@ console.log('🔌 Connecting to PostgreSQL (Supabase)...');
 // ✅ Get DATABASE_URL from environment
 const databaseUrl = process.env.DATABASE_URL;
 console.log('🔍 DATABASE_URL is set:', databaseUrl ? 'YES' : 'NO');
-console.log('🔍 DATABASE_URL starts with:', databaseUrl ? databaseUrl.substring(0, 30) + '...' : 'NOT SET');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
