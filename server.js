@@ -12,8 +12,13 @@ const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail } = require(
 // ========== POSTGRESQL SETUP ==========
 console.log('🔌 Connecting to PostgreSQL (Supabase)...');
 
+// ✅ Get DATABASE_URL from environment
+const databaseUrl = process.env.DATABASE_URL;
+console.log('🔍 DATABASE_URL is set:', databaseUrl ? 'YES' : 'NO');
+console.log('🔍 DATABASE_URL starts with:', databaseUrl ? databaseUrl.substring(0, 30) + '...' : 'NOT SET');
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: databaseUrl,
   ssl: { 
     rejectUnauthorized: false 
   },
@@ -44,7 +49,7 @@ app.use(async (req, res, next) => {
       await pool.query('SELECT NOW()');
       console.log('✅ PostgreSQL Connected (Supabase)');
       
-      // Check if users table exists (your data is already imported)
+      // Check if users table exists
       const tableCheck = await pool.query(`
         SELECT EXISTS (
           SELECT FROM information_schema.tables 
@@ -639,6 +644,7 @@ app.get('/api/drinks', async (req, res) => {
     });
   }
 });
+
 app.get('/api/test', (req, res) => {
   res.json({ success: true, message: 'DrinkQuick API v3.0', working: true, database: 'Supabase PostgreSQL', email: 'Enabled' });
 });
@@ -674,8 +680,8 @@ app.get('/debug-db', async (req, res) => {
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
-// CONFIRM EMAIL (clicked from email link)
 
+// CONFIRM EMAIL (clicked from email link)
 app.get('/api/auth/confirm-email', async (req, res) => {
   try {
     const { email, code } = req.query;
@@ -690,7 +696,6 @@ app.get('/api/auth/confirm-email', async (req, res) => {
     }
     
     if (Date.now() > stored.expiresAt) {
-      //delete resetCodes[email];   //to delete code after email is verifed
       return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#ff9800;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">⏰</div><h1>Link Expired</h1><p>This verification link has expired. Please register again.</p></div></body></html>`);
     }
     
@@ -763,6 +768,7 @@ app.get('/api/auth/confirm-email', async (req, res) => {
     res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#e74c3c;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">❌</div><h1>Server Error</h1><p>Please try again later.</p></div></body></html>`);
   }
 });
+
 // VERIFY COMPANY INVITE CODE
 app.post('/api/companies/verify-code', async (req, res) => {
   try {
@@ -783,6 +789,7 @@ app.post('/api/companies/verify-code', async (req, res) => {
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
+
 // ========== 404 ==========
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
