@@ -790,7 +790,39 @@ app.post('/api/companies/verify-code', async (req, res) => {
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
-
+// ========== SESSION VALIDATION ==========
+app.post('/api/auth/validate-session', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.json({ valid: false, terminated: false });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return res.json({ valid: false, terminated: false });
+    }
+    
+    // ✅ Check if token is valid (starts with 'token_' and has an ID)
+    const tokenParts = token.split('_');
+    if (tokenParts.length === 2 && tokenParts[0] === 'token') {
+      const userId = parseInt(tokenParts[1]);
+      if (!isNaN(userId) && userId > 0) {
+        return res.json({ 
+          valid: true, 
+          terminated: false,
+          previousDeviceName: null
+        });
+      }
+    }
+    
+    res.json({ valid: false, terminated: false });
+    
+  } catch (error) {
+    console.error('❌ Validate session error:', error);
+    res.json({ valid: false, terminated: false });
+  }
+});
 // ========== 404 ==========
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
