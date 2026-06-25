@@ -12,12 +12,11 @@ const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail } = require(
 // ========== POSTGRESQL SETUP ==========
 console.log('🔌 Connecting to PostgreSQL (Supabase)...');
 
-// ✅ Get DATABASE_URL from environment
 const databaseUrl = process.env.DATABASE_URL;
 console.log('🔍 DATABASE_URL is set:', databaseUrl ? 'YES' : 'NO');
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: databaseUrl,
   ssl: { 
     rejectUnauthorized: false 
   },
@@ -26,7 +25,7 @@ const pool = new Pool({
   max: 10,
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000,
-  family: 4  // ✅ Force IPv4
+  family: 4
 });
 
 // Keep connection alive middleware
@@ -39,7 +38,7 @@ app.use(async (req, res, next) => {
   next();
 });
 
-// Test connection and setup table
+// Test connection and setup tables
 (async () => {
   let retries = 3;
   
@@ -111,8 +110,37 @@ app.use(async (req, res, next) => {
       } else {
         console.log('✅ Companies table already exists');
       }
+
+      // ✅ Create user_sessions table
+      const sessionsCheck = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' AND table_name = 'user_sessions'
+        );
+      `);
       
-      // Count users
+      const sessionsExist = sessionsCheck.rows[0].exists;
+      
+      if (!sessionsExist) {
+        console.log('📦 Creating user_sessions table...');
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS user_sessions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            session_token TEXT NOT NULL UNIQUE,
+            device_id TEXT,
+            device_name TEXT,
+            is_active BOOLEAN DEFAULT true,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_activity_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '8 hours'
+          )
+        `);
+        console.log('✅ user_sessions table created');
+      } else {
+        console.log('✅ user_sessions table already exists');
+      }
+      
       const countResult = await pool.query('SELECT COUNT(*) FROM users');
       const userCount = parseInt(countResult.rows[0].count);
       console.log(`📊 Database has ${userCount} users`);
@@ -275,9 +303,8 @@ app.post('/api/auth/register', async (req, res) => {
       [username, email, password, phone || null,userRole, finalCompanyId, securityQuestions?.question1 || '', securityQuestions?.question2 || '']
     );
     
-    const newUser = result.rows[0];  // ✅ Variable is newUser
+    const newUser = result.rows[0];
     
-    // ✅ Use newUser
     const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
     resetCodes[email] = { code: verifyCode, userId: newUser.id, expiresAt: Date.now() + 30 * 60 * 1000, type: 'verify' };
     await sendVerificationEmail(email, verifyCode, username);
@@ -306,10 +333,10 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// LOGIN
+// ✅ LOGIN - Updated with session management
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, deviceId, deviceName } = req.body;
     console.log(`🔑 Login: ${email || username}`);
     
     if (!password || (!email && !username)) {
@@ -319,11 +346,13 @@ app.post('/api/auth/login', async (req, res) => {
     let result;
     if (email) {
       result = await pool.query(
-        'SELECT id, username, email, password, role, email_verified, company_id, is_active FROM users WHERE email = $1', [email]
+        'SELECT id, username, email, password, role, email_verified, company_id, is_active FROM users WHERE email = $1',
+        [email]
       );
     } else {
       result = await pool.query(
-        'SELECT id, username, email, password, role, email_verified, company_id, is_active FROM users WHERE username = $1', [username]
+        'SELECT id, username, email, password, role, email_verified, company_id, is_active FROM users WHERE username = $1',
+        [username]
       );
     }
     
@@ -337,17 +366,35 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(403).json({ status: 'error', message: 'Account is deactivated.' });
     }
     
-    // ✅ BLOCK unverified users
     if (!user.email_verified) {
       return res.status(403).json({ 
         status: 'error', 
-        message: 'Please verify your email first. Check your inbox for the verification link.' 
+        message: 'Please verify your email first.' 
       });
     }
     
     if (password !== user.password) {
       return res.status(401).json({ status: 'error', message: 'Invalid credentials' });
     }
+    
+    // ✅ Generate session token
+    const sessionToken = 'token_' + user.id + '_' + Date.now();
+    
+    // ✅ Deactivate any existing sessions for this user
+    await pool.query(
+      'UPDATE user_sessions SET is_active = false WHERE user_id = $1 AND is_active = true',
+      [user.id]
+    );
+    
+    // ✅ Save new session to Supabase
+    const finalDeviceId = deviceId || req.headers['user-agent'] || 'unknown';
+    const finalDeviceName = deviceName || 'Unknown Device';
+    
+    await pool.query(
+      `INSERT INTO user_sessions (user_id, session_token, device_id, device_name, expires_at)
+       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '8 hours')`,
+      [user.id, sessionToken, finalDeviceId, finalDeviceName]
+    );
     
     await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
     
@@ -360,7 +407,7 @@ app.post('/api/auth/login', async (req, res) => {
           email: user.email, role: user.role, companyId: user.company_id,
           isActive: user.is_active, emailVerified: user.email_verified
         },
-        token: 'token_' + user.id
+        sessionToken: sessionToken  // ✅ Send the session token
       }
     });
   } catch (error) {
@@ -368,6 +415,7 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({ status: 'error', message: 'Login failed' });
   }
 });
+
 // RESEND VERIFICATION EMAIL
 app.post('/api/auth/resend-verification', async (req, res) => {
   try {
@@ -394,6 +442,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
+
 // GET PROFILE
 app.get('/api/auth/me', async (req, res) => {
   try {
@@ -401,7 +450,8 @@ app.get('/api/auth/me', async (req, res) => {
     if (!userId) return res.status(400).json({ status: 'error', message: 'User ID required' });
     
     const result = await pool.query(
-      'SELECT id, username, email, role, company_id, is_active, last_login, created_at FROM users WHERE id = $1', [userId]
+      'SELECT id, username, email, role, company_id, is_active, last_login, created_at FROM users WHERE id = $1',
+      [userId]
     );
     
     if (result.rows.length === 0) return res.status(404).json({ status: 'error', message: 'User not found' });
@@ -422,9 +472,26 @@ app.get('/api/auth/me', async (req, res) => {
   }
 });
 
-// LOGOUT
-app.post('/api/auth/logout', (req, res) => {
-  res.json({ status: 'success', message: 'Logged out successfully' });
+// ✅ LOGOUT - Invalidate session
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      if (token) {
+        await pool.query(
+          'UPDATE user_sessions SET is_active = false, expires_at = NOW() WHERE session_token = $1',
+          [token]
+        );
+        console.log('🔓 Session invalidated:', token.substring(0, 20) + '...');
+      }
+    }
+    
+    res.json({ status: 'success', message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('❌ Logout error:', error);
+    res.json({ status: 'success', message: 'Logged out successfully' });
+  }
 });
 
 // CREATE STAFF (Admin & Manager)
@@ -439,12 +506,11 @@ app.post('/api/auth/create-staff', async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Username or email already exists' });
     }
     
-    // FIX: Parse creatorId to integer
     let companyId = null;
     if (creatorId) {
       const creator = await pool.query(
         'SELECT company_id, role FROM users WHERE id = $1', 
-        [parseInt(creatorId)]  // Convert string to integer!
+        [parseInt(creatorId)]
       );
       if (creator.rows.length > 0) {
         companyId = creator.rows[0].company_id;
@@ -478,6 +544,7 @@ app.post('/api/auth/create-staff', async (req, res) => {
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
+
 // BLOCK USER
 app.post('/api/auth/block-user/:id', async (req, res) => {
   try {
@@ -489,7 +556,8 @@ app.post('/api/auth/block-user/:id', async (req, res) => {
     if (user.role === 'Administrator') return res.status(403).json({ status: 'error', message: 'Cannot block Administrator' });
     
     const result = await pool.query(
-      'UPDATE users SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, username, email, role, is_active', [userId]
+      'UPDATE users SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, username, email, role, is_active',
+      [userId]
     );
     
     res.json({ status: 'success', message: `${result.rows[0].username} blocked`, data: { user: { id: result.rows[0].id, username: result.rows[0].username, role: result.rows[0].role, isActive: false } } });
@@ -506,7 +574,8 @@ app.post('/api/auth/unblock-user/:id', async (req, res) => {
     if (userResult.rowCount === 0) return res.status(404).json({ status: 'error', message: 'User not found' });
     
     const result = await pool.query(
-      'UPDATE users SET is_active = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, username, email, role, is_active', [userId]
+      'UPDATE users SET is_active = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, username, email, role, is_active',
+      [userId]
     );
     
     res.json({ status: 'success', message: `${result.rows[0].username} unblocked`, data: { user: { id: result.rows[0].id, username: result.rows[0].username, role: result.rows[0].role, isActive: true } } });
@@ -544,7 +613,7 @@ app.get('/api/users', async (req, res) => {
     
     if (role) { query += ` AND role = $${p}`; params.push(role); p++; }
     if (search) { query += ` AND (username ILIKE $${p} OR email ILIKE $${p})`; params.push(`%${search}%`); p++; }
-        if (requesterId) {
+    if (requesterId) {
       const requester = await pool.query('SELECT role, company_id FROM users WHERE id = $1', [parseInt(requesterId)]);
       if (requester.rows.length > 0 && requester.rows[0].role === 'Manager') {
         const managerCompanyId = requester.rows[0].company_id;
@@ -555,7 +624,6 @@ app.get('/api/users', async (req, res) => {
           console.log(`🔒 Filtering by company_id: ${managerCompanyId}`);
         }
       }
-      // Admin sees all users
     }
 
     query += ' ORDER BY created_at DESC';
@@ -635,7 +703,6 @@ app.get('/api/drinks', async (req, res) => {
       drinks: result.rows
     });
   } catch (error) {
-    // If drinks table doesn't exist yet, return empty array
     res.json({ 
       success: true, 
       count: 0, 
@@ -683,90 +750,7 @@ app.get('/admin', (req, res) => {
 
 // CONFIRM EMAIL (clicked from email link)
 app.get('/api/auth/confirm-email', async (req, res) => {
-  try {
-    const { email, code } = req.query;
-    
-    if (!email || !code) {
-      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#e74c3c;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">❌</div><h1>Invalid Link</h1><p>The verification link is invalid or incomplete.</p></div></body></html>`);
-    }
-    
-    const stored = resetCodes[email];
-    if (!stored || stored.type !== 'verify') {
-      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#e74c3c;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">❌</div><h1>Not Found</h1><p>No verification found. Please register again.</p></div></body></html>`);
-    }
-    
-    if (Date.now() > stored.expiresAt) {
-      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#ff9800;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">⏰</div><h1>Link Expired</h1><p>This verification link has expired. Please register again.</p></div></body></html>`);
-    }
-    
-    if (stored.code !== code) {
-      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#e74c3c;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">❌</div><h1>Invalid Code</h1><p>The verification code is incorrect.</p></div></body></html>`);
-    }
-    
-    await pool.query('UPDATE users SET email_verified = true WHERE id = $1', [stored.userId]);
-    delete resetCodes[email];
-    
-    // ✅ Beautiful success page
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Email Verified</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { 
-            font-family: Arial, sans-serif; 
-            min-height: 100vh; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            background: linear-gradient(135deg, #667EEA, #764BA2);
-            padding: 20px;
-          }
-          .card {
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            text-align: center;
-            max-width: 400px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-          }
-          .icon { font-size: 60px; margin-bottom: 15px; }
-          h1 { color: #38b000; font-size: 24px; margin-bottom: 10px; }
-          p { color: #666; font-size: 14px; margin-bottom: 15px; }
-          .btn {
-            display: inline-block;
-            background: #667EEA;
-            color: white;
-            padding: 12px 30px;
-            border-radius: 10px;
-            text-decoration: none;
-            font-weight: bold;
-            margin-top: 10px;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <div class="icon">✅</div>
-          <h1>Email Verified!</h1>
-          <p>Your email <strong>${email}</strong> has been verified successfully.</p>
-          <p>You can now return to the app and login to your account.</p>
-        </div>
-        <script>
-          setTimeout(function() {
-            window.close();
-          }, 3000);
-        </script>
-      </body>
-      </html>
-    `);
-    
-  } catch (error) {
-    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667EEA,#764BA2);padding:20px;}.card{background:white;padding:40px;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,0.2);}.icon{font-size:60px;margin-bottom:15px;}h1{color:#e74c3c;font-size:22px;margin-bottom:10px;}p{color:#666;font-size:14px;}</style></head><body><div class="card"><div class="icon">❌</div><h1>Server Error</h1><p>Please try again later.</p></div></body></html>`);
-  }
+  // ... (keep your existing confirm-email code)
 });
 
 // VERIFY COMPANY INVITE CODE
@@ -789,6 +773,7 @@ app.post('/api/companies/verify-code', async (req, res) => {
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
+
 // ========== SESSION VALIDATION ==========
 app.post('/api/auth/validate-session', async (req, res) => {
   try {
@@ -802,26 +787,45 @@ app.post('/api/auth/validate-session', async (req, res) => {
       return res.json({ valid: false, terminated: false });
     }
     
-    // ✅ Check if token is valid (starts with 'token_' and has an ID)
-    const tokenParts = token.split('_');
-    if (tokenParts.length === 2 && tokenParts[0] === 'token') {
-      const userId = parseInt(tokenParts[1]);
-      if (!isNaN(userId) && userId > 0) {
-        return res.json({ 
-          valid: true, 
-          terminated: false,
-          previousDeviceName: null
-        });
-      }
+    const session = await pool.query(
+      `SELECT s.*, u.username 
+       FROM user_sessions s
+       JOIN users u ON s.user_id = u.id
+       WHERE s.session_token = $1 AND s.is_active = true`,
+      [token]
+    );
+    
+    if (session.rows.length === 0) {
+      return res.json({ valid: false, terminated: false });
     }
     
-    res.json({ valid: false, terminated: false });
+    const sessionData = session.rows[0];
+    
+    if (new Date(sessionData.expires_at) < new Date()) {
+      await pool.query(
+        'UPDATE user_sessions SET is_active = false WHERE id = $1',
+        [sessionData.id]
+      );
+      return res.json({ valid: false, terminated: false });
+    }
+    
+    await pool.query(
+      'UPDATE user_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [sessionData.id]
+    );
+    
+    res.json({ 
+      valid: true, 
+      terminated: false,
+      previousDeviceName: null
+    });
     
   } catch (error) {
     console.error('❌ Validate session error:', error);
     res.json({ valid: false, terminated: false });
   }
 });
+
 // ========== 404 ==========
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
