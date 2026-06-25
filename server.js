@@ -18,7 +18,7 @@ console.log('🔍 DATABASE_URL is set:', databaseUrl ? 'YES' : 'NO');
 console.log('🔍 DATABASE_URL starts with:', databaseUrl ? databaseUrl.substring(0, 30) + '...' : 'NOT SET');
 
 const pool = new Pool({
-  connectionString: databaseUrl,
+  connectionString: process.env.DATABASE_URL,
   ssl: { 
     rejectUnauthorized: false 
   },
@@ -26,7 +26,8 @@ const pool = new Pool({
   idleTimeoutMillis: 60000,
   max: 10,
   keepAlive: true,
-  keepAliveInitialDelayMillis: 10000
+  keepAliveInitialDelayMillis: 10000,
+  family: 4  // ✅ Force IPv4
 });
 
 // Keep connection alive middleware
