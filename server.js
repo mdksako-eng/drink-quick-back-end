@@ -10,7 +10,7 @@ const app = express();
 const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail } = require('./utils/email.service');
 
 // ========== POSTGRESQL SETUP ==========
-console.log('🔌 Connecting to PostgreSQL (Neon)...');
+console.log('🔌 Connecting to PostgreSQL (Supabase)...');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -40,50 +40,74 @@ app.use(async (req, res, next) => {
   
   while (retries > 0) {
     try {
-      console.log(`🔄 Connecting to database... (attempt ${4 - retries}/3)`);
+      console.log(`🔄 Connecting to Supabase... (attempt ${4 - retries}/3)`);
       await pool.query('SELECT NOW()');
-      console.log('✅ PostgreSQL Connected (Neon)');
+      console.log('✅ PostgreSQL Connected (Supabase)');
       
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS users (
-          id SERIAL PRIMARY KEY,
-          username VARCHAR(50) NOT NULL,
-          email VARCHAR(100) UNIQUE NOT NULL,
-          password TEXT NOT NULL,
-          role VARCHAR(50) DEFAULT 'Customer',
-          company_id INTEGER,
-          security_question1 VARCHAR(255) DEFAULT '',
-          security_question2 VARCHAR(255) DEFAULT '',
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          profile_image TEXT DEFAULT '',
-          is_active BOOLEAN DEFAULT TRUE,
-          email_verified BOOLEAN DEFAULT FALSE,
-          last_login TIMESTAMP
-        )
-      `);
-      console.log('✅ Users table ready');
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS companies (
-          id SERIAL PRIMARY KEY,
-          name VARCHAR(255) NOT NULL,
-          code VARCHAR(50) UNIQUE NOT NULL,
-          email VARCHAR(255),
-          phone VARCHAR(50),
-          is_active BOOLEAN DEFAULT true,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-      console.log('✅ Companies table ready');
-
-      await pool.query(`
-        INSERT INTO companies (name, code) 
-        VALUES ('My Business', 'MYBIZ')
-        ON CONFLICT (code) DO NOTHING
+      // Check if users table exists (your data is already imported)
+      const tableCheck = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' AND table_name = 'users'
+        );
       `);
       
+      const usersExist = tableCheck.rows[0].exists;
+      
+      if (!usersExist) {
+        console.log('📦 Creating users table...');
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(50) NOT NULL,
+            email VARCHAR(100) UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            role VARCHAR(50) DEFAULT 'Customer',
+            company_id INTEGER,
+            security_question1 VARCHAR(255) DEFAULT '',
+            security_question2 VARCHAR(255) DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            profile_image TEXT DEFAULT '',
+            is_active BOOLEAN DEFAULT TRUE,
+            email_verified BOOLEAN DEFAULT FALSE,
+            last_login TIMESTAMP
+          )
+        `);
+        console.log('✅ Users table created');
+      } else {
+        console.log('✅ Users table already exists');
+      }
+
+      const companiesCheck = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' AND table_name = 'companies'
+        );
+      `);
+      
+      const companiesExist = companiesCheck.rows[0].exists;
+      
+      if (!companiesExist) {
+        console.log('📦 Creating companies table...');
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS companies (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            code VARCHAR(50) UNIQUE NOT NULL,
+            email VARCHAR(255),
+            phone VARCHAR(50),
+            is_active BOOLEAN DEFAULT true,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        console.log('✅ Companies table created');
+      } else {
+        console.log('✅ Companies table already exists');
+      }
+      
+      // Count users
       const countResult = await pool.query('SELECT COUNT(*) FROM users');
       const userCount = parseInt(countResult.rows[0].count);
       console.log(`📊 Database has ${userCount} users`);
@@ -616,7 +640,7 @@ app.get('/api/drinks', async (req, res) => {
   }
 });
 app.get('/api/test', (req, res) => {
-  res.json({ success: true, message: 'DrinkQuick API v3.0', working: true, database: 'Neon PostgreSQL', email: 'Enabled' });
+  res.json({ success: true, message: 'DrinkQuick API v3.0', working: true, database: 'Supabase PostgreSQL', email: 'Enabled' });
 });
 
 app.get('/api/ping', (req, res) => {
@@ -624,7 +648,7 @@ app.get('/api/ping', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.json({ success: true, message: 'DrinkQuick API 🍹', version: '2.0', status: '🟢 ONLINE', database: 'Neon PostgreSQL' });
+  res.json({ success: true, message: 'DrinkQuick API 🍹', version: '2.0', status: '🟢 ONLINE', database: 'Supabase PostgreSQL' });
 });
 
 app.get('/health', async (req, res) => {
@@ -769,6 +793,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 DRINKQUICK SERVER v2.0 🚀`);
   console.log(`📍 Port: ${PORT}`);
-  console.log('🗄️  Database: Neon PostgreSQL');
+  console.log('🗄️  Database: Supabase PostgreSQL');
   console.log('📧 Email: Password Reset Codes Enabled\n');
 });
