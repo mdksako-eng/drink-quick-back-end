@@ -338,7 +338,8 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, email, password, deviceId, deviceName } = req.body;
     console.log(`🔑 Login: ${email || username}`);
-    
+    console.log(`📱 Device ID: ${deviceId}`);
+    console.log(`📱 Device Name: ${deviceName}`);
     if (!password || (!email && !username)) {
       return res.status(400).json({ status: 'error', message: 'Email/username and password required' });
     }
@@ -408,6 +409,8 @@ app.post('/api/auth/login', async (req, res) => {
           isActive: user.is_active, emailVerified: user.email_verified
         },
         sessionToken: sessionToken  // ✅ Send the session token
+        deviceId: finalDeviceId,
+        deviceName: finalDeviceName
       }
     });
   } catch (error) {
