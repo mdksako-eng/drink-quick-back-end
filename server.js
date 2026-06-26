@@ -408,7 +408,7 @@ app.post('/api/auth/login', async (req, res) => {
           email: user.email, role: user.role, companyId: user.company_id,
           isActive: user.is_active, emailVerified: user.email_verified
         },
-        sessionToken: sessionToken  // ✅ Send the session token
+        sessionToken: sessionToken,  // Send the session token
         deviceId: finalDeviceId,
         deviceName: finalDeviceName
       }
