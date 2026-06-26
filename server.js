@@ -779,46 +779,59 @@ app.post('/api/auth/validate-session', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('🔍 No auth header found');
       return res.json({ valid: false, terminated: false });
     }
     
     const token = authHeader.split(' ')[1];
     if (!token) {
+      console.log('🔍 No token found');
       return res.json({ valid: false, terminated: false });
     }
     
+    console.log('🔍 Validating token:', token.substring(0, 20) + '...');
+    
+    // ✅ Check in database first
     const session = await pool.query(
       `SELECT s.*, u.username 
        FROM user_sessions s
        JOIN users u ON s.user_id = u.id
-       WHERE s.session_token = $1 AND s.is_active = true`,
+       WHERE s.session_token = $1 AND s.is_active = true AND s.expires_at > NOW()`,
       [token]
     );
     
-    if (session.rows.length === 0) {
-      return res.json({ valid: false, terminated: false });
-    }
-    
-    const sessionData = session.rows[0];
-    
-    if (new Date(sessionData.expires_at) < new Date()) {
+    if (session.rows.length > 0) {
+      console.log('✅ Session found in database for user:', session.rows[0].username);
+      
+      // ✅ Update last activity
       await pool.query(
-        'UPDATE user_sessions SET is_active = false WHERE id = $1',
-        [sessionData.id]
+        'UPDATE user_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE session_token = $1',
+        [token]
       );
-      return res.json({ valid: false, terminated: false });
+      
+      return res.json({ 
+        valid: true, 
+        terminated: false,
+        previousDeviceName: null
+      });
     }
     
-    await pool.query(
-      'UPDATE user_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE id = $1',
-      [sessionData.id]
-    );
+    // ✅ Check token format as fallback
+    const tokenParts = token.split('_');
+    if (tokenParts.length >= 2 && tokenParts[0] === 'token') {
+      const userId = parseInt(tokenParts[1]);
+      if (!isNaN(userId) && userId > 0) {
+        console.log('⚠️ Token format valid but not in database');
+        return res.json({ 
+          valid: false, 
+          terminated: false,
+          message: 'Session not found in database'
+        });
+      }
+    }
     
-    res.json({ 
-      valid: true, 
-      terminated: false,
-      previousDeviceName: null
-    });
+    console.log('❌ Invalid session token');
+    res.json({ valid: false, terminated: false });
     
   } catch (error) {
     console.error('❌ Validate session error:', error);
