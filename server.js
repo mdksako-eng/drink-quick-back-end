@@ -332,14 +332,14 @@ app.post('/api/auth/register', async (req, res) => {
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
-
-// ✅ LOGIN - Updated with session management
+// ✅ LOGIN - Updated with Staff Approval System
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, email, password, deviceId, deviceName } = req.body;
     console.log(`🔑 Login: ${email || username}`);
     console.log(`📱 Device ID: ${deviceId}`);
     console.log(`📱 Device Name: ${deviceName}`);
+    
     if (!password || (!email && !username)) {
       return res.status(400).json({ status: 'error', message: 'Email/username and password required' });
     }
@@ -378,41 +378,150 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ status: 'error', message: 'Invalid credentials' });
     }
     
-    // ✅ Generate session token
-    const sessionToken = 'token_' + user.id + '_' + Date.now();
-    
-    // ✅ Deactivate any existing sessions for this user
-    await pool.query(
-      'UPDATE user_sessions SET is_active = false WHERE user_id = $1 AND is_active = true',
-      [user.id]
-    );
-    
-    // ✅ Save new session to Supabase
+    const userRole = user.role;
     const finalDeviceId = deviceId || req.headers['user-agent'] || 'unknown';
     const finalDeviceName = deviceName || 'Unknown Device';
     
-    await pool.query(
-      `INSERT INTO user_sessions (user_id, session_token, device_id, device_name, expires_at)
-       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '8 hours')`,
-      [user.id, sessionToken, finalDeviceId, finalDeviceName]
+    // ✅ Check if user already has an active session
+    const existingSession = await pool.query(
+      `SELECT * FROM user_sessions 
+       WHERE user_id = $1 AND is_active = true AND expires_at > NOW()`,
+      [user.id]
     );
     
-    await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+    // ✅ If no existing session → Login normally
+    if (existingSession.rows.length === 0) {
+      const sessionToken = 'token_' + user.id + '_' + Date.now();
+      await pool.query(
+        `INSERT INTO user_sessions (user_id, session_token, device_id, device_name, is_active, expires_at)
+         VALUES ($1, $2, $3, $4, true, NOW() + INTERVAL '8 hours')`,
+        [user.id, sessionToken, finalDeviceId, finalDeviceName]
+      );
+      
+      await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+      
+      return res.json({
+        status: 'success',
+        message: 'Login successful',
+        data: {
+          user: {
+            id: user.id,
+            _id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            companyId: user.company_id,
+            isActive: user.is_active,
+            emailVerified: user.email_verified
+          },
+          sessionToken: sessionToken,
+          deviceId: finalDeviceId,
+          deviceName: finalDeviceName
+        }
+      });
+    }
     
-    res.json({
-      status: 'success',
-      message: 'Login successful',
-      data: {
-        user: {
-          id: user.id, _id: user.id, username: user.username,
-          email: user.email, role: user.role, companyId: user.company_id,
-          isActive: user.is_active, emailVerified: user.email_verified
-        },
-        sessionToken: sessionToken,  // Send the session token
-        deviceId: finalDeviceId,
-        deviceName: finalDeviceName
+    const activeSession = existingSession.rows[0];
+    
+    // ✅ If Manager or Admin → Auto-terminate old session (always allowed)
+    if (userRole === 'Manager' || userRole === 'Administrator') {
+      await pool.query(
+        'UPDATE user_sessions SET is_active = false WHERE user_id = $1 AND is_active = true',
+        [user.id]
+      );
+      
+      const sessionToken = 'token_' + user.id + '_' + Date.now();
+      await pool.query(
+        `INSERT INTO user_sessions (user_id, session_token, device_id, device_name, is_active, expires_at)
+         VALUES ($1, $2, $3, $4, true, NOW() + INTERVAL '8 hours')`,
+        [user.id, sessionToken, finalDeviceId, finalDeviceName]
+      );
+      
+      await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+      
+      return res.json({
+        status: 'success',
+        message: 'Login successful (previous session terminated)',
+        data: {
+          user: {
+            id: user.id,
+            _id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            companyId: user.company_id,
+            isActive: user.is_active,
+            emailVerified: user.email_verified
+          },
+          sessionToken: sessionToken,
+          deviceId: finalDeviceId,
+          deviceName: finalDeviceName,
+          previousDeviceTerminated: true,
+        }
+      });
+    }
+    
+    // ✅ If Staff → Needs Manager Approval
+    if (userRole === 'Staff') {
+      // Check if there's already a pending request
+      const pendingRequest = await pool.query(
+        `SELECT * FROM login_requests 
+         WHERE user_id = $1 AND status = 'pending' AND expires_at > NOW()`,
+        [user.id]
+      );
+      
+      if (pendingRequest.rows.length > 0) {
+        return res.json({
+          status: 'pending',
+          message: 'Approval request already sent to manager. Please wait.',
+          requestToken: pendingRequest.rows[0].request_token,
+          deviceName: pendingRequest.rows[0].device_name,
+        });
       }
+      
+      // ✅ Create a pending session request
+      const requestToken = 'request_' + user.id + '_' + Date.now();
+      
+      await pool.query(
+        `INSERT INTO login_requests (
+          user_id, 
+          request_token, 
+          device_id, 
+          device_name, 
+          status,
+          request_time,
+          expires_at,
+          existing_session_token
+        ) VALUES ($1, $2, $3, $4, 'pending', CURRENT_TIMESTAMP, NOW() + INTERVAL '15 minutes', $5)`,
+        [user.id, requestToken, finalDeviceId, finalDeviceName, activeSession.session_token]
+      );
+      
+      // Get managers for notification
+      const managers = await pool.query(
+        `SELECT id, username FROM users 
+         WHERE company_id = $1 AND (role = 'Manager' OR role = 'Administrator')`,
+        [user.company_id]
+      );
+      
+      // Send notification to managers (optional)
+      console.log(`📢 Login request from ${user.username} on ${finalDeviceName}`);
+      console.log(`👥 Notify managers: ${managers.rows.map(m => m.username).join(', ')}`);
+      
+      return res.json({
+        status: 'pending',
+        message: 'Approval request sent to manager. Please wait.',
+        requestToken: requestToken,
+        deviceName: finalDeviceName,
+        managers: managers.rows,
+      });
+    }
+    
+    // Fallback (should not reach here)
+    return res.status(400).json({ 
+      status: 'error', 
+      message: 'Unable to process login request' 
     });
+    
   } catch (error) {
     console.error('❌ Login error:', error.message);
     res.status(500).json({ status: 'error', message: 'Login failed' });
@@ -841,7 +950,211 @@ app.post('/api/auth/validate-session', async (req, res) => {
     res.json({ valid: false, terminated: false });
   }
 });
+// ========== MANAGER APPROVAL SYSTEM ==========
 
+// ✅ Get pending requests (for Manager)
+app.get('/api/auth/pending-requests', async (req, res) => {
+  try {
+    // Get manager's company ID
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    const tokenParts = token.split('_');
+    if (tokenParts.length < 2) {
+      return res.status(401).json({ status: 'error', message: 'Invalid token' });
+    }
+    
+    const managerId = parseInt(tokenParts[1]);
+    if (isNaN(managerId)) {
+      return res.status(401).json({ status: 'error', message: 'Invalid user' });
+    }
+    
+    // Get manager's company
+    const manager = await pool.query(
+      'SELECT company_id, role FROM users WHERE id = $1',
+      [managerId]
+    );
+    
+    if (manager.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'User not found' });
+    }
+    
+    if (manager.rows[0].role !== 'Manager' && manager.rows[0].role !== 'Administrator') {
+      return res.status(403).json({ status: 'error', message: 'Only managers can view pending requests' });
+    }
+    
+    const companyId = manager.rows[0].company_id;
+    
+    // Get pending requests for staff in this company
+    const pendingRequests = await pool.query(
+      `SELECT lr.*, u.username 
+       FROM login_requests lr
+       JOIN users u ON lr.user_id = u.id
+       WHERE lr.status = 'pending' 
+         AND lr.expires_at > NOW()
+         AND u.company_id = $1
+       ORDER BY lr.request_time DESC`,
+      [companyId]
+    );
+    
+    res.json({
+      status: 'success',
+      requests: pendingRequests.rows,
+    });
+    
+  } catch (error) {
+    console.error('❌ Pending requests error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to get pending requests' });
+  }
+});
+
+// ✅ Check approval status (for Staff)
+app.get('/api/auth/check-approval', async (req, res) => {
+  try {
+    const { token } = req.query;
+    
+    if (!token) {
+      return res.status(400).json({ status: 'error', message: 'Request token required' });
+    }
+    
+    const request = await pool.query(
+      `SELECT status, new_session_token, device_name 
+       FROM login_requests 
+       WHERE request_token = $1`,
+      [token]
+    );
+    
+    if (request.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Request not found' });
+    }
+    
+    const requestData = request.rows[0];
+    
+    res.json({
+      status: 'success',
+      approvalStatus: requestData.status,
+      sessionToken: requestData.new_session_token,
+      deviceName: requestData.device_name,
+    });
+    
+  } catch (error) {
+    console.error('❌ Check approval error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to check approval status' });
+  }
+});
+
+// ✅ Approve or reject login (Manager)
+app.post('/api/auth/approve-login', async (req, res) => {
+  try {
+    const { requestToken, approved, managerId } = req.body;
+    
+    if (!requestToken || approved === undefined || !managerId) {
+      return res.status(400).json({ status: 'error', message: 'Missing required fields' });
+    }
+    
+    // ✅ Verify manager
+    const managerCheck = await pool.query(
+      'SELECT role, company_id FROM users WHERE id = $1',
+      [managerId]
+    );
+    
+    if (managerCheck.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Manager not found' });
+    }
+    
+    const manager = managerCheck.rows[0];
+    if (manager.role !== 'Manager' && manager.role !== 'Administrator') {
+      return res.status(403).json({ status: 'error', message: 'Only managers can approve logins' });
+    }
+    
+    // ✅ Get the pending request
+    const request = await pool.query(
+      `SELECT * FROM login_requests 
+       WHERE request_token = $1 AND status = 'pending'`,
+      [requestToken]
+    );
+    
+    if (request.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Request not found or already processed' });
+    }
+    
+    const requestData = request.rows[0];
+    const userId = requestData.user_id;
+    const existingSessionToken = requestData.existing_session_token;
+    
+    if (approved) {
+      // ✅ TERMINATE the existing session (Phone 1)
+      if (existingSessionToken) {
+        await pool.query(
+          'UPDATE user_sessions SET is_active = false, terminated_at = NOW() WHERE session_token = $1',
+          [existingSessionToken]
+        );
+        console.log(`🔒 Session terminated: ${existingSessionToken}`);
+      }
+      
+      // ✅ Create NEW session (Phone 2)
+      const newSessionToken = 'token_' + userId + '_' + Date.now();
+      await pool.query(
+        `INSERT INTO user_sessions (user_id, session_token, device_id, device_name, is_active, expires_at)
+         VALUES ($1, $2, $3, $4, true, NOW() + INTERVAL '8 hours')`,
+        [userId, newSessionToken, requestData.device_id, requestData.device_name]
+      );
+      
+      // ✅ Mark request as approved
+      await pool.query(
+        `UPDATE login_requests 
+         SET status = 'approved', 
+             approved_by = $1,
+             approved_at = CURRENT_TIMESTAMP,
+             new_session_token = $2
+         WHERE request_token = $3`,
+        [managerId, newSessionToken, requestToken]
+      );
+      
+      // ✅ Log the approval
+      await pool.query(
+        `INSERT INTO approval_logs (request_token, manager_id, action, timestamp)
+         VALUES ($1, $2, 'approved', CURRENT_TIMESTAMP)`,
+        [requestToken, managerId]
+      );
+      
+      return res.json({
+        status: 'success',
+        message: '✅ Login approved! Old session terminated.',
+        sessionToken: newSessionToken,
+        deviceName: requestData.device_name,
+      });
+    } else {
+      // ❌ Reject the request
+      await pool.query(
+        `UPDATE login_requests 
+         SET status = 'rejected', 
+             approved_by = $1,
+             approved_at = CURRENT_TIMESTAMP
+         WHERE request_token = $2`,
+        [managerId, requestToken]
+      );
+      
+      await pool.query(
+        `INSERT INTO approval_logs (request_token, manager_id, action, timestamp)
+         VALUES ($1, $2, 'rejected', CURRENT_TIMESTAMP)`,
+        [requestToken, managerId]
+      );
+      
+      return res.json({
+        status: 'success',
+        message: '❌ Login request rejected',
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Approval error:', error);
+    res.status(500).json({ status: 'error', message: 'Approval failed' });
+  }
+});
 // ========== 404 ==========
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
