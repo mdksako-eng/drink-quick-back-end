@@ -917,8 +917,10 @@ app.post('/api/auth/validate-session', async (req, res) => {
       
       // ✅ Update last activity
       await pool.query(
-        'UPDATE user_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE session_token = $1',
-        [token]
+         `UPDATE user_sessions 
+   SET is_active = false, terminated_at = NOW() 
+   WHERE expires_at < NOW() AND is_active = true`,
+  []
       );
       
       return res.json({ 
