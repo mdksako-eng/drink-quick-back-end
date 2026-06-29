@@ -1085,8 +1085,10 @@ app.post('/api/auth/approve-login', async (req, res) => {
     
     // ✅ Get the pending request
     const request = await pool.query(
-      `SELECT * FROM login_requests 
-       WHERE request_token = $1 AND status = 'pending'`,
+      `SELECT lr.*, u.username as staff_username, u.id as staff_id
+       FROM login_requests lr
+       JOIN users u ON lr.user_id = u.id
+       WHERE lr.request_token = $1 AND lr.status = 'pending'`,
       [requestToken]
     );
     
@@ -1097,7 +1099,10 @@ app.post('/api/auth/approve-login', async (req, res) => {
     const requestData = request.rows[0];
     const userId = requestData.user_id;
     const existingSessionToken = requestData.existing_session_token;
-    
+        const staffId = requestData.staff_id;
+    const staffName = requestData.staff_username || 'Unknown Staff';
+    const deviceName = requestData.device_name || 'Unknown Device';
+
     if (approved) {
       // ✅ TERMINATE the existing session (Phone 1)
       if (existingSessionToken) {
@@ -1128,10 +1133,25 @@ app.post('/api/auth/approve-login', async (req, res) => {
       );
       
       // ✅ Log the approval
-      await pool.query(
-        `INSERT INTO approval_logs (request_token, manager_id, action, timestamp)
-         VALUES ($1, $2, 'approved', CURRENT_TIMESTAMP)`,
-        [requestToken, managerId]
+          await pool.query(
+        `INSERT INTO approval_logs (
+          request_token, 
+          manager_id, 
+          staff_id, 
+          staff_name, 
+          device_name, 
+          action, 
+          details, 
+          timestamp
+        ) VALUES ($1, $2, $3, $4, $5, 'approved', $6, CURRENT_TIMESTAMP)`,
+        [
+          requestToken,
+          managerId,
+          staffId,
+          staffName,
+          deviceName,
+          `Approved by ${manager.username} - Staff ${staffName} on ${deviceName}`
+        ]
       );
       
       return res.json({
@@ -1151,10 +1171,25 @@ app.post('/api/auth/approve-login', async (req, res) => {
         [managerId, requestToken]
       );
       
-      await pool.query(
-        `INSERT INTO approval_logs (request_token, manager_id, action, timestamp)
-         VALUES ($1, $2, 'rejected', CURRENT_TIMESTAMP)`,
-        [requestToken, managerId]
+            await pool.query(
+        `INSERT INTO approval_logs (
+          request_token, 
+          manager_id, 
+          staff_id, 
+          staff_name, 
+          device_name, 
+          action, 
+          details, 
+          timestamp
+        ) VALUES ($1, $2, $3, $4, $5, 'rejected', $6, CURRENT_TIMESTAMP)`,
+        [
+          requestToken,
+          managerId,
+          staffId,
+          staffName,
+          deviceName,
+          `Rejected by ${manager.username} - Staff ${staffName} on ${deviceName}`
+        ]
       );
       
       return res.json({
