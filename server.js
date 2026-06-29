@@ -426,7 +426,7 @@ app.post('/api/auth/login', async (req, res) => {
     // ✅ If Manager or Admin → Auto-terminate old session (always allowed)
     if (userRole === 'Manager' || userRole === 'Administrator') {
       await pool.query(
-        'UPDATE user_sessions SET is_active = false WHERE user_id = $1 AND is_active = true',
+         'UPDATE user_sessions SET is_active = false, terminated_at = NOW() WHERE user_id = $1 AND is_active = true',
         [user.id]
       );
       
