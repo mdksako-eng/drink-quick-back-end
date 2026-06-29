@@ -469,16 +469,22 @@ app.post('/api/auth/login', async (req, res) => {
          WHERE user_id = $1 AND status = 'pending' AND expires_at > NOW()`,
         [user.id]
       );
-      
       if (pendingRequest.rows.length > 0) {
-        return res.json({
-          status: 'pending',
-          message: 'Approval request already sent to manager. Please wait.',
-          requestToken: pendingRequest.rows[0].request_token,
-          deviceName: pendingRequest.rows[0].device_name,
-        });
-      }
-      
+  const existing = pendingRequest.rows[0];
+  
+     
+       if (existing.device_id === finalDeviceId) {
+    return res.json({
+      status: 'pending',
+      message: 'Approval request already sent to manager. Please wait.',
+      requestToken: existing.request_token,
+      deviceName: existing.device_name,
+    });
+  }
+        await pool.query(
+    'UPDATE login_requests SET status = 'expired', terminated_at = NOW() WHERE request_token = $1',
+    [existing.request_token]
+  );
       // ✅ Create a pending session request
       const requestToken = 'request_' + user.id + '_' + Date.now();
       
