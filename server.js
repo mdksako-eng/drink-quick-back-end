@@ -481,10 +481,12 @@ app.post('/api/auth/login', async (req, res) => {
       deviceName: existing.device_name,
     });
   }
-        await pool.query(
-    'UPDATE login_requests SET status = 'expired', terminated_at = NOW() WHERE request_token = $1',
-    [existing.request_token]
+       await pool.query(
+  `UPDATE login_requests SET status = 'expired', terminated_at = NOW() WHERE request_token = $1`,
+  // ✅ Use BACKTICKS for the SQL string
+  [existing.request_token]
   );
+      }
       // ✅ Create a pending session request
       const requestToken = 'request_' + user.id + '_' + Date.now();
       
@@ -533,6 +535,7 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({ status: 'error', message: 'Login failed' });
   }
 });
+
 
 // RESEND VERIFICATION EMAIL
 app.post('/api/auth/resend-verification', async (req, res) => {
@@ -908,7 +911,11 @@ app.post('/api/auth/validate-session', async (req, res) => {
     }
     
     console.log('🔍 Validating token:', token.substring(0, 20) + '...');
-    
+     await pool.query(
+      `UPDATE user_sessions 
+       SET is_active = false, terminated_at = NOW() 
+       WHERE expires_at < NOW() AND is_active = true`
+    );
     // ✅ Check in database first
     const session = await pool.query(
       `SELECT s.*, u.username 
@@ -923,10 +930,8 @@ app.post('/api/auth/validate-session', async (req, res) => {
       
       // ✅ Update last activity
       await pool.query(
-         `UPDATE user_sessions 
-   SET is_active = false, terminated_at = NOW() 
-   WHERE expires_at < NOW() AND is_active = true`,
-  []
+        'UPDATE user_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE session_token = $1',
+        [token]
       );
       
       return res.json({ 
