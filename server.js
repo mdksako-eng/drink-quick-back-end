@@ -592,7 +592,7 @@ app.post('/api/auth/logout', async (req, res) => {
       const token = authHeader.split(' ')[1];
       if (token) {
         await pool.query(
-          'UPDATE user_sessions SET is_active = false, expires_at = NOW() WHERE session_token = $1',
+          'UPDATE user_sessions SET is_active = false, expires_at = NOW(), terminated_at = NOW() WHERE session_token = $1',
           [token]
         );
         console.log('🔓 Session invalidated:', token.substring(0, 20) + '...');
