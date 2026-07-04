@@ -371,7 +371,6 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(403).json({ 
         status: 'error', 
         message: 'Please verify your email first.' 
-        code: 'EMAIL_NOT_VERIFIED'
       });
     }
     
