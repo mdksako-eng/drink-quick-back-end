@@ -370,7 +370,8 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user.email_verified) {
       return res.status(403).json({ 
         status: 'error', 
-        message: 'Please verify your email first.' 
+        message: 'Please verify your email first.',
+        code: 'EMAIL_NOT_VERIFIED' 
       });
     }
     
@@ -871,7 +872,150 @@ app.get('/admin', (req, res) => {
 
 // CONFIRM EMAIL (clicked from email link)
 app.get('/api/auth/confirm-email', async (req, res) => {
-  // ... (keep your existing confirm-email code)
+  try {
+    const { email, code } = req.query;
+    
+    console.log(`📧 Verification request: email=${email}, code=${code}`);
+    
+    // 1. Validate email and code
+    if (!email || !code) {
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+          <head><title>Invalid Link</title></head>
+          <body style="font-family:Arial;text-align:center;padding:50px;">
+            <h2 style="color:red;">❌ Invalid Verification Link</h2>
+            <p>The verification link is missing required information.</p>
+            <a href="https://drink-quick-cal-kja1.onrender.com" style="color:#667EEA;">Go to App</a>
+          </body>
+        </html>
+      `);
+    }
+    
+    // 2. Check if code exists in resetCodes
+    const stored = resetCodes[email];
+    
+    if (!stored) {
+      console.log(`❌ No verification code found for: ${email}`);
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+          <head><title>Code Expired</title></head>
+          <body style="font-family:Arial;text-align:center;padding:50px;">
+            <h2 style="color:orange;">⏳ Code Expired</h2>
+            <p>No verification code found. Please request a new one.</p>
+            <a href="https://drink-quick-cal-kja1.onrender.com" style="color:#667EEA;">Go to App</a>
+          </body>
+        </html>
+      `);
+    }
+    
+    // 3. Check if code matches
+    if (stored.code !== code) {
+      console.log(`❌ Invalid code for: ${email}`);
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+          <head><title>Invalid Code</title></head>
+          <body style="font-family:Arial;text-align:center;padding:50px;">
+            <h2 style="color:red;">❌ Invalid Code</h2>
+            <p>The verification code is incorrect.</p>
+            <a href="https://drink-quick-cal-kja1.onrender.com" style="color:#667EEA;">Go to App</a>
+          </body>
+        </html>
+      `);
+    }
+    
+    // 4. Check if expired
+    if (Date.now() > stored.expiresAt) {
+      console.log(`❌ Code expired for: ${email}`);
+      delete resetCodes[email];
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+          <head><title>Code Expired</title></head>
+          <body style="font-family:Arial;text-align:center;padding:50px;">
+            <h2 style="color:orange;">⏳ Code Expired</h2>
+            <p>The verification code has expired (10 minutes). Please request a new one.</p>
+            <a href="https://drink-quick-cal-kja1.onrender.com" style="color:#667EEA;">Go to App</a>
+          </body>
+        </html>
+      `);
+    }
+    
+    // 5. ✅ ALL CHECKS PASSED - Update user's email_verified
+    console.log(`✅ Verifying email for user ID: ${stored.userId}`);
+    
+    await pool.query(
+      'UPDATE users SET email_verified = true WHERE id = $1',
+      [stored.userId]
+    );
+    
+    // 6. Clean up
+    delete resetCodes[email];
+    
+    console.log(`✅ Email verified for: ${email}`);
+    
+    // 7. Show success page
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Email Verified ✅</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              text-align: center;
+              padding: 50px;
+              background: #f5f5f5;
+              margin: 0;
+            }
+            .container {
+              max-width: 400px;
+              margin: 0 auto;
+              background: white;
+              padding: 40px;
+              border-radius: 15px;
+              box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            }
+            h1 { color: #4CAF50; }
+            .btn {
+              display: inline-block;
+              background: #667EEA;
+              color: white;
+              padding: 12px 30px;
+              border-radius: 10px;
+              text-decoration: none;
+              margin-top: 20px;
+            }
+            .btn:hover { background: #5a6fd6; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>✅ Email Verified!</h1>
+            <p>Your email has been successfully verified.</p>
+            <p>You can now login to your account.</p>
+            <a href="https://drink-quick-cal-kja1.onrender.com" class="btn">Go to App</a>
+          </div>
+        </body>
+      </html>
+    `);
+    
+  } catch (error) {
+    console.error('❌ Verification error:', error);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+        <head><title>Error</title></head>
+        <body style="font-family:Arial;text-align:center;padding:50px;">
+          <h2 style="color:red;">❌ Verification Failed</h2>
+          <p>An error occurred. Please try again later.</p>
+          <a href="https://drink-quick-cal-kja1.onrender.com" style="color:#667EEA;">Go to App</a>
+        </body>
+      </html>
+    `);
+  }
 });
 
 // VERIFY COMPANY INVITE CODE
