@@ -1490,5 +1490,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('📧 Email: Password Reset Codes Enabled');
   console.log('✅ Session Management: Enabled');
   console.log('✅ Staff Approval System: Enabled');
-  console.log('✅ Approval Logging: Enabled\n`);
+  console.log('✅ Approval Logging: Enabled\n');
 });
