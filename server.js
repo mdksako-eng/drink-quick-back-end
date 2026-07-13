@@ -66,6 +66,7 @@ app.use(async (req, res, next) => {
             username VARCHAR(50) NOT NULL,
             email VARCHAR(100) UNIQUE NOT NULL,
             password TEXT NOT NULL,
+            phone VARCHAR(20),
             role VARCHAR(50) DEFAULT 'Customer',
             company_id INTEGER,
             security_question1 VARCHAR(255) DEFAULT '',
@@ -83,6 +84,7 @@ app.use(async (req, res, next) => {
         console.log('✅ Users table already exists');
       }
 
+      // Check companies table
       const companiesCheck = await pool.query(`
         SELECT EXISTS (
           SELECT FROM information_schema.tables 
@@ -99,6 +101,7 @@ app.use(async (req, res, next) => {
             id SERIAL PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             code VARCHAR(50) UNIQUE NOT NULL,
+            invite_code VARCHAR(50) UNIQUE,
             email VARCHAR(255),
             phone VARCHAR(50),
             is_active BOOLEAN DEFAULT true,
@@ -111,7 +114,7 @@ app.use(async (req, res, next) => {
         console.log('✅ Companies table already exists');
       }
 
-      // ✅ Create user_sessions table
+      // Check user_sessions table
       const sessionsCheck = await pool.query(`
         SELECT EXISTS (
           SELECT FROM information_schema.tables 
@@ -133,12 +136,77 @@ app.use(async (req, res, next) => {
             is_active BOOLEAN DEFAULT true,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_activity_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '8 hours'
+            expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '8 hours',
+            terminated_at TIMESTAMP
           )
         `);
         console.log('✅ user_sessions table created');
       } else {
         console.log('✅ user_sessions table already exists');
+      }
+
+      // Check login_requests table
+      const requestsCheck = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' AND table_name = 'login_requests'
+        );
+      `);
+      
+      const requestsExist = requestsCheck.rows[0].exists;
+      
+      if (!requestsExist) {
+        console.log('📦 Creating login_requests table...');
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS login_requests (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            request_token TEXT NOT NULL UNIQUE,
+            device_id TEXT,
+            device_name TEXT,
+            status VARCHAR(20) DEFAULT 'pending',
+            existing_session_token TEXT,
+            new_session_token TEXT,
+            approved_by INTEGER,
+            request_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '15 minutes',
+            approved_at TIMESTAMP,
+            terminated_at TIMESTAMP
+          )
+        `);
+        console.log('✅ login_requests table created');
+      } else {
+        console.log('✅ login_requests table already exists');
+      }
+
+      // Check approval_logs table
+      const logsCheck = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' AND table_name = 'approval_logs'
+        );
+      `);
+      
+      const logsExist = logsCheck.rows[0].exists;
+      
+      if (!logsExist) {
+        console.log('📦 Creating approval_logs table...');
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS approval_logs (
+            id SERIAL PRIMARY KEY,
+            request_token TEXT,
+            manager_id INTEGER REFERENCES users(id),
+            staff_id INTEGER REFERENCES users(id),
+            staff_name VARCHAR(100),
+            device_name VARCHAR(255),
+            action VARCHAR(20),
+            details TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        console.log('✅ approval_logs table created');
+      } else {
+        console.log('✅ approval_logs table already exists');
       }
       
       const countResult = await pool.query('SELECT COUNT(*) FROM users');
@@ -270,14 +338,15 @@ app.post('/api/auth/register', async (req, res) => {
     if (existingUsername.rows.length > 0) {
       return res.status(400).json({ status: 'error', message: 'Username already taken' });
     }
-     let finalCompanyId = null;
-     let userRole = 'Customer'; 
+    
+    let finalCompanyId = null;
+    let userRole = 'Customer';
+    
     if (registerAsManager) {
       userRole = 'Manager';
       if (companyId) {
         // Joining existing company
         finalCompanyId = companyId;
-        // Update company contact if null
         await pool.query(
           'UPDATE companies SET email = COALESCE(email, $1), phone = COALESCE(phone, $2) WHERE id = $3',
           [email, phone || null, companyId]
@@ -296,42 +365,46 @@ app.post('/api/auth/register', async (req, res) => {
         }
       }
     }
+    
     const result = await pool.query(
       `INSERT INTO users (username, email, password, phone, role, company_id, security_question1, security_question2, email_verified) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false) 
        RETURNING id, username, email, phone, role, company_id, is_active, created_at`,
-      [username, email, password, phone || null,userRole, finalCompanyId, securityQuestions?.question1 || '', securityQuestions?.question2 || '']
+      [username, email, password, phone || null, userRole, finalCompanyId, 
+       securityQuestions?.question1 || '', securityQuestions?.question2 || '']
     );
     
     const newUser = result.rows[0];
     
+    // Send verification email
     const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
     resetCodes[email] = { code: verifyCode, userId: newUser.id, expiresAt: Date.now() + 30 * 60 * 1000, type: 'verify' };
-    await sendVerificationEmail(email, verifyCode, username);
-    console.log(`📧 Verification email sent to ${email}`);
+    
     try {
       await sendVerificationEmail(email, verifyCode, username);
-      console.log(`📧 Verification sent to ${email}`);
+      console.log(`📧 Verification email sent to ${email}`);
     } catch (e) {
       console.log('⚠️ Verification email failed:', e.message);
     }
-   res.status(201).json({
-  status: 'success',
-  message: registerAsManager ? 'Business account created! Check email to verify.' : 'Account created! Check email to verify.',
-  data: {
-    user: {
-      id: newUser.id, _id: newUser.id, username: newUser.username,
-      email: newUser.email, phone: newUser.phone, role: newUser.role,
-      companyId: newUser.company_id, isActive: newUser.is_active, emailVerified: false
-    },
-    token: 'token_' + newUser.id
-  }
-});
+    
+    res.status(201).json({
+      status: 'success',
+      message: registerAsManager ? 'Business account created! Check email to verify.' : 'Account created! Check email to verify.',
+      data: {
+        user: {
+          id: newUser.id, _id: newUser.id, username: newUser.username,
+          email: newUser.email, phone: newUser.phone, role: newUser.role,
+          companyId: newUser.company_id, isActive: newUser.is_active, emailVerified: false
+        },
+        token: 'token_' + newUser.id
+      }
+    });
   } catch (error) {
     console.error('❌ Registration error:', error.message);
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
+
 // ✅ LOGIN - Updated with Staff Approval System
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -383,6 +456,13 @@ app.post('/api/auth/login', async (req, res) => {
     const finalDeviceId = deviceId || req.headers['user-agent'] || 'unknown';
     const finalDeviceName = deviceName || 'Unknown Device';
     
+    // ✅ Clean expired sessions
+    await pool.query(
+      `UPDATE user_sessions 
+       SET is_active = false, terminated_at = NOW() 
+       WHERE expires_at < NOW() AND is_active = true`
+    );
+    
     // ✅ Check if user already has an active session
     const existingSession = await pool.query(
       `SELECT * FROM user_sessions 
@@ -427,7 +507,7 @@ app.post('/api/auth/login', async (req, res) => {
     // ✅ If Manager or Admin → Auto-terminate old session (always allowed)
     if (userRole === 'Manager' || userRole === 'Administrator') {
       await pool.query(
-         'UPDATE user_sessions SET is_active = false, terminated_at = NOW() WHERE user_id = $1 AND is_active = true',
+        'UPDATE user_sessions SET is_active = false, terminated_at = NOW() WHERE user_id = $1 AND is_active = true',
         [user.id]
       );
       
@@ -470,24 +550,27 @@ app.post('/api/auth/login', async (req, res) => {
          WHERE user_id = $1 AND status = 'pending' AND expires_at > NOW()`,
         [user.id]
       );
+      
       if (pendingRequest.rows.length > 0) {
-  const existing = pendingRequest.rows[0];
-  
-     
-       if (existing.device_id === finalDeviceId) {
-    return res.json({
-      status: 'pending',
-      message: 'Approval request already sent to manager. Please wait.',
-      requestToken: existing.request_token,
-      deviceName: existing.device_name,
-    });
-  }
-       await pool.query(
-  `UPDATE login_requests SET status = 'expired', terminated_at = NOW() WHERE request_token = $1`,
-  // ✅ Use BACKTICKS for the SQL string
-  [existing.request_token]
-  );
+        const existing = pendingRequest.rows[0];
+        
+        // If same device, return existing request
+        if (existing.device_id === finalDeviceId) {
+          return res.json({
+            status: 'pending',
+            message: 'Approval request already sent to manager. Please wait.',
+            requestToken: existing.request_token,
+            deviceName: existing.device_name,
+          });
+        }
+        
+        // Different device - expire old request
+        await pool.query(
+          `UPDATE login_requests SET status = 'expired', terminated_at = NOW() WHERE request_token = $1`,
+          [existing.request_token]
+        );
       }
+      
       // ✅ Create a pending session request
       const requestToken = 'request_' + user.id + '_' + Date.now();
       
@@ -512,7 +595,6 @@ app.post('/api/auth/login', async (req, res) => {
         [user.company_id]
       );
       
-      // Send notification to managers (optional)
       console.log(`📢 Login request from ${user.username} on ${finalDeviceName}`);
       console.log(`👥 Notify managers: ${managers.rows.map(m => m.username).join(', ')}`);
       
@@ -522,6 +604,38 @@ app.post('/api/auth/login', async (req, res) => {
         requestToken: requestToken,
         deviceName: finalDeviceName,
         managers: managers.rows,
+      });
+    }
+    
+    // ✅ Customer login with existing session - create new session (allow multiple devices)
+    if (userRole === 'Customer') {
+      const sessionToken = 'token_' + user.id + '_' + Date.now();
+      await pool.query(
+        `INSERT INTO user_sessions (user_id, session_token, device_id, device_name, is_active, expires_at)
+         VALUES ($1, $2, $3, $4, true, NOW() + INTERVAL '8 hours')`,
+        [user.id, sessionToken, finalDeviceId, finalDeviceName]
+      );
+      
+      await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+      
+      return res.json({
+        status: 'success',
+        message: 'Login successful',
+        data: {
+          user: {
+            id: user.id,
+            _id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            companyId: user.company_id,
+            isActive: user.is_active,
+            emailVerified: user.email_verified
+          },
+          sessionToken: sessionToken,
+          deviceId: finalDeviceId,
+          deviceName: finalDeviceName
+        }
       });
     }
     
@@ -536,7 +650,6 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({ status: 'error', message: 'Login failed' });
   }
 });
-
 
 // RESEND VERIFICATION EMAIL
 app.post('/api/auth/resend-verification', async (req, res) => {
@@ -644,7 +757,8 @@ app.post('/api/auth/create-staff', async (req, res) => {
       `INSERT INTO users (username, email, password, role, company_id, security_question1, security_question2) 
        VALUES ($1, $2, $3, 'Staff', $4, $5, $6) 
        RETURNING id, username, email, role, company_id, is_active, created_at`,
-      [username, email, password, companyId, securityQuestions?.question1 || '', securityQuestions?.question2 || '']
+      [username, email, password, companyId, 
+       securityQuestions?.question1 || '', securityQuestions?.question2 || '']
     );
     
     console.log(`✅ Staff created: ${username} with company_id: ${result.rows[0].company_id}`);
@@ -843,7 +957,7 @@ app.get('/api/ping', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.json({ success: true, message: 'DrinkQuick API 🍹', version: '2.0', status: '🟢 ONLINE', database: 'Supabase PostgreSQL' });
+  res.json({ success: true, message: 'DrinkQuick API 🍹', version: '3.0', status: '🟢 ONLINE', database: 'Supabase PostgreSQL' });
 });
 
 app.get('/health', async (req, res) => {
@@ -877,7 +991,6 @@ app.get('/api/auth/confirm-email', async (req, res) => {
     
     console.log(`📧 Verification request: email=${email}, code=${code}`);
     
-    // 1. Validate email and code
     if (!email || !code) {
       return res.status(400).send(`
         <!DOCTYPE html>
@@ -892,7 +1005,6 @@ app.get('/api/auth/confirm-email', async (req, res) => {
       `);
     }
     
-    // 2. Check if code exists in resetCodes
     const stored = resetCodes[email];
     
     if (!stored) {
@@ -910,7 +1022,6 @@ app.get('/api/auth/confirm-email', async (req, res) => {
       `);
     }
     
-    // 3. Check if code matches
     if (stored.code !== code) {
       console.log(`❌ Invalid code for: ${email}`);
       return res.status(400).send(`
@@ -926,7 +1037,6 @@ app.get('/api/auth/confirm-email', async (req, res) => {
       `);
     }
     
-    // 4. Check if expired
     if (Date.now() > stored.expiresAt) {
       console.log(`❌ Code expired for: ${email}`);
       delete resetCodes[email];
@@ -943,7 +1053,6 @@ app.get('/api/auth/confirm-email', async (req, res) => {
       `);
     }
     
-    // 5. ✅ ALL CHECKS PASSED - Update user's email_verified
     console.log(`✅ Verifying email for user ID: ${stored.userId}`);
     
     await pool.query(
@@ -951,12 +1060,10 @@ app.get('/api/auth/confirm-email', async (req, res) => {
       [stored.userId]
     );
     
-    // 6. Clean up
     delete resetCodes[email];
     
     console.log(`✅ Email verified for: ${email}`);
     
-    // 7. Show success page
     res.send(`
       <!DOCTYPE html>
       <html>
@@ -1044,23 +1151,24 @@ app.post('/api/auth/validate-session', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('🔍 No auth header found');
       return res.json({ valid: false, terminated: false });
     }
     
     const token = authHeader.split(' ')[1];
     if (!token) {
-      console.log('🔍 No token found');
       return res.json({ valid: false, terminated: false });
     }
     
     console.log('🔍 Validating token:', token.substring(0, 20) + '...');
-     await pool.query(
+    
+    // Clean expired sessions
+    await pool.query(
       `UPDATE user_sessions 
        SET is_active = false, terminated_at = NOW() 
        WHERE expires_at < NOW() AND is_active = true`
     );
-    // ✅ Check in database first
+    
+    // Check in database
     const session = await pool.query(
       `SELECT s.*, u.username 
        FROM user_sessions s
@@ -1072,7 +1180,6 @@ app.post('/api/auth/validate-session', async (req, res) => {
     if (session.rows.length > 0) {
       console.log('✅ Session found in database for user:', session.rows[0].username);
       
-      // ✅ Update last activity
       await pool.query(
         'UPDATE user_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE session_token = $1',
         [token]
@@ -1085,7 +1192,7 @@ app.post('/api/auth/validate-session', async (req, res) => {
       });
     }
     
-    // ✅ Check token format as fallback
+    // Check token format as fallback
     const tokenParts = token.split('_');
     if (tokenParts.length >= 2 && tokenParts[0] === 'token') {
       const userId = parseInt(tokenParts[1]);
@@ -1107,12 +1214,12 @@ app.post('/api/auth/validate-session', async (req, res) => {
     res.json({ valid: false, terminated: false });
   }
 });
+
 // ========== MANAGER APPROVAL SYSTEM ==========
 
 // ✅ Get pending requests (for Manager)
 app.get('/api/auth/pending-requests', async (req, res) => {
   try {
-    // Get manager's company ID
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ status: 'error', message: 'Unauthorized' });
@@ -1129,9 +1236,8 @@ app.get('/api/auth/pending-requests', async (req, res) => {
       return res.status(401).json({ status: 'error', message: 'Invalid user' });
     }
     
-    // Get manager's company
     const manager = await pool.query(
-      'SELECT company_id, role FROM users WHERE id = $1',
+      'SELECT id, username, company_id, role FROM users WHERE id = $1',
       [managerId]
     );
     
@@ -1145,9 +1251,12 @@ app.get('/api/auth/pending-requests', async (req, res) => {
     
     const companyId = manager.rows[0].company_id;
     
-    // Get pending requests for staff in this company
+    // ✅ Get pending requests with staff info
     const pendingRequests = await pool.query(
-      `SELECT lr.*, u.username 
+      `SELECT 
+        lr.*, 
+        u.id as staff_id,
+        u.username as staff_username
        FROM login_requests lr
        JOIN users u ON lr.user_id = u.id
        WHERE lr.status = 'pending' 
@@ -1159,7 +1268,11 @@ app.get('/api/auth/pending-requests', async (req, res) => {
     
     res.json({
       status: 'success',
-      requests: pendingRequests.rows,
+      requests: pendingRequests.rows.map(row => ({
+        ...row,
+        staff_id: row.staff_id,
+        staff_username: row.staff_username,
+      })),
     });
     
   } catch (error) {
@@ -1178,7 +1291,7 @@ app.get('/api/auth/check-approval', async (req, res) => {
     }
     
     const request = await pool.query(
-      `SELECT status, new_session_token, device_name 
+      `SELECT status, new_session_token, device_name, user_id
        FROM login_requests 
        WHERE request_token = $1`,
       [token]
@@ -1203,7 +1316,7 @@ app.get('/api/auth/check-approval', async (req, res) => {
   }
 });
 
-// ✅ Approve or reject login (Manager)
+// ✅ Approve or reject login (Manager) - FIXED
 app.post('/api/auth/approve-login', async (req, res) => {
   try {
     const { requestToken, approved, managerId } = req.body;
@@ -1212,9 +1325,9 @@ app.post('/api/auth/approve-login', async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Missing required fields' });
     }
     
-    // ✅ Verify manager
+    // ✅ Get manager info FIRST
     const managerCheck = await pool.query(
-      'SELECT role, company_id FROM users WHERE id = $1',
+      'SELECT id, username, role, company_id FROM users WHERE id = $1',
       [managerId]
     );
     
@@ -1227,9 +1340,12 @@ app.post('/api/auth/approve-login', async (req, res) => {
       return res.status(403).json({ status: 'error', message: 'Only managers can approve logins' });
     }
     
-    // ✅ Get the pending request
+    // ✅ Get the pending request with staff info
     const request = await pool.query(
-      `SELECT lr.*, u.username as staff_username, u.id as staff_id
+      `SELECT 
+        lr.*, 
+        u.id as staff_id,
+        u.username as staff_username
        FROM login_requests lr
        JOIN users u ON lr.user_id = u.id
        WHERE lr.request_token = $1 AND lr.status = 'pending'`,
@@ -1243,12 +1359,18 @@ app.post('/api/auth/approve-login', async (req, res) => {
     const requestData = request.rows[0];
     const userId = requestData.user_id;
     const existingSessionToken = requestData.existing_session_token;
-        const staffId = requestData.staff_id;
+    const staffId = requestData.staff_id;
     const staffName = requestData.staff_username || 'Unknown Staff';
     const deviceName = requestData.device_name || 'Unknown Device';
+    const managerName = manager.username || 'Unknown Manager';
+
+    console.log(`👤 Manager: ${managerName} (ID: ${managerId})`);
+    console.log(`👤 Staff: ${staffName} (ID: ${staffId})`);
+    console.log(`📱 Device: ${deviceName}`);
+    console.log(`📝 Action: ${approved ? 'APPROVED' : 'REJECTED'}`);
 
     if (approved) {
-      // ✅ TERMINATE the existing session (Phone 1)
+      // ✅ TERMINATE the existing session
       if (existingSessionToken) {
         await pool.query(
           'UPDATE user_sessions SET is_active = false, terminated_at = NOW() WHERE session_token = $1',
@@ -1257,7 +1379,7 @@ app.post('/api/auth/approve-login', async (req, res) => {
         console.log(`🔒 Session terminated: ${existingSessionToken}`);
       }
       
-      // ✅ Create NEW session (Phone 2)
+      // ✅ Create NEW session
       const newSessionToken = 'token_' + userId + '_' + Date.now();
       await pool.query(
         `INSERT INTO user_sessions (user_id, session_token, device_id, device_name, is_active, expires_at)
@@ -1276,8 +1398,8 @@ app.post('/api/auth/approve-login', async (req, res) => {
         [managerId, newSessionToken, requestToken]
       );
       
-      // ✅ Log the approval
-          await pool.query(
+      // ✅ Log the approval with ALL data
+      await pool.query(
         `INSERT INTO approval_logs (
           request_token, 
           manager_id, 
@@ -1290,11 +1412,11 @@ app.post('/api/auth/approve-login', async (req, res) => {
         ) VALUES ($1, $2, $3, $4, $5, 'approved', $6, CURRENT_TIMESTAMP)`,
         [
           requestToken,
-          managerId,
-          staffId,
-          staffName,
-          deviceName,
-          `Approved by ${manager.username} - Staff ${staffName} on ${deviceName}`
+          managerId,           // ✅ Manager ID
+          staffId,             // ✅ Staff ID (FIXED)
+          staffName,           // ✅ Staff Name
+          deviceName,          // ✅ Device Name
+          `✅ Approved by ${managerName} - Staff ${staffName} on ${deviceName}`
         ]
       );
       
@@ -1303,7 +1425,10 @@ app.post('/api/auth/approve-login', async (req, res) => {
         message: '✅ Login approved! Old session terminated.',
         sessionToken: newSessionToken,
         deviceName: requestData.device_name,
+        managerName: managerName,
+        staffName: staffName,
       });
+      
     } else {
       // ❌ Reject the request
       await pool.query(
@@ -1315,7 +1440,8 @@ app.post('/api/auth/approve-login', async (req, res) => {
         [managerId, requestToken]
       );
       
-            await pool.query(
+      // ✅ Log the rejection with ALL data
+      await pool.query(
         `INSERT INTO approval_logs (
           request_token, 
           manager_id, 
@@ -1328,17 +1454,19 @@ app.post('/api/auth/approve-login', async (req, res) => {
         ) VALUES ($1, $2, $3, $4, $5, 'rejected', $6, CURRENT_TIMESTAMP)`,
         [
           requestToken,
-          managerId,
-          staffId,
-          staffName,
-          deviceName,
-          `Rejected by ${manager.username} - Staff ${staffName} on ${deviceName}`
+          managerId,           // ✅ Manager ID
+          staffId,             // ✅ Staff ID (FIXED)
+          staffName,           // ✅ Staff Name
+          deviceName,          // ✅ Device Name
+          `❌ Rejected by ${managerName} - Staff ${staffName} on ${deviceName}`
         ]
       );
       
       return res.json({
         status: 'success',
         message: '❌ Login request rejected',
+        managerName: managerName,
+        staffName: staffName,
       });
     }
     
@@ -1347,6 +1475,7 @@ app.post('/api/auth/approve-login', async (req, res) => {
     res.status(500).json({ status: 'error', message: 'Approval failed' });
   }
 });
+
 // ========== 404 ==========
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
@@ -1355,8 +1484,11 @@ app.use((req, res) => {
 // ========== START ==========
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 DRINKQUICK SERVER v2.0 🚀`);
+  console.log(`\n🚀 DRINKQUICK SERVER v3.0 🚀`);
   console.log(`📍 Port: ${PORT}`);
   console.log('🗄️  Database: Supabase PostgreSQL');
-  console.log('📧 Email: Password Reset Codes Enabled\n');
+  console.log('📧 Email: Password Reset Codes Enabled');
+  console.log('✅ Session Management: Enabled');
+  console.log('✅ Staff Approval System: Enabled');
+  console.log('✅ Approval Logging: Enabled\n`);
 });
