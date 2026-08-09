@@ -2,36 +2,13 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const axios = require('axios');
 
 // ============================================================
-// 📦 CONFIGURATION
-// ============================================================
-
-// In-memory store for payment requests (use Redis in production)
-const paymentRequests = new Map();
-
-// MTN & Orange API endpoints
-const MTN_API = {
-  sandbox: 'https://sandbox.momodeveloper.mtn.com',
-  production: 'https://ericssonbasicapi2.azure-api.net',
-};
-
-const ORANGE_API = {
-  sandbox: 'https://api.sandbox.orange-money.com',
-  production: 'https://api.orange-money.com',
-};
-
-// ============================================================
-// 📦 HELPER FUNCTIONS
+// 📦 HELPERS
 // ============================================================
 
 function generateTransactionId() {
   return `txn_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
-}
-
-function generateRequestToken() {
-  return `req_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
 }
 
 function validatePhoneNumber(phone, provider) {
@@ -49,9 +26,43 @@ function validatePhoneNumber(phone, provider) {
 // ============================================================
 router.get('/company-settings', async (req, res) => {
   try {
-    const { companyId, role } = req.user;
-    
-    // ✅ Get company from database
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const tokenParts = token.split('_');
+    if (tokenParts.length < 2) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const userId = parseInt(tokenParts[1]);
+    if (isNaN(userId)) {
+      return res.status(401).json({ error: 'Invalid user' });
+    }
+
+    // ✅ Get user info
+    const userResult = await req.db.query(
+      'SELECT id, company_id, role FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+    const companyId = user.company_id;
+    const role = user.role;
+
+    if (!companyId) {
+      return res.status(400).json({ 
+        error: 'User does not belong to a company' 
+      });
+    }
+
+    // ✅ Get company settings
     const result = await req.db.query(
       `SELECT 
         id,
@@ -80,7 +91,7 @@ router.get('/company-settings', async (req, res) => {
     const company = result.rows[0];
     const isManager = ['Manager', 'Administrator', 'Admin'].includes(role);
 
-    // ✅ Build response based on role
+    // ✅ Build response
     const response = {
       id: company.id,
       name: company.name,
@@ -89,7 +100,7 @@ router.get('/company-settings', async (req, res) => {
       orangeEnabled: company.orange_enabled || false,
     };
 
-    // ✅ ONLY Managers/Admins get to see/edit payment settings
+    // ✅ Only Managers get sensitive data
     if (isManager) {
       response.mtnMerchantPhone = company.mtn_merchant_phone || '';
       response.orangeMerchantPhone = company.orange_merchant_phone || '';
@@ -104,7 +115,6 @@ router.get('/company-settings', async (req, res) => {
       response.isManager = true;
     } else {
       response.isManager = false;
-      // ✅ Mask sensitive data for non-managers
       response.mtnMerchantPhone = '••••••••••';
       response.orangeMerchantPhone = '••••••••••';
       response.mtnApiKey = '••••••••••';
@@ -132,8 +142,36 @@ router.get('/company-settings', async (req, res) => {
 // ============================================================
 router.patch('/company-settings', async (req, res) => {
   try {
-    const { companyId, role } = req.user;
-    
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const tokenParts = token.split('_');
+    if (tokenParts.length < 2) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const userId = parseInt(tokenParts[1]);
+    if (isNaN(userId)) {
+      return res.status(401).json({ error: 'Invalid user' });
+    }
+
+    // ✅ Get user info
+    const userResult = await req.db.query(
+      'SELECT id, company_id, role FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+    const companyId = user.company_id;
+    const role = user.role;
+
     // ✅ Only Managers can update
     const isManager = ['Manager', 'Administrator', 'Admin'].includes(role);
     if (!isManager) {
@@ -163,7 +201,6 @@ router.patch('/company-settings', async (req, res) => {
     const values = [];
     let paramIndex = 1;
 
-    // ✅ Only update fields that are provided
     if (businessPaymentsEnabled !== undefined) {
       updates.business_payments_enabled = businessPaymentsEnabled;
     }
@@ -237,7 +274,36 @@ router.patch('/company-settings', async (req, res) => {
 // ============================================================
 router.post('/payment/initiate', async (req, res) => {
   try {
-    const { companyId, userId, role } = req.user;
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const tokenParts = token.split('_');
+    if (tokenParts.length < 2) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const userId = parseInt(tokenParts[1]);
+    if (isNaN(userId)) {
+      return res.status(401).json({ error: 'Invalid user' });
+    }
+
+    // ✅ Get user info
+    const userResult = await req.db.query(
+      'SELECT id, company_id, role FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+    const companyId = user.company_id;
+    const role = user.role;
+
     const { amount, customerPhone, paymentMethod, orderId } = req.body;
 
     // ✅ Validate input
@@ -322,19 +388,6 @@ router.post('/payment/initiate', async (req, res) => {
     // ✅ Generate transaction ID
     const transactionId = generateTransactionId();
 
-    // ✅ Store payment request in memory (use Redis in production)
-    paymentRequests.set(transactionId, {
-      companyId,
-      userId,
-      orderId,
-      amount,
-      customerPhone,
-      paymentMethod,
-      companyName: company.name,
-      status: 'pending',
-      createdAt: Date.now(),
-    });
-
     // ✅ Save transaction to database
     await req.db.query(
       `INSERT INTO payment_transactions 
@@ -350,10 +403,8 @@ router.post('/payment/initiate', async (req, res) => {
     console.log(`   Customer: ${customerPhone}`);
     console.log(`   Method: ${paymentMethod}`);
     console.log(`   Transaction: ${transactionId}`);
+    console.log(`   Order ID: ${orderId}`);
 
-    // ✅ In production, you would call the actual payment API here
-    // For now, we'll simulate the request
-    
     // ✅ Return success with transaction ID
     res.json({
       success: true,
@@ -378,7 +429,34 @@ router.post('/payment/initiate', async (req, res) => {
 router.get('/payment/status/:transactionId', async (req, res) => {
   try {
     const { transactionId } = req.params;
-    const { companyId } = req.user;
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const tokenParts = token.split('_');
+    if (tokenParts.length < 2) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const userId = parseInt(tokenParts[1]);
+    if (isNaN(userId)) {
+      return res.status(401).json({ error: 'Invalid user' });
+    }
+
+    // ✅ Get user info
+    const userResult = await req.db.query(
+      'SELECT company_id FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const companyId = userResult.rows[0].company_id;
 
     // ✅ Get from database
     const result = await req.db.query(
@@ -397,27 +475,19 @@ router.get('/payment/status/:transactionId', async (req, res) => {
 
     const transaction = result.rows[0];
 
-    // ✅ In production: Check with actual payment provider
-    // For testing: Auto-complete after 15 seconds
+    // ✅ Auto-complete for testing (remove in production)
     if (transaction.status === 'pending') {
       const created = new Date(transaction.created_at);
       const elapsed = Date.now() - created.getTime();
       
-      // ✅ Auto-complete for testing (remove in production)
-      if (elapsed > 15000) { // 15 seconds
+      // Auto-complete after 15 seconds
+      if (elapsed > 15000) {
         await req.db.query(
           `UPDATE payment_transactions 
            SET status = 'completed', confirmed_at = NOW() 
            WHERE transaction_id = $1`,
           [transactionId]
         );
-        
-        // ✅ Update in-memory store
-        const payment = paymentRequests.get(transactionId);
-        if (payment) {
-          payment.status = 'completed';
-          payment.confirmedAt = new Date();
-        }
         
         console.log(`✅ Payment ${transactionId} auto-completed after ${elapsed}ms`);
         
@@ -428,19 +498,14 @@ router.get('/payment/status/:transactionId', async (req, res) => {
         });
       }
       
-      // ✅ Check if expired (5 minutes)
-      if (elapsed > 300000) { // 5 minutes
+      // Check if expired (5 minutes)
+      if (elapsed > 300000) {
         await req.db.query(
           `UPDATE payment_transactions 
            SET status = 'expired', error_message = 'Payment request expired' 
            WHERE transaction_id = $1`,
           [transactionId]
         );
-        
-        const payment = paymentRequests.get(transactionId);
-        if (payment) {
-          payment.status = 'expired';
-        }
         
         return res.json({
           success: true,
@@ -472,7 +537,34 @@ router.get('/payment/status/:transactionId', async (req, res) => {
 router.post('/payment/cancel', async (req, res) => {
   try {
     const { transactionId } = req.body;
-    const { companyId } = req.user;
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const tokenParts = token.split('_');
+    if (tokenParts.length < 2) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const userId = parseInt(tokenParts[1]);
+    if (isNaN(userId)) {
+      return res.status(401).json({ error: 'Invalid user' });
+    }
+
+    // ✅ Get user info
+    const userResult = await req.db.query(
+      'SELECT company_id FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const companyId = userResult.rows[0].company_id;
 
     // ✅ Update transaction status in database
     const result = await req.db.query(
@@ -488,12 +580,6 @@ router.post('/payment/cancel', async (req, res) => {
         success: false, 
         error: 'Transaction not found or already completed' 
       });
-    }
-
-    // ✅ Remove from memory store
-    const payment = paymentRequests.get(transactionId);
-    if (payment) {
-      payment.status = 'cancelled';
     }
 
     console.log(`❌ Payment ${transactionId} cancelled by user`);
@@ -517,8 +603,36 @@ router.post('/payment/cancel', async (req, res) => {
 // ============================================================
 router.get('/payment/history', async (req, res) => {
   try {
-    const { companyId, role } = req.user;
-    
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const tokenParts = token.split('_');
+    if (tokenParts.length < 2) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const userId = parseInt(tokenParts[1]);
+    if (isNaN(userId)) {
+      return res.status(401).json({ error: 'Invalid user' });
+    }
+
+    // ✅ Get user info
+    const userResult = await req.db.query(
+      'SELECT company_id, role FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+    const companyId = user.company_id;
+    const role = user.role;
+
     // ✅ Only Managers can view payment history
     const isManager = ['Manager', 'Administrator', 'Admin'].includes(role);
     if (!isManager) {
@@ -583,8 +697,36 @@ router.get('/payment/history', async (req, res) => {
 // ============================================================
 router.get('/payment/stats', async (req, res) => {
   try {
-    const { companyId, role } = req.user;
-    
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const tokenParts = token.split('_');
+    if (tokenParts.length < 2) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const userId = parseInt(tokenParts[1]);
+    if (isNaN(userId)) {
+      return res.status(401).json({ error: 'Invalid user' });
+    }
+
+    // ✅ Get user info
+    const userResult = await req.db.query(
+      'SELECT company_id, role FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+    const companyId = user.company_id;
+    const role = user.role;
+
     // ✅ Only Managers can view stats
     const isManager = ['Manager', 'Administrator', 'Admin'].includes(role);
     if (!isManager) {
@@ -631,7 +773,7 @@ router.get('/payment/stats', async (req, res) => {
 });
 
 // ============================================================
-// 🔄 WEBHOOK for payment confirmation (from MTN/Orange)
+// 🔄 WEBHOOK for payment confirmation
 // ============================================================
 router.post('/payment/webhook', async (req, res) => {
   try {
@@ -666,16 +808,7 @@ router.post('/payment/webhook', async (req, res) => {
       ]
     );
 
-    // ✅ Update in-memory store
-    const payment = paymentRequests.get(transactionId);
-    if (payment) {
-      payment.status = status === 'completed' ? 'completed' : 'failed';
-      if (status === 'completed') {
-        payment.confirmedAt = new Date();
-      }
-    }
-
-    // ✅ If payment was successful, you could trigger order completion here
+    // ✅ If payment was successful, trigger order completion
     if (status === 'completed') {
       console.log(`✅ Payment ${transactionId} confirmed via webhook`);
       // TODO: Trigger order completion, inventory update, etc.
@@ -696,7 +829,6 @@ router.get('/payment/health', (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    pendingTransactions: paymentRequests.size,
   });
 });
 
