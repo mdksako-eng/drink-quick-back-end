@@ -1475,7 +1475,9 @@ app.post('/api/auth/approve-login', async (req, res) => {
     res.status(500).json({ status: 'error', message: 'Approval failed' });
   }
 });
-
+// ========== PAYMENT ROUTES ==========
+const paymentRoutes = require('./routes/payment.routes');
+app.use('/api', paymentRoutes);
 // ========== 404 ==========
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
