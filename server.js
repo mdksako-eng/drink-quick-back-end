@@ -233,7 +233,20 @@ app.use(async (req, res, next) => {
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
-
+// ✅ Database connection middleware - MUST BE BEFORE ROUTES
+app.use(async (req, res, next) => {
+  try {
+    // Test database connection
+    await pool.query('SELECT 1');
+    req.db = pool;  // ✅ This makes `req.db` available
+    next();
+  } catch (error) {
+    console.error('❌ Database connection error:', error.message);
+    // Still allow the request to continue, but set req.db
+    req.db = pool;
+    next();
+  }
+});
 // ========== ADMIN AUTH ==========
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
