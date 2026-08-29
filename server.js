@@ -1491,6 +1491,91 @@ app.post('/api/auth/approve-login', async (req, res) => {
 // ========== PAYMENT ROUTES ==========
 const paymentRoutes = require('./routes/payment.routes');
 app.use('/api', paymentRoutes);
+
+// ========== AI CHAT (Groq proxy — API key stays on server) ==========
+app.post('/api/ai/chat', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const tokenParts = token.split('_');
+    if (tokenParts.length < 2) {
+      return res.status(401).json({ success: false, error: 'Invalid token' });
+    }
+
+    const userId = parseInt(tokenParts[1]);
+    if (isNaN(userId)) {
+      return res.status(401).json({ success: false, error: 'Invalid user' });
+    }
+
+    // ✅ Verify the user actually exists
+    const userResult = await req.db.query(
+      'SELECT id FROM users WHERE id = $1',
+      [userId]
+    );
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({ success: false, error: 'User not found' });
+    }
+
+    const { prompt, history } = req.body || {};
+    if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {
+      return res.status(400).json({ success: false, error: 'Prompt is required' });
+    }
+
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      console.error('❌ GROQ_API_KEY not set on server');
+      return res.status(500).json({ success: false, error: 'AI service not configured' });
+    }
+
+    const messages = [
+      {
+        role: 'system',
+        content: 'You are a helpful drink ordering assistant for "Drink Quick Cal". Be concise, friendly, and helpful. Keep responses under 150 words.',
+      },
+      ...(Array.isArray(history) ? history : []),
+      { role: 'user', content: prompt },
+    ];
+
+    const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        messages,
+        temperature: 0.7,
+        max_tokens: 500,
+      }),
+    });
+
+    const data = await groqResponse.json();
+
+    if (groqResponse.ok) {
+      const content = (data.choices && data.choices[0] && data.choices[0].message
+        ? data.choices[0].message.content
+        : '').trim() || 'No response';
+      return res.json({ success: true, content });
+    }
+
+    console.error('❌ Groq API error:', groqResponse.status, JSON.stringify(data).slice(0, 300));
+    return res.status(502).json({
+      success: false,
+      error: data && data.error && data.error.message
+        ? data.error.message
+        : 'AI request failed',
+    });
+  } catch (error) {
+    console.error('❌ AI chat error:', error.message);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // ========== 404 ==========
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
