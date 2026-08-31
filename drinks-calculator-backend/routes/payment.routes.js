@@ -2,6 +2,16 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const { getSessionUser } = require('../middleware/sessionAuth');
+
+// Resolves the authenticated user from the Bearer session token (DB-backed).
+async function requireSessionUser(req) {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.startsWith('Bearer ')
+    ? authHeader.split(' ')[1]
+    : null;
+  return getSessionUser(req.db, token);
+}
 
 // ============================================================
 // 📦 HELPERS
@@ -26,33 +36,11 @@ function validatePhoneNumber(phone, provider) {
 // ============================================================
 router.get('/company-settings', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const user = await requireSessionUser(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
-    const token = authHeader.split(' ')[1];
-    const tokenParts = token.split('_');
-    if (tokenParts.length < 2) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    const userId = parseInt(tokenParts[1]);
-    if (isNaN(userId)) {
-      return res.status(401).json({ error: 'Invalid user' });
-    }
-
-    // ✅ Get user info
-    const userResult = await req.db.query(
-      'SELECT id, company_id, role FROM users WHERE id = $1',
-      [userId]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const user = userResult.rows[0];
     const companyId = user.company_id;
     const role = user.role;
 
@@ -142,33 +130,11 @@ router.get('/company-settings', async (req, res) => {
 // ============================================================
 router.patch('/company-settings', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const user = await requireSessionUser(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
-    const token = authHeader.split(' ')[1];
-    const tokenParts = token.split('_');
-    if (tokenParts.length < 2) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    const userId = parseInt(tokenParts[1]);
-    if (isNaN(userId)) {
-      return res.status(401).json({ error: 'Invalid user' });
-    }
-
-    // ✅ Get user info
-    const userResult = await req.db.query(
-      'SELECT id, company_id, role FROM users WHERE id = $1',
-      [userId]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const user = userResult.rows[0];
     const companyId = user.company_id;
     const role = user.role;
 
@@ -274,33 +240,12 @@ router.patch('/company-settings', async (req, res) => {
 // ============================================================
 router.post('/payment/initiate', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const user = await requireSessionUser(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
-    const token = authHeader.split(' ')[1];
-    const tokenParts = token.split('_');
-    if (tokenParts.length < 2) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    const userId = parseInt(tokenParts[1]);
-    if (isNaN(userId)) {
-      return res.status(401).json({ error: 'Invalid user' });
-    }
-
-    // ✅ Get user info
-    const userResult = await req.db.query(
-      'SELECT id, company_id, role FROM users WHERE id = $1',
-      [userId]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const user = userResult.rows[0];
+    const userId = user.id;
     const companyId = user.company_id;
     const role = user.role;
 
@@ -430,33 +375,12 @@ router.get('/payment/status/:transactionId', async (req, res) => {
   try {
     const { transactionId } = req.params;
 
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const user = await requireSessionUser(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
-    const token = authHeader.split(' ')[1];
-    const tokenParts = token.split('_');
-    if (tokenParts.length < 2) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    const userId = parseInt(tokenParts[1]);
-    if (isNaN(userId)) {
-      return res.status(401).json({ error: 'Invalid user' });
-    }
-
-    // ✅ Get user info
-    const userResult = await req.db.query(
-      'SELECT company_id FROM users WHERE id = $1',
-      [userId]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const companyId = userResult.rows[0].company_id;
+    const companyId = user.company_id;
 
     // ✅ Get from database
     const result = await req.db.query(
@@ -538,33 +462,12 @@ router.post('/payment/cancel', async (req, res) => {
   try {
     const { transactionId } = req.body;
 
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const user = await requireSessionUser(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
-    const token = authHeader.split(' ')[1];
-    const tokenParts = token.split('_');
-    if (tokenParts.length < 2) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    const userId = parseInt(tokenParts[1]);
-    if (isNaN(userId)) {
-      return res.status(401).json({ error: 'Invalid user' });
-    }
-
-    // ✅ Get user info
-    const userResult = await req.db.query(
-      'SELECT company_id FROM users WHERE id = $1',
-      [userId]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const companyId = userResult.rows[0].company_id;
+    const companyId = user.company_id;
 
     // ✅ Update transaction status in database
     const result = await req.db.query(
@@ -603,33 +506,11 @@ router.post('/payment/cancel', async (req, res) => {
 // ============================================================
 router.get('/payment/history', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const user = await requireSessionUser(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
-    const token = authHeader.split(' ')[1];
-    const tokenParts = token.split('_');
-    if (tokenParts.length < 2) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    const userId = parseInt(tokenParts[1]);
-    if (isNaN(userId)) {
-      return res.status(401).json({ error: 'Invalid user' });
-    }
-
-    // ✅ Get user info
-    const userResult = await req.db.query(
-      'SELECT company_id, role FROM users WHERE id = $1',
-      [userId]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const user = userResult.rows[0];
     const companyId = user.company_id;
     const role = user.role;
 
@@ -697,33 +578,11 @@ router.get('/payment/history', async (req, res) => {
 // ============================================================
 router.get('/payment/stats', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const user = await requireSessionUser(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
-    const token = authHeader.split(' ')[1];
-    const tokenParts = token.split('_');
-    if (tokenParts.length < 2) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    const userId = parseInt(tokenParts[1]);
-    if (isNaN(userId)) {
-      return res.status(401).json({ error: 'Invalid user' });
-    }
-
-    // ✅ Get user info
-    const userResult = await req.db.query(
-      'SELECT company_id, role FROM users WHERE id = $1',
-      [userId]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const user = userResult.rows[0];
     const companyId = user.company_id;
     const role = user.role;
 

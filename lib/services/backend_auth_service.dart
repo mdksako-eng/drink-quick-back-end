@@ -53,12 +53,18 @@ class BackendAuthService {
 
         final response = await http.get(
           Uri.parse(test['url']!),
-          headers: {'Accept': 'application/json'},
+          headers: {
+            'Accept': 'application/json',
+            // /api/drinks and /api/users now require a session; 401 means
+            // the endpoint EXISTS and is protected — still "reachable".
+          },
         ).timeout(_backendTimeout);
 
+        // 200 = open endpoint, 401 = protected endpoint that exists.
+        // Both prove the backend is up; only network errors / true 404s
+        // indicate connectivity problems.
         final success = response.statusCode == 200 ||
-            response.statusCode == 404 ||
-            (test['name'] == 'Root' && response.statusCode == 200);
+            response.statusCode == 401;
 
         final statusMessage = success ? '✅ Accessible' : '⚠️ Blocked';
 

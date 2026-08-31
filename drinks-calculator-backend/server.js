@@ -10,6 +10,9 @@ const app = express();
 // ========== EMAIL SERVICE ==========
 const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail } = require('./utils/email.service');
 
+// ========== SESSION AUTH (DB-backed) ==========
+const { generateSessionToken, getSessionUser, requireSession } = require('./middleware/sessionAuth');
+
 // ========== PASSWORD HELPERS ===========
 // Passwords are stored as bcrypt hashes ($2a$ / $2b$ / $2y$).
 // Legacy rows with plaintext passwords are upgraded automatically on next successful login.
@@ -442,7 +445,8 @@ app.post('/api/auth/register', async (req, res) => {
           email: newUser.email, phone: newUser.phone, role: newUser.role,
           companyId: newUser.company_id, isActive: newUser.is_active, emailVerified: false
         },
-        token: 'token_' + newUser.id
+        // ⚠️ Placeholder token — the real session is created on first login.
+        token: generateSessionToken()
       }
     });
   } catch (error) {
@@ -536,7 +540,7 @@ app.post('/api/auth/login', async (req, res) => {
     
     // ✅ If no existing session → Login normally
     if (existingSession.rows.length === 0) {
-      const sessionToken = 'token_' + user.id + '_' + Date.now();
+      const sessionToken = generateSessionToken();
       await pool.query(
         `INSERT INTO user_sessions (user_id, session_token, device_id, device_name, is_active, expires_at)
          VALUES ($1, $2, $3, $4, true, NOW() + INTERVAL '8 hours')`,
@@ -575,7 +579,7 @@ app.post('/api/auth/login', async (req, res) => {
         [user.id]
       );
       
-      const sessionToken = 'token_' + user.id + '_' + Date.now();
+      const sessionToken = generateSessionToken();
       await pool.query(
         `INSERT INTO user_sessions (user_id, session_token, device_id, device_name, is_active, expires_at)
          VALUES ($1, $2, $3, $4, true, NOW() + INTERVAL '8 hours')`,
@@ -673,7 +677,7 @@ app.post('/api/auth/login', async (req, res) => {
     
     // ✅ Customer login with existing session - create new session (allow multiple devices)
     if (userRole === 'Customer') {
-      const sessionToken = 'token_' + user.id + '_' + Date.now();
+      const sessionToken = generateSessionToken();
       await pool.query(
         `INSERT INTO user_sessions (user_id, session_token, device_id, device_name, is_active, expires_at)
          VALUES ($1, $2, $3, $4, true, NOW() + INTERVAL '8 hours')`,
@@ -742,11 +746,10 @@ app.post('/api/auth/resend-verification', async (req, res) => {
   }
 });
 
-// GET PROFILE
-app.get('/api/auth/me', async (req, res) => {
+// GET PROFILE (requires valid session — identity comes from the token, not the client)
+app.get('/api/auth/me', requireSession(pool), async (req, res) => {
   try {
-    const userId = req.headers['user-id'] || req.query.userId;
-    if (!userId) return res.status(400).json({ status: 'error', message: 'User ID required' });
+    const userId = req.user.id;
     
     const result = await pool.query(
       'SELECT id, username, email, role, company_id, is_active, last_login, created_at FROM users WHERE id = $1',
@@ -793,11 +796,11 @@ app.post('/api/auth/logout', async (req, res) => {
   }
 });
 
-// CREATE STAFF (Admin & Manager)
-app.post('/api/auth/create-staff', async (req, res) => {
+// CREATE STAFF (Admin & Manager — requires valid session)
+app.post('/api/auth/create-staff', requireSession(pool), async (req, res) => {
   try {
     const { username, email, password, securityQuestions } = req.body;
-    const creatorId = req.headers['user-id'];
+    const creatorId = req.user.id;
     console.log(`👤 Creating staff: ${username} by user ID: ${creatorId}`);
     
     const existing = await pool.query('SELECT id FROM users WHERE username = $1 OR email = $2', [username, email]);
@@ -805,17 +808,13 @@ app.post('/api/auth/create-staff', async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Username or email already exists' });
     }
     
-    let companyId = null;
-    if (creatorId) {
-      const creator = await pool.query(
-        'SELECT company_id, role FROM users WHERE id = $1', 
-        [parseInt(creatorId)]
-      );
-      if (creator.rows.length > 0) {
-        companyId = creator.rows[0].company_id;
-        console.log(`🏢 Creator company_id: ${companyId}`);
-      }
+    // 🔒 Only Manager/Administrator can create staff
+    if (!['Manager', 'Administrator'].includes(req.user.role)) {
+      return res.status(403).json({ status: 'error', message: 'Only managers and administrators can create staff' });
     }
+    
+    const companyId = req.user.company_id;
+    console.log(`🏢 Creator company_id: ${companyId}`);
     
     // 🔒 Hash the password before storing
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -905,27 +904,30 @@ app.delete('/api/auth/users/:id', verifyAdmin, async (req, res) => {
   }
 });
 
-// GET USERS
-app.get('/api/users', async (req, res) => {
+// GET USERS (requires session; only Manager/Administrator; Managers see their own company)
+app.get('/api/users', requireSession(pool), async (req, res) => {
   try {
     const { role, search } = req.query;
-    const requesterId = req.headers['user-id'];
+    const requesterRole = req.user.role;
+    
+    // 🔒 Only Manager/Administrator can list users
+    if (!['Manager', 'Administrator'].includes(requesterRole)) {
+      return res.status(403).json({ status: 'error', message: 'Not authorized to list users' });
+    }
+    
     let query = 'SELECT id, username, email, role, company_id, is_active, created_at, last_login FROM users WHERE 1=1';
     const params = [];
     let p = 1;
     
     if (role) { query += ` AND role = $${p}`; params.push(role); p++; }
     if (search) { query += ` AND (username ILIKE $${p} OR email ILIKE $${p})`; params.push(`%${search}%`); p++; }
-    if (requesterId) {
-      const requester = await pool.query('SELECT role, company_id FROM users WHERE id = $1', [parseInt(requesterId)]);
-      if (requester.rows.length > 0 && requester.rows[0].role === 'Manager') {
-        const managerCompanyId = requester.rows[0].company_id;
-        if (managerCompanyId) {
-          query += ` AND company_id = $${p}`;
-          params.push(managerCompanyId);
-          p++;
-          console.log(`🔒 Filtering by company_id: ${managerCompanyId}`);
-        }
+    if (requesterRole === 'Manager') {
+      const managerCompanyId = req.user.company_id;
+      if (managerCompanyId) {
+        query += ` AND company_id = $${p}`;
+        params.push(managerCompanyId);
+        p++;
+        console.log(`🔒 Filtering by company_id: ${managerCompanyId}`);
       }
     }
 
@@ -993,8 +995,8 @@ app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
 
 // ========== OTHER ROUTES ==========
 
-// GET DRINKS FROM DATABASE
-app.get('/api/drinks', async (req, res) => {
+// GET DRINKS FROM DATABASE (requires valid session)
+app.get('/api/drinks', requireSession(pool), async (req, res) => {
   try {
     const result = await pool.query(
       'SELECT * FROM drinks WHERE is_active = true ORDER BY name ASC'
@@ -1006,12 +1008,17 @@ app.get('/api/drinks', async (req, res) => {
       drinks: result.rows
     });
   } catch (error) {
-    res.json({ 
-      success: true, 
-      count: 0, 
-      drinks: [],
-      message: 'No drinks table yet. Create one or use the app to add drinks.'
-    });
+    // Missing table is a recoverable "no data yet" state — report it honestly.
+    if (error.message && error.message.includes('does not exist')) {
+      return res.json({
+        success: true,
+        count: 0,
+        drinks: [],
+        message: 'No drinks table yet. Create one or use the app to add drinks.'
+      });
+    }
+    console.error('❌ Drinks query error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to load drinks' });
   }
 });
 
@@ -1288,20 +1295,13 @@ app.post('/api/auth/validate-session', async (req, res) => {
 app.get('/api/auth/pending-requests', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    const sessionUser = await getSessionUser(pool, token);
+    if (!sessionUser) {
+      return res.status(401).json({ status: 'error', message: 'Invalid or expired session' });
     }
     
-    const token = authHeader.split(' ')[1];
-    const tokenParts = token.split('_');
-    if (tokenParts.length < 2) {
-      return res.status(401).json({ status: 'error', message: 'Invalid token' });
-    }
-    
-    const managerId = parseInt(tokenParts[1]);
-    if (isNaN(managerId)) {
-      return res.status(401).json({ status: 'error', message: 'Invalid user' });
-    }
+    const managerId = sessionUser.id;
     
     const manager = await pool.query(
       'SELECT id, username, company_id, role FROM users WHERE id = $1',
@@ -1386,11 +1386,20 @@ app.get('/api/auth/check-approval', async (req, res) => {
 // ✅ Approve or reject login (Manager) - FIXED
 app.post('/api/auth/approve-login', async (req, res) => {
   try {
-    const { requestToken, approved, managerId } = req.body;
+    const { requestToken, approved } = req.body;
     
-    if (!requestToken || approved === undefined || !managerId) {
+    if (!requestToken || approved === undefined) {
       return res.status(400).json({ status: 'error', message: 'Missing required fields' });
     }
+    
+    // 🔒 Manager identity comes from the session token, not the client body
+    const authHeader = req.headers.authorization;
+    const sessionToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    const sessionUser = await getSessionUser(pool, sessionToken);
+    if (!sessionUser) {
+      return res.status(401).json({ status: 'error', message: 'Invalid or expired session' });
+    }
+    const managerId = sessionUser.id;
     
     // ✅ Get manager info FIRST
     const managerCheck = await pool.query(
@@ -1447,7 +1456,7 @@ app.post('/api/auth/approve-login', async (req, res) => {
       }
       
       // ✅ Create NEW session
-      const newSessionToken = 'token_' + userId + '_' + Date.now();
+      const newSessionToken = generateSessionToken();
       await pool.query(
         `INSERT INTO user_sessions (user_id, session_token, device_id, device_name, is_active, expires_at)
          VALUES ($1, $2, $3, $4, true, NOW() + INTERVAL '8 hours')`,
@@ -1550,29 +1559,12 @@ app.use('/api', paymentRoutes);
 app.post('/api/ai/chat', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    const sessionUser = await getSessionUser(req.db, token);
+    if (!sessionUser) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired session' });
     }
-
-    const token = authHeader.split(' ')[1];
-    const tokenParts = token.split('_');
-    if (tokenParts.length < 2) {
-      return res.status(401).json({ success: false, error: 'Invalid token' });
-    }
-
-    const userId = parseInt(tokenParts[1]);
-    if (isNaN(userId)) {
-      return res.status(401).json({ success: false, error: 'Invalid user' });
-    }
-
-    // ✅ Verify the user actually exists
-    const userResult = await req.db.query(
-      'SELECT id FROM users WHERE id = $1',
-      [userId]
-    );
-    if (userResult.rows.length === 0) {
-      return res.status(401).json({ success: false, error: 'User not found' });
-    }
+    const userId = sessionUser.id;
 
     const { prompt, history } = req.body || {};
     if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {

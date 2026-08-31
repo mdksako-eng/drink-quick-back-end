@@ -8,6 +8,7 @@ import '../providers/auth_provider.dart';
 import '../utils/helpers.dart';
 import '../config/api_config.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
+import 'package:drinks_calculator_fixed/services/secure_storage_service.dart';
 
 class ManagerPanel extends StatefulWidget {
   const ManagerPanel({Key? key}) : super(key: key);
@@ -75,11 +76,13 @@ class _ManagerPanelState extends State<ManagerPanel>
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final userId = authProvider.user?.id ?? '';
+      final token = await SecureStorageService.getSessionToken();
       final response = await http.get(
         Uri.parse('${ApiConfig.usersUrl}?role=Staff'),
         headers: {
           'Content-Type': 'application/json',
           'user-id': userId,
+          if (token != null) 'Authorization': 'Bearer $token',
         },
       ).timeout(const Duration(seconds: 15));
 
@@ -116,6 +119,7 @@ class _ManagerPanelState extends State<ManagerPanel>
     setState(() => _isCreating = true);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userId = authProvider.user?.id ?? '';
+    final token = await SecureStorageService.getSessionToken();
 
     try {
       final response = await http
@@ -124,6 +128,7 @@ class _ManagerPanelState extends State<ManagerPanel>
             headers: {
               'Content-Type': 'application/json',
               'user-id': userId,
+              if (token != null) 'Authorization': 'Bearer $token',
             },
             body: json.encode({
               'username': _usernameController.text.trim(),
