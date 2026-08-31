@@ -30,10 +30,25 @@ ALTER TABLE user_sessions      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE login_requests     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE approval_logs      ENABLE ROW LEVEL SECURITY;
 
--- No policies are created for the anon/authenticated roles here,
--- which means the supabase anon key (shipped inside the app) can
--- no longer SELECT/INSERT/UPDATE/DELETE these tables at all.
--- The Node backend (postgres connection role) is unaffected.
+-- We found pre-existing policies granting the PUBLIC role
+-- (i.e. the anon key used by the app) full access to these tables.
+-- We must DROP them, otherwise RLS alone changes nothing.
+DROP POLICY IF EXISTS "Users can view all users"         ON public.users;
+DROP POLICY IF EXISTS "Users can update own profile"     ON public.users;
+DROP POLICY IF EXISTS "Users can view sessions"          ON public.user_sessions;
+DROP POLICY IF EXISTS "Users can insert sessions"        ON public.user_sessions;
+DROP POLICY IF EXISTS "Users can update sessions"        ON public.user_sessions;
+DROP POLICY IF EXISTS "Users can delete sessions"        ON public.user_sessions;
+DROP POLICY IF EXISTS "Users can view requests"          ON public.login_requests;
+DROP POLICY IF EXISTS "Users can create requests"        ON public.login_requests;
+DROP POLICY IF EXISTS "Users can update requests"        ON public.login_requests;
+DROP POLICY IF EXISTS "Users can view approval logs"     ON public.approval_logs;
+DROP POLICY IF EXISTS "Users can insert approval logs"   ON public.approval_logs;
+
+-- With RLS enabled and zero policies, the supabase anon key (shipped
+-- inside the app) can no longer SELECT/INSERT/UPDATE/DELETE these
+-- tables at all. The Node backend (postgres connection role) is
+-- unaffected.
 
 -- ------------------------------------------------------------
 -- VERIFY TIER 1  (should ALL return t = true)

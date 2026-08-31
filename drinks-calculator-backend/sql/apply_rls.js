@@ -72,10 +72,15 @@ function alternateUrls(original) {
 
   if (!checkOnly) {
     const sql = fs.readFileSync(SQL_FILE, 'utf8');
+    // Strip SQL comments and empty lines, then split on statement boundaries
     const statements = sql
-      .split(/;\s*(?:\r?\n|$)/)
+      .split(/\r?\n/)
+      .map((l) => l.replace(/--.*$/, '').trim()) // remove -- comments
+      .filter((l) => l.length > 0)
+      .join('\n')
+      .split(';')
       .map((s) => s.trim())
-      .filter((s) => s.length > 0 && !s.startsWith('--'));
+      .filter((s) => s.length > 0);
 
     let applied = 0;
     const failed = [];
@@ -94,12 +99,14 @@ function alternateUrls(original) {
     console.log('🔎 --check-only mode: only verifying current RLS state');
   }
 
-  // ---- Verify RLS state ----
+  // ---- Verify RLS state (public schema only) ----
   const verify = await pool.query(
-    `SELECT relname AS table_name, relrowsecurity AS rls_enabled
-     FROM pg_class
-     WHERE relname IN ('users','user_sessions','login_requests','approval_logs')
-     ORDER BY relname`
+    `SELECT c.relname AS table_name, c.relrowsecurity AS rls_enabled
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relname IN ('users','user_sessions','login_requests','approval_logs')
+      ORDER BY c.relname`
   );
   verify.rows.forEach((r) => {
     console.log(`   - ${r.table_name}: RLS ${r.rls_enabled ? '✅ ENABLED' : '❌ NOT ENABLED'}`);
