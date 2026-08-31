@@ -1,0 +1,46 @@
+{
+  "name": "drinks-calculator-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "jest --runInBand",
+    "start": "node server.js",
+    "migrate:passwords": "node scripts/migrate_passwords.js",
+    "rls:apply": "node sql/apply_rls.js",
+    "rls:check": "node sql/apply_rls.js --check-only",
+    "rls:revert": "node sql/revert_rls.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@sendgrid/mail": "^8.1.6",
+    "bcryptjs": "^3.0.3",
+    "cloudinary": "^2.9.0",
+    "cors": "^2.8.6",
+    "crypto": "^1.0.1",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-validator": "^7.3.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.1.5",
+    "morgan": "^1.10.1",
+    "multer": "^2.0.2",
+    "nodemailer": "^7.0.13",
+    "pdfkit": "^0.17.2",
+    "pg": "^8.20.0",
+    "socket.io": "^4.8.3",
+    "winston": "^3.19.0"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0",
+    "nodemon": "^3.1.11",
+    "supertest": "^7.2.2"
+  },
+  "directories": {
+    "test": "tests"
+  }
+}

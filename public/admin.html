@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DrinkQuick Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        
+        body {
+            background: #f0f2f5;
+            padding: 10px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        header {
+            background: #4a00e0;
+            color: white;
+            padding: 20px;
+            border-radius: 10px 10px 0 0;
+        }
+        
+        .content {
+            padding: 20px;
+        }
+        
+        .auth-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .password-input {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        @media (min-width: 768px) {
+            .password-input {
+                flex-direction: row;
+            }
+        }
+        
+        .password-input input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        
+        .password-input button {
+            padding: 12px 20px;
+            background: #4a00e0;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .message {
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 30px;
+            display: none;
+        }
+        /* Responsive table */
+        
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 700px;
+        }
+        
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        th {
+            background: #f8f9fa;
+            white-space: nowrap;
+        }
+        /* Responsive cells */
+        
+        td {
+            word-break: break-word;
+        }
+        
+        @media (max-width: 768px) {
+            td,
+            th {
+                padding: 10px 8px;
+                font-size: 14px;
+            }
+        }
+        
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        @media (min-width: 480px) {
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (min-width: 768px) {
+            .stats {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        .stat-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        @media (max-width: 768px) {
+            .stat-number {
+                font-size: 22px;
+            }
+        }
+        /* Button container */
+        
+        .button-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        @media (min-width: 480px) {
+            .button-container {
+                flex-direction: row;
+            }
+        }
+        
+        .button-container button {
+            padding: 12px 20px;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        @media (max-width: 480px) {
+            .button-container button {
+                width: 100%;
+            }
+        }
+        /* User avatar in table */
+        
+        .user-cell {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            background: #4a00e0;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+            position: relative;
+        }
+        
+        @media (max-width: 768px) {
+            .user-avatar {
+                width: 32px;
+                height: 32px;
+                font-size: 14px;
+            }
+        }
+        /* Online status indicator */
+        
+        .online-status {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            width: 10px;
+            height: 10px;
+            background: #28a745;
+            border: 2px solid white;
+            border-radius: 50%;
+        }
+        
+        .online-status.offline {
+            background: #6c757d;
+        }
+        
+        .online-status.idle {
+            background: #ffc107;
+        }
+        /* Online status text */
+        
+        .status-text {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-online {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-offline {
+            background: #f8f9fa;
+            color: #6c757d;
+        }
+        
+        .status-idle {
+            background: #fff3cd;
+            color: #856404;
+        }
+        /* Header responsive */
+        
+        header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        
+        header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        @media (max-width: 768px) {
+            header {
+                padding: 15px;
+            }
+            header h1 {
+                font-size: 20px;
+            }
+        }
+        /* No data message */
+        
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        /* Action buttons */
+        
+        .actions-cell {
+            white-space: nowrap;
+        }
+        /* Last seen text */
+        
+        .last-seen {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 2px;
+        }
+        /* Auto-refresh toggle */
+        
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 15px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked+.slider {
+            background-color: #28a745;
+        }
+        
+        input:checked+.slider:before {
+            transform: translateX(26px);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>DrinkQuick Admin Panel</h1>
+            <p>Manage users and view real-time statistics</p>
+        </header>
+
+        <div class="content">
+            <div class="auth-section">
+                <h2>Admin Login</h2>
+                <div class="password-input">
+                    <input type="password" id="adminPassword" placeholder="Enter admin password" value="admin123">
+                    <button id="loginBtn">Login</button>
+                </div>
+            </div>
+
+            <div id="message" class="message"></div>
+            <div id="loading" class="loading">Loading...</div>
+
+            <div id="adminPanel" style="display: none;">
+                <div class="stats">
+                    <div class="stat-box">
+                        <div class="stat-number" id="totalUsers">0</div>
+                        <div>Total Users</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="newToday">0</div>
+                        <div>New Today</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number" id="onlineUsers">0</div>
+                        <div>Online Now</div>
+                    </div>
+                </div>
+
+                <div class="auto-refresh">
+                    <label class="switch">
+                        <input type="checkbox" id="autoRefreshToggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span>Auto-refresh online status (30s)</span>
+                    <span id="lastUpdate" style="margin-left: auto; font-size: 12px; color: #6c757d;"></span>
+                </div>
+
+                <div class="button-container">
+                    <button id="loadUsersBtn" style="background: #28a745;">
+                        Load All Users
+                    </button>
+                    <button id="refreshBtn" style="background: #17a2b8;">
+                        Refresh Now
+                    </button>
+                    <button id="viewOnlineBtn" style="background: #ffc107; color: #212529;">
+                        Show Online Only
+                    </button>
+                </div>
+
+                <div class="table-container">
+                    <table id="usersTable">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th>Joined</th>
+                                <th>Role</th>
+                                <th class="actions-cell">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <!-- Users will appear here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple, reliable admin panel script
+        const API_BASE = window.location.origin;
+        let adminPassword = 'admin123';
+        let usersData = [];
+        let autoRefreshInterval = null;
+        let isOnlineOnlyView = false;
+        let onlineUsers = new Set(); // Track user IDs that are currently online
+
+        // DOM elements
+        const elements = {
+            passwordInput: document.getElementById('adminPassword'),
+            loginBtn: document.getElementById('loginBtn'),
+            adminPanel: document.getElementById('adminPanel'),
+            loadUsersBtn: document.getElementById('loadUsersBtn'),
+            refreshBtn: document.getElementById('refreshBtn'),
+            viewOnlineBtn: document.getElementById('viewOnlineBtn'),
+            autoRefreshToggle: document.getElementById('autoRefreshToggle'),
+            lastUpdate: document.getElementById('lastUpdate'),
+            loading: document.getElementById('loading'),
+            message: document.getElementById('message'),
+            usersTableBody: document.getElementById('usersTableBody'),
+            totalUsers: document.getElementById('totalUsers'),
+            newToday: document.getElementById('newToday'),
+            onlineUsers: document.getElementById('onlineUsers')
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Admin panel loaded. API Base:', API_BASE);
+
+            // Set up event listeners
+            elements.loginBtn.addEventListener('click', login);
+            elements.loadUsersBtn.addEventListener('click', () => loadUsers());
+            elements.refreshBtn.addEventListener('click', refreshUsers);
+            elements.viewOnlineBtn.addEventListener('click', toggleOnlineView);
+            elements.autoRefreshToggle.addEventListener('change', toggleAutoRefresh);
+
+            // Auto-login if token in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            if (token) {
+                elements.passwordInput.value = token;
+                setTimeout(login, 500);
+            }
+
+            // Also allow Enter key to login
+            elements.passwordInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') login();
+            });
+
+            // Update last update time
+            updateLastUpdateTime();
+
+            // Listen for online users from server (if using WebSockets)
+            setupOnlineStatusTracking();
+        });
+
+        function showMessage(text, type = 'success') {
+            elements.message.textContent = text;
+            elements.message.className = 'message ' + type;
+            elements.message.style.display = 'block';
+            setTimeout(() => {
+                elements.message.style.display = 'none';
+            }, 5000);
+        }
+
+        function showLoading(show) {
+            elements.loading.style.display = show ? 'block' : 'none';
+        }
+
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            elements.lastUpdate.textContent = `Last updated: ${timeString}`;
+        }
+
+        async function login() {
+            adminPassword = elements.passwordInput.value.trim();
+            if (!adminPassword) {
+                showMessage('Please enter admin password', 'error');
+                return;
+            }
+
+            showMessage('Authenticating...', 'success');
+
+            try {
+                // Test with stats endpoint first
+                const response = await fetch(API_BASE + '/api/admin/stats', {
+                    headers: {
+                        'Authorization': 'Bearer ' + adminPassword,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('Login response status:', response.status);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Stats data:', data);
+                    updateStats(data);
+                    elements.adminPanel.style.display = 'block';
+                    showMessage('Login successful!', 'success');
+
+                    // Auto-load users after successful login
+                    setTimeout(loadUsers, 1000);
+
+                    // Start auto-refresh if enabled
+                    if (elements.autoRefreshToggle.checked) {
+                        startAutoRefresh();
+                    }
+                } else {
+                    const error = await response.text();
+                    console.error('Login failed:', error);
+                    showMessage('Login failed. Check password.', 'error');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showMessage('Network error. Is the server running?', 'error');
+            }
+        }
+
+        async function loadUsers() {
+            showLoading(true);
+
+            try {
+                console.log('Loading users with password:', adminPassword.substring(0, 3) + '...');
+
+                const response = await fetch(API_BASE + '/api/admin/users', {
+                    headers: {
+                        'Authorization': 'Bearer ' + adminPassword,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('Users response status:', response.status);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Users data received:', data);
+                    usersData = data.users || data || [];
+
+                    // If data is not an array but an object with users property
+                    if (!Array.isArray(usersData) && usersData.users) {
+                        usersData = usersData.users;
+                    }
+
+                    console.log('Processed users data:', usersData);
+
+                    if (usersData.length === 0) {
+                        elements.usersTableBody.innerHTML = '<tr><td colspan="6" class="no-data">No users found</td></tr>';
+                        showMessage('No users in database', 'info');
+                    } else {
+                        // Process and display users
+                        processUserStatus();
+                        updateLastUpdateTime();
+                        showMessage('Loaded ' + usersData.length + ' users', 'success');
+                    }
+
+                    // Update stats
+                    updateAllStats();
+                } else {
+                    const error = await response.text();
+                    console.error('Failed to load users:', error);
+                    showMessage('Failed to load users', 'error');
+                }
+            } catch (error) {
+                console.error('Load users error:', error);
+                showMessage('Error loading users: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function refreshUsers() {
+            await loadUsers();
+        }
+
+        function processUserStatus() {
+            // Determine user status based on available data
+            usersData.forEach(user => {
+                // Default status is offline
+                user.status = 'offline';
+                user.statusColor = 'status-offline';
+                user.statusIcon = 'offline';
+
+                // If we have lastActive property, use it
+                if (user.lastActive) {
+                    const now = new Date();
+                    const lastActive = new Date(user.lastActive);
+                    const minutesAgo = (now - lastActive) / (1000 * 60);
+
+                    if (minutesAgo < 2) {
+                        user.status = 'online';
+                        user.statusColor = 'status-online';
+                        user.statusIcon = 'online';
+                    } else if (minutesAgo < 5) {
+                        user.status = 'idle';
+                        user.statusColor = 'status-idle';
+                        user.statusIcon = 'idle';
+                    }
+
+                    // Format last active time
+                    if (minutesAgo < 1) {
+                        user.lastSeenText = 'Just now';
+                    } else if (minutesAgo < 60) {
+                        user.lastSeenText = `${Math.floor(minutesAgo)} min ago`;
+                    } else if (minutesAgo < 1440) {
+                        user.lastSeenText = `${Math.floor(minutesAgo / 60)} hours ago`;
+                    } else {
+                        user.lastSeenText = lastActive.toLocaleDateString();
+                    }
+                } else if (user.lastLogin) {
+                    // Fallback to lastLogin if available
+                    const now = new Date();
+                    const lastLogin = new Date(user.lastLogin);
+                    const minutesAgo = (now - lastLogin) / (1000 * 60);
+
+                    if (minutesAgo < 2) {
+                        user.status = 'online';
+                        user.statusColor = 'status-online';
+                        user.statusIcon = 'online';
+                    }
+
+                    user.lastSeenText = `Last login: ${lastLogin.toLocaleDateString()}`;
+                } else {
+                    user.lastSeenText = 'Never active';
+                }
+
+                // Check if user is in onlineUsers Set (from real-time tracking)
+                if (onlineUsers.has(user._id) || onlineUsers.has(user.email)) {
+                    user.status = 'online';
+                    user.statusColor = 'status-online';
+                    user.statusIcon = 'online';
+                    user.lastSeenText = 'Online now';
+                }
+
+                // If we have no activity info at all
+                if (!user.lastActive && !user.lastLogin && !onlineUsers.has(user._id) && !onlineUsers.has(user.email)) {
+                    user.lastSeenText = 'No activity data';
+                }
+            });
+
+            // Filter if online-only view is active
+            const usersToDisplay = isOnlineOnlyView ?
+                usersData.filter(user => user.status === 'online' || user.status === 'idle') :
+                usersData;
+
+            displayUsers(usersToDisplay);
+
+            // Update online count
+            const onlineCount = usersData.filter(user => user.status === 'online').length;
+            const idleCount = usersData.filter(user => user.status === 'idle').length;
+            elements.onlineUsers.textContent = onlineCount + idleCount;
+        }
+
+        function displayUsers(users) {
+            elements.usersTableBody.innerHTML = '';
+
+            if (users.length === 0) {
+                const message = isOnlineOnlyView ?
+                    'No online users found' :
+                    'No users found';
+                elements.usersTableBody.innerHTML = `<tr><td colspan="6" class="no-data">${message}</td></tr>`;
+                return;
+            }
+
+            users.forEach(user => {
+                const row = document.createElement('tr');
+
+                // Get user initials for avatar
+                const initials = user.name ? user.name.charAt(0).toUpperCase() :
+                    user.email ? user.email.charAt(0).toUpperCase() : 'U';
+
+                // Format join date
+                let joinDate = 'N/A';
+                if (user.createdAt) {
+                    const date = new Date(user.createdAt);
+                    joinDate = date.toLocaleDateString();
+                } else if (user.joined) {
+                    const date = new Date(user.joined);
+                    joinDate = date.toLocaleDateString();
+                }
+
+                row.innerHTML = `
+                    <td>
+                        <div class="user-cell">
+                            <div class="user-avatar">
+                                ${initials}
+                                <div class="online-status ${user.statusIcon}"></div>
+                            </div>
+                            <div>
+                                <strong>${user.name || user.email || 'Unknown User'}</strong>
+                                ${user.isAdmin ? '<br><small style="color: #4a00e0;">Admin</small>' : ''}
+                            </div>
+                        </div>
+                    </td>
+                    <td>${user.email || 'No email'}</td>
+                    <td>
+                        <span class="status-text ${user.statusColor}">${user.status.toUpperCase()}</span>
+                        <div class="last-seen">${user.lastSeenText}</div>
+                    </td>
+                    <td>${joinDate}</td>
+                    <td>${user.role || 'Customer'}</td>
+                    <td class="actions-cell">
+                        <button class="delete-btn" onclick="deleteUser('${user._id || user.id}', '${(user.name || user.email || 'user').replace(/'/g, "\\'")}')">
+                            Delete
+                        </button>
+                    </td>
+                `;
+
+                elements.usersTableBody.appendChild(row);
+            });
+        }
+
+        async function updateAllStats() {
+            try {
+                const response = await fetch(API_BASE + '/api/admin/stats', {
+                    headers: {
+                        'Authorization': 'Bearer ' + adminPassword,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    updateStats(data);
+                }
+            } catch (error) {
+                console.error('Update stats error:', error);
+            }
+        }
+
+        function updateStats(data) {
+            elements.totalUsers.textContent = data.totalUsers || 0;
+            elements.newToday.textContent = data.newToday || 0;
+            // Update online count from stats if available
+            if (data.onlineUsers !== undefined) {
+                elements.onlineUsers.textContent = data.onlineUsers;
+            }
+        }
+
+        function toggleOnlineView() {
+            isOnlineOnlyView = !isOnlineOnlyView;
+            elements.viewOnlineBtn.textContent = isOnlineOnlyView ? 'Show All Users' : 'Show Online Only';
+            elements.viewOnlineBtn.style.background = isOnlineOnlyView ? '#28a745' : '#ffc107';
+
+            if (usersData.length > 0) {
+                processUserStatus();
+            }
+        }
+
+        function toggleAutoRefresh() {
+            if (elements.autoRefreshToggle.checked) {
+                startAutoRefresh();
+                showMessage('Auto-refresh enabled (30s interval)', 'success');
+            } else {
+                stopAutoRefresh();
+                showMessage('Auto-refresh disabled', 'info');
+            }
+        }
+
+        function startAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+            autoRefreshInterval = setInterval(async() => {
+                await refreshUsers();
+                updateLastUpdateTime();
+            }, 30000); // 30 seconds
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+
+        // Setup WebSocket or polling for real-time online status
+        function setupOnlineStatusTracking() {
+            // Method 1: WebSocket (if your server supports it)
+            try {
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${wsProtocol}//${window.location.host}/ws/admin/online`;
+                const ws = new WebSocket(wsUrl);
+
+                ws.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'online_users') {
+                        onlineUsers = new Set(data.userIds || []);
+                        processUserStatus();
+                    } else if (data.type === 'user_online') {
+                        onlineUsers.add(data.userId);
+                        processUserStatus();
+                    } else if (data.type === 'user_offline') {
+                        onlineUsers.delete(data.userId);
+                        processUserStatus();
+                    }
+                };
+
+                ws.onerror = function(error) {
+                    console.log('WebSocket error, using polling instead');
+                    // Fallback to polling
+                    startPollingOnlineStatus();
+                };
+            } catch (error) {
+                console.log('WebSocket not available, using polling');
+                startPollingOnlineStatus();
+            }
+        }
+
+        function startPollingOnlineStatus() {
+            // Poll every 10 seconds for online users
+            setInterval(async() => {
+                if (adminPassword && elements.adminPanel.style.display !== 'none') {
+                    try {
+                        const response = await fetch(API_BASE + '/api/admin/online-users', {
+                            headers: {
+                                'Authorization': 'Bearer ' + adminPassword,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            onlineUsers = new Set(data.onlineUsers || []);
+                            processUserStatus();
+                        }
+                    } catch (error) {
+                        console.error('Polling online status error:', error);
+                    }
+                }
+            }, 10000);
+        }
+
+        async function deleteUser(userId, userName) {
+            if (!confirm('Are you sure you want to delete user: ' + userName + '?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(API_BASE + '/api/admin/users/' + userId, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': 'Bearer ' + adminPassword,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    showMessage('User deleted successfully', 'success');
+                    // Remove from online users set
+                    onlineUsers.delete(userId);
+                    // Reload users
+                    loadUsers();
+                } else {
+                    const error = await response.text();
+                    showMessage('Delete failed: ' + error, 'error');
+                }
+            } catch (error) {
+                showMessage('Delete error: ' + error.message, 'error');
+            }
+        }
+
+        // Make functions available globally
+        window.deleteUser = deleteUser;
+    </script>
+</body>
+
+</html>
