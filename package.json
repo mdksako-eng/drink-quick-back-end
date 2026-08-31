@@ -1,5 +1,13 @@
 {
-  "dependencies": {
-    "nodemailer": "^8.0.7"
+  "name": "drinks-calculator-backend-root",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Root shim so the backend in drinks-calculator-backend/ can be started from the repo root (Render default). Prefer setting Root Directory = drinks-calculator-backend.",
+  "scripts": {
+    "start": "node server.js",
+    "postinstall": "npm --prefix drinks-calculator-backend install --omit=dev"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
