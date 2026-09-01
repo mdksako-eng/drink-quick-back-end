@@ -905,52 +905,29 @@ class CustomDrawer extends StatelessWidget {
         }
       }
 
-      // ✅ FIX: Query ALL companies and filter locally
+      // ✅ Fetch via the session-authenticated backend data API.
+      // (Never query companies directly with the anon key — payment
+      // secrets must not leave the server.)
+      final cid = int.tryParse(companyId.toString());
+      if (cid == null) {
+        print('❌ Invalid company ID: $companyId');
+        return null;
+      }
 
-      final response = await http.get(
-        Uri.parse(
-          '${ApiConfig.supabaseRestUrl}/companies?select=*',
-        ),
-        headers: ApiConfig.supabaseHeaders,
-      );
+      final company = await SupabaseService.getCompany(cid);
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        print('📨 Found ${data.length} companies total');
+      if (company != null) {
+        // Cache the company data
+        await prefs.setString(cacheKey, jsonEncode(company));
+        await prefs.setString(
+            'company_name_$companyId', company['name'] ?? '');
+        await prefs.setString(
+            'company_code_$companyId', company['code'] ?? '');
 
-        // ✅ Find company by ID (handle both int and string)
-        Map<String, dynamic>? foundCompany;
-        for (final item in data) {
-          if (item is Map) {
-            final itemId = item['id'];
-            // Compare as both int and string
-            if (itemId == companyId ||
-                itemId?.toString() == companyId.toString()) {
-              foundCompany = Map<String, dynamic>.from(item);
-              print(
-                  '✅ Found company: ${foundCompany['name']} (ID: ${foundCompany['id']})');
-              break;
-            }
-          }
-        }
-
-        if (foundCompany != null) {
-          // Cache the company data
-          await prefs.setString(cacheKey, jsonEncode(foundCompany));
-          await prefs.setString(
-              'company_name_$companyId', foundCompany['name'] ?? '');
-          await prefs.setString(
-              'company_code_$companyId', foundCompany['code'] ?? '');
-
-          return foundCompany;
-        } else {
-          print(
-              '❌ Company ID $companyId not found in ${data.length} companies');
-          return null;
-        }
+        print('✅ Found company: ${company['name']} (ID: ${company['id']})');
+        return company;
       } else {
-        print(
-            '❌ Failed to fetch companies: ${response.statusCode} - ${response.body}');
+        print('❌ Company ID $companyId not found via backend');
         return null;
       }
     } catch (e, stackTrace) {

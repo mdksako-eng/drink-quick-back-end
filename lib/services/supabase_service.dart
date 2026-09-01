@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
+import 'secure_storage_service.dart';
 
 // ✅ Import for Realtime
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -25,7 +26,15 @@ class SupabaseService {
   static bool get canUseSupabase =>
       !_isCustomerMode && _currentCompanyId != null;
 
-  static Map<String, String> get _headers => ApiConfig.supabaseHeaders;
+  // Session-authenticated headers for the backend data API.
+  static Future<Map<String, String>> _authedHeaders() async {
+    final token = await SecureStorageService.getSessionToken();
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+  }
 
   static void setCompanyContext(int? companyId, int? userId) {
     _currentCompanyId = companyId;
@@ -199,13 +208,12 @@ class SupabaseService {
     }
 
     try {
-      final url =
-          '${ApiConfig.supabaseDrinks}?company_id=eq.$_currentCompanyId&select=*';
+      final url = ApiConfig.dataDrinks;
       print('   URL: $url');
 
       final response = await http.get(
         Uri.parse(url),
-        headers: _headers,
+        headers: await _authedHeaders(),
       );
 
       print('📨 Response status: ${response.statusCode}');
@@ -273,8 +281,8 @@ class SupabaseService {
       print('   Current stock: ${cleanedDrink['current_stock']}');
 
       final response = await http.post(
-        Uri.parse(ApiConfig.supabaseDrinks),
-        headers: {..._headers, 'Prefer': 'return=representation'},
+        Uri.parse(ApiConfig.dataDrinks),
+        headers: await _authedHeaders(),
         body: jsonEncode(cleanedDrink),
       );
 
@@ -312,13 +320,12 @@ class SupabaseService {
       };
 
       final response = await http.patch(
-        Uri.parse(
-            '${ApiConfig.supabaseDrinks}?id=eq.$id&company_id=eq.$_currentCompanyId'),
-        headers: _headers,
+        Uri.parse('${ApiConfig.dataDrinks}/$id'),
+        headers: await _authedHeaders(),
         body: jsonEncode(cleanedDrink),
       );
 
-      return response.statusCode == 204;
+      return response.statusCode == 204 || response.statusCode == 200;
     } catch (e) {
       print('Supabase updateDrink error: $e');
       return false;
@@ -332,11 +339,10 @@ class SupabaseService {
     }
     try {
       final response = await http.delete(
-        Uri.parse(
-            '${ApiConfig.supabaseDrinks}?id=eq.$id&company_id=eq.$_currentCompanyId'),
-        headers: _headers,
+        Uri.parse('${ApiConfig.dataDrinks}/$id'),
+        headers: await _authedHeaders(),
       );
-      return response.statusCode == 204;
+      return response.statusCode == 204 || response.statusCode == 200;
     } catch (e) {
       return false;
     }
@@ -354,9 +360,8 @@ class SupabaseService {
 
     try {
       final response = await http.get(
-        Uri.parse(
-            '${ApiConfig.supabaseOrders}?company_id=eq.$_currentCompanyId&select=*&order=created_at.desc'),
-        headers: _headers,
+        Uri.parse(ApiConfig.dataOrders),
+        headers: await _authedHeaders(),
       );
 
       if (response.statusCode == 200) {
@@ -421,8 +426,8 @@ class SupabaseService {
       print('📦 Mapped order: $mappedOrder');
 
       final response = await http.post(
-        Uri.parse(ApiConfig.supabaseOrders),
-        headers: {..._headers, 'Prefer': 'return=representation'},
+        Uri.parse(ApiConfig.dataOrders),
+        headers: await _authedHeaders(),
         body: jsonEncode(mappedOrder),
       );
 
@@ -443,9 +448,8 @@ class SupabaseService {
   static Future<bool> updateOrderStatus(String id, bool isActive) async {
     try {
       final response = await http.patch(
-        Uri.parse(
-            '${ApiConfig.supabaseOrders}?id=eq.$id&company_id=eq.$_currentCompanyId'),
-        headers: _headers,
+        Uri.parse('${ApiConfig.dataOrders}/$id'),
+        headers: await _authedHeaders(),
         body: jsonEncode({'is_active': isActive}),
       );
       return response.statusCode == 204;
@@ -468,13 +472,12 @@ class SupabaseService {
     }
 
     try {
-      final url =
-          '${ApiConfig.supabaseInventory}?company_id=eq.$_currentCompanyId&select=*';
+      final url = ApiConfig.dataInventory;
       print('   URL: $url');
 
       final response = await http.get(
         Uri.parse(url),
-        headers: _headers,
+        headers: await _authedHeaders(),
       );
 
       print('📨 getInventory response status: ${response.statusCode}');
@@ -500,8 +503,8 @@ class SupabaseService {
   static Future<bool> saveInventory(Map<String, dynamic> item) async {
     try {
       final response = await http.post(
-        Uri.parse(ApiConfig.supabaseInventory),
-        headers: {..._headers, 'Prefer': 'return=representation'},
+        Uri.parse(ApiConfig.dataInventory),
+        headers: await _authedHeaders(),
         body: jsonEncode({
           ...item,
           'company_id': _currentCompanyId,
@@ -517,9 +520,8 @@ class SupabaseService {
       String id, Map<String, dynamic> item) async {
     try {
       final response = await http.patch(
-        Uri.parse(
-            '${ApiConfig.supabaseInventory}?id=eq.$id&company_id=eq.$_currentCompanyId'),
-        headers: _headers,
+        Uri.parse('${ApiConfig.dataInventory}/$id'),
+        headers: await _authedHeaders(),
         body: jsonEncode(item),
       );
       return response.statusCode == 204;
@@ -547,62 +549,28 @@ class SupabaseService {
       print('   drink_id: $drinkId');
       print('   company_id: $_currentCompanyId');
 
-      final checkResponse = await http.get(
-        Uri.parse(
-            '${ApiConfig.supabaseInventory}?drink_id=eq.$drinkId&company_id=eq.$_currentCompanyId&select=id'),
-        headers: _headers,
+      final inventoryData = {
+        'drink_id': drinkId,
+        'drink_name': item['drinkName'] ?? item['drink_name'] ?? '',
+        'quantity': item['quantity'] ?? 0,
+        'min_stock_level':
+            item['minStockLevel'] ?? item['min_stock_level'] ?? 5,
+        'category': item['category'] ?? 'Beer',
+        'unit': item['unit'] ?? 'Bottle',
+        'purchase_price':
+            (item['purchasePrice'] ?? item['purchase_price'] ?? 0).toDouble(),
+        'last_restocked': (item['lastRestocked'] ??
+            item['last_restocked'] ??
+            DateTime.now().toIso8601String()),
+      };
+
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataInventoryUpsert),
+        headers: await _authedHeaders(),
+        body: jsonEncode(inventoryData),
       );
-
-      print('   Check response status: ${checkResponse.statusCode}');
-
-      if (checkResponse.statusCode == 200) {
-        final existingData = jsonDecode(checkResponse.body);
-        final bool exists = existingData is List && existingData.isNotEmpty;
-
-        final inventoryData = {
-          'drink_id': drinkId,
-          'drink_name': item['drinkName'] ?? item['drink_name'] ?? '',
-          'quantity': item['quantity'] ?? 0,
-          'min_stock_level':
-              item['minStockLevel'] ?? item['min_stock_level'] ?? 5,
-          'category': item['category'] ?? 'Beer',
-          'unit': item['unit'] ?? 'Bottle',
-          'purchase_price':
-              (item['purchasePrice'] ?? item['purchase_price'] ?? 0).toDouble(),
-          'last_restocked': (item['lastRestocked'] ??
-              item['last_restocked'] ??
-              DateTime.now().toIso8601String()),
-          'company_id': _currentCompanyId,
-        };
-
-        if (exists) {
-          print('   Updating existing inventory record...');
-          final updateResponse = await http.patch(
-            Uri.parse(
-                '${ApiConfig.supabaseInventory}?drink_id=eq.$drinkId&company_id=eq.$_currentCompanyId'),
-            headers: _headers,
-            body: jsonEncode(inventoryData),
-          );
-          print('   Update response status: ${updateResponse.statusCode}');
-          return updateResponse.statusCode == 204;
-        } else {
-          print('   Inserting new inventory record...');
-          final insertResponse = await http.post(
-            Uri.parse(ApiConfig.supabaseInventory),
-            headers: {..._headers, 'Prefer': 'return=representation'},
-            body: jsonEncode({
-              'id':
-                  item['id'] ?? 'inv_${DateTime.now().millisecondsSinceEpoch}',
-              ...inventoryData,
-            }),
-          );
-          print('   Insert response status: ${insertResponse.statusCode}');
-          print('   Insert response body: ${insertResponse.body}');
-          return insertResponse.statusCode == 201;
-        }
-      }
-
-      return false;
+      print('   Upsert response status: ${response.statusCode}');
+      return response.statusCode == 201 || response.statusCode == 200;
     } catch (e) {
       print('❌ Supabase upsertInventory error: $e');
       return false;
@@ -621,14 +589,15 @@ class SupabaseService {
 
     try {
       final response = await http.get(
-        Uri.parse('${ApiConfig.supabaseCompanies}?id=eq.$companyId&select=*'),
-        headers: _headers,
+        Uri.parse(ApiConfig.dataCompany(companyId)),
+        headers: await _authedHeaders(),
       );
 
       if (response.statusCode == 200) {
-        final data = List<Map<String, dynamic>>.from(jsonDecode(response.body));
-        if (data.isNotEmpty) {
-          return data.first;
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic>) return data;
+        if (data is List && data.isNotEmpty) {
+          return Map<String, dynamic>.from(data.first);
         }
       }
       return null;
@@ -647,9 +616,8 @@ class SupabaseService {
 
     try {
       final response = await http.get(
-        Uri.parse(
-            '${ApiConfig.supabaseTransactions}?company_id=eq.$_currentCompanyId&select=*&order=date.desc'),
-        headers: _headers,
+        Uri.parse(ApiConfig.dataInventoryTransactions),
+        headers: await _authedHeaders(),
       );
       if (response.statusCode == 200) {
         final data = List<Map<String, dynamic>>.from(jsonDecode(response.body));
@@ -703,8 +671,8 @@ class SupabaseService {
       print('   Mapped transaction: $mappedTransaction');
 
       final response = await http.post(
-        Uri.parse(ApiConfig.supabaseTransactions),
-        headers: {..._headers, 'Prefer': 'return=representation'},
+        Uri.parse(ApiConfig.dataInventoryTransactions),
+        headers: await _authedHeaders(),
         body: jsonEncode(mappedTransaction),
       );
 
@@ -735,10 +703,8 @@ class SupabaseService {
 
     try {
       final response = await http.get(
-        Uri.parse(
-          '${ApiConfig.supabaseSettings}?user_id=eq.$intUserId&company_id=eq.$_currentCompanyId&select=*',
-        ),
-        headers: _headers,
+        Uri.parse(ApiConfig.dataSettings),
+        headers: await _authedHeaders(),
       );
       if (response.statusCode == 200) {
         final data = List<Map<String, dynamic>>.from(jsonDecode(response.body));
@@ -773,26 +739,12 @@ class SupabaseService {
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-      final existing = await getSettings(settings['user_id']);
-
-      if (existing != null) {
-        final response = await http.patch(
-          Uri.parse(
-            '${ApiConfig.supabaseSettings}?user_id=eq.$intUserId&company_id=eq.$_currentCompanyId',
-          ),
-          headers: _headers,
-          body: jsonEncode(cleanedSettings),
-        );
-        return response.statusCode == 204;
-      } else {
-        cleanedSettings['created_at'] = DateTime.now().toIso8601String();
-        final response = await http.post(
-          Uri.parse(ApiConfig.supabaseSettings),
-          headers: {..._headers, 'Prefer': 'return=representation'},
-          body: jsonEncode(cleanedSettings),
-        );
-        return response.statusCode == 201;
-      }
+      final response = await http.put(
+        Uri.parse(ApiConfig.dataSettings),
+        headers: await _authedHeaders(),
+        body: jsonEncode(cleanedSettings),
+      );
+      return response.statusCode == 204 || response.statusCode == 201;
     } catch (e) {
       print('Supabase saveSettings error: $e');
       return false;
@@ -806,10 +758,7 @@ class SupabaseService {
   static Future<bool> isConnected() async {
     try {
       final response = await http
-          .get(
-            Uri.parse('${ApiConfig.supabaseRestUrl}/drinks?limit=1'),
-            headers: _headers,
-          )
+          .get(Uri.parse(ApiConfig.health))
           .timeout(const Duration(seconds: 5));
       return response.statusCode == 200;
     } catch (e) {
@@ -829,25 +778,18 @@ class SupabaseService {
 
     try {
       final response = await http.get(
-        Uri.parse(
-          '${ApiConfig.supabaseRestUrl}/companies?id=eq.$_currentCompanyId&select=*',
-        ),
-        headers: _headers,
+        Uri.parse(ApiConfig.dataCompany(_currentCompanyId)),
+        headers: await _authedHeaders(),
       );
 
       if (response.statusCode == 200) {
-        final data = List<Map<String, dynamic>>.from(jsonDecode(response.body));
-        if (data.isNotEmpty) {
-          final company = data.first;
-          print('✅ Loaded company: ${company['name']}');
-          return company;
-        }
-        print('⚠️ Company not found for ID: $_currentCompanyId');
-        return null;
-      } else {
-        print('❌ Failed to get company: ${response.statusCode}');
-        return null;
+        // Backend returns the company object directly (secrets masked/removed server-side).
+        final company = Map<String, dynamic>.from(jsonDecode(response.body));
+        print('✅ Loaded company: ${company['name']}');
+        return company;
       }
+      print('❌ Failed to get company: ${response.statusCode}');
+      return null;
     } catch (e) {
       print('❌ getCompanyPaymentSettings error: $e');
       return null;
@@ -891,10 +833,8 @@ class SupabaseService {
       };
 
       final response = await http.patch(
-        Uri.parse(
-          '${ApiConfig.supabaseCompanies}?id=eq.$_currentCompanyId',
-        ),
-        headers: {..._headers, 'Prefer': 'return=representation'},
+        Uri.parse(ApiConfig.dataCompanyPaymentSettings(_currentCompanyId)),
+        headers: await _authedHeaders(),
         body: jsonEncode(paymentSettings),
       );
 
@@ -938,8 +878,8 @@ class SupabaseService {
       };
 
       final response = await http.post(
-        Uri.parse(ApiConfig.supabasePaymentTransactions),
-        headers: {..._headers, 'Prefer': 'return=representation'},
+        Uri.parse(ApiConfig.dataPaymentTransactions),
+        headers: await _authedHeaders(),
         body: jsonEncode(mappedTransaction),
       );
 
@@ -974,10 +914,8 @@ class SupabaseService {
       };
 
       final response = await http.patch(
-        Uri.parse(
-          '${ApiConfig.supabasePaymentTransactions}?order_id=eq.$orderId&company_id=eq.$_currentCompanyId',
-        ),
-        headers: _headers,
+        Uri.parse('${ApiConfig.dataPaymentTransactions}/$orderId'),
+        headers: await _authedHeaders(),
         body: jsonEncode(updates),
       );
 
@@ -994,10 +932,8 @@ class SupabaseService {
 
     try {
       final response = await http.get(
-        Uri.parse(
-          '${ApiConfig.supabasePaymentTransactions}?order_id=eq.$orderId&company_id=eq.$_currentCompanyId&select=*',
-        ),
-        headers: _headers,
+        Uri.parse('${ApiConfig.dataPaymentTransactions}?orderId=$orderId'),
+        headers: await _authedHeaders(),
       );
 
       if (response.statusCode == 200) {

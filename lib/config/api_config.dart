@@ -51,7 +51,21 @@ class ApiConfig {
   // Get environment info
   static bool get isProduction => baseUrl.contains('onrender.com');
   static String get environment => isProduction ? 'Production' : 'Environment';
-  // Supabase headers
+  // ========== BACKEND DATA ENDPOINTS (session-authenticated; replaces direct Supabase REST) ==========
+  static const String dataDrinks = '$apiBase/data/drinks';
+  static const String dataOrders = '$apiBase/data/orders';
+  static const String dataInventory = '$apiBase/data/inventory';
+  static const String dataInventoryUpsert = '$apiBase/data/inventory/upsert';
+  static const String dataInventoryTransactions =
+      '$apiBase/data/inventory-transactions';
+  static const String dataSettings = '$apiBase/data/settings';
+  static const String dataPaymentTransactions =
+      '$apiBase/data/payment-transactions';
+  static String dataCompany(dynamic id) => '$apiBase/data/company/$id';
+  static String dataCompanyPaymentSettings(dynamic id) =>
+      '$apiBase/data/company/$id/payment-settings';
+
+  // Supabase headers (anon key) — legacy direct access only.
   static Map<String, String> get supabaseHeaders => {
     'apikey': supabaseAnonKey,
     'Authorization': 'Bearer $supabaseAnonKey',

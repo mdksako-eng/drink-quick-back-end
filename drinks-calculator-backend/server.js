@@ -1555,6 +1555,33 @@ app.post('/api/auth/approve-login', async (req, res) => {
 const paymentRoutes = require('./routes/payment.routes');
 app.use('/api', paymentRoutes);
 
+// ========== PUBLIC COMPANY PROFILE (no auth — customer mode) ==========
+// Returns only non-secret fields so the anon key / unauthenticated users
+// can render the order screen. API keys never leave the server.
+app.get('/api/data/company/:id/public', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, name, email, phone, address, currency_symbol, currency_position,
+              decimal_separator, thousands_separator, decimal_places,
+              business_payments_enabled, mtn_enabled, orange_enabled,
+              mtn_merchant_phone, orange_merchant_phone
+       FROM companies WHERE id = $1`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Company not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('GET /api/data/company/:id/public error:', error.message);
+    res.status(500).json({ message: 'Failed to load company' });
+  }
+});
+
+// ========== DATA ROUTES (replaces direct Supabase REST access) ==========
+const dataRoutes = require('./routes/data.routes');
+app.use('/api/data', dataRoutes);
+
 // ========== AI CHAT (Groq proxy — API key stays on server) ==========
 app.post('/api/ai/chat', async (req, res) => {
   try {
