@@ -191,21 +191,34 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   }
 
   // ✅ Ensure orders + settings are loaded as soon as login is confirmed.
-  // OrderProvider.initialize() is guarded (`_isInitialized`), so on session
-  // restore (already loaded in AuthWrapper) this is a safe no-op, while on a
-  // fresh login it preloads orders right away.
+  // Only auto-initialize orders when we actually have a company context;
+  // otherwise we'd cache an empty local list and mark OrderProvider as
+  // initialized, which would block the real Supabase load later (e.g. for
+  // customer/temp logins). Payment/currency refresh is deferred to the next
+  // frame to avoid "setState() called during build" from notifyListeners().
   Future<void> _initOrdersAndSettingsAfterLogin() async {
     try {
-      final orderProvider =
-          Provider.of<OrderProvider>(context, listen: false);
-      await orderProvider.initialize();
-      debugPrint(
-          '✅ Orders loaded after login: ${orderProvider.orderHistory.length}');
+      if (SupabaseService.canUseSupabase) {
+        final orderProvider =
+            Provider.of<OrderProvider>(context, listen: false);
+        if (!orderProvider.isInitialized) {
+          await orderProvider.initialize();
+          debugPrint(
+              '✅ Orders loaded after login: ${orderProvider.orderHistory.length}');
+        } else {
+          debugPrint('✅ Orders already initialized - skipping');
+        }
+      } else {
+        debugPrint(
+            '⏭️ No company context yet - deferring order load after login');
+      }
 
-      await PaymentHelper.refresh();
-      await CurrencyHelper.refresh();
-      if (mounted) setState(() {});
-      debugPrint('✅ Settings refreshed after login');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        PaymentHelper.refresh();
+        CurrencyHelper.refresh();
+        debugPrint('✅ Settings refreshed after login');
+      });
     } catch (e) {
       debugPrint('❌ _initOrdersAndSettingsAfterLogin error: $e');
     }

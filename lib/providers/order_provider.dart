@@ -111,6 +111,7 @@ class OrderProvider with ChangeNotifier {
   Order? get currentOrder => _currentOrder;
   List<Order> get orderHistory => _orderHistory;
   bool get isLoading => _isLoading;
+  bool get isInitialized => _isInitialized;
 
   // ✅ Don't load in constructor - wait for initialization
   OrderProvider() {
