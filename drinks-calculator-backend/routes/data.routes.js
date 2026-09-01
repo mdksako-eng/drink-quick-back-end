@@ -605,6 +605,27 @@ router.get('/company', async (req, res) => {
   }
 });
 
+// 🏢 COMPANY BY ID (secret-stripped) — used by the app's getCompany()/getCompanyPaymentSettings().
+// Staff/Customers may only read their own company; managers/admins may read any.
+router.get('/company/:id', async (req, res) => {
+  try {
+    const requestedId = parseInt(req.params.id, 10);
+    if (Number.isNaN(requestedId)) {
+      return res.status(400).json({ message: 'Invalid company id' });
+    }
+    const isManager = ['Manager', 'Administrator', 'Admin'].includes(req.user.role);
+    if (!isManager && req.user.company_id != null && req.user.company_id !== requestedId) {
+      return res.status(403).json({ message: 'Not authorized to view this company' });
+    }
+    const result = await req.db.query('SELECT * FROM companies WHERE id = $1', [requestedId]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Company not found' });
+    res.json(stripSecrets(result.rows[0]));
+  } catch (error) {
+    console.error('GET /company/:id error:', error.message);
+    res.status(500).json({ message: 'Failed to load company' });
+  }
+});
+
 // NOTE: /company/:id/public lives in server.js (unauthenticated, outside this
 // router's session check) so customer mode can read the public profile.
 
