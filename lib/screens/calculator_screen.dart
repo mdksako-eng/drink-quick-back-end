@@ -98,6 +98,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     _loadPendingOrderFromAI();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshDrinks();
+      _initOrdersAndSettingsAfterLogin();
     });
     SupabaseService.addInventoryListener(_onInventoryChanged);
     SupabaseService.addOrderListener(_onOrderChanged);
@@ -187,6 +188,27 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     setState(() {
       _companyName = prefs.getString('company_name') ?? 'Drink Quick Cal';
     });
+  }
+
+  // ✅ Ensure orders + settings are loaded as soon as login is confirmed.
+  // OrderProvider.initialize() is guarded (`_isInitialized`), so on session
+  // restore (already loaded in AuthWrapper) this is a safe no-op, while on a
+  // fresh login it preloads orders right away.
+  Future<void> _initOrdersAndSettingsAfterLogin() async {
+    try {
+      final orderProvider =
+          Provider.of<OrderProvider>(context, listen: false);
+      await orderProvider.initialize();
+      debugPrint(
+          '✅ Orders loaded after login: ${orderProvider.orderHistory.length}');
+
+      await PaymentHelper.refresh();
+      await CurrencyHelper.refresh();
+      if (mounted) setState(() {});
+      debugPrint('✅ Settings refreshed after login');
+    } catch (e) {
+      debugPrint('❌ _initOrdersAndSettingsAfterLogin error: $e');
+    }
   }
 
   void _refreshCurrency() {
