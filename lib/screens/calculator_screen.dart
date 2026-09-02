@@ -26,6 +26,7 @@ import 'package:drinks_calculator_fixed/widgets/floating_ai_button.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/payment_service.dart';
+import 'package:drinks_calculator_fixed/screens/notifications_screen.dart';
 
 enum PaymentMethod {
   cash,
@@ -86,6 +87,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   @override
   void initState() {
     super.initState();
+    NotificationService().initialize();
     _loadData();
     _loadBusinessPaymentSettings();
     _loadCompanyName();
@@ -684,6 +686,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         _paymentStatus = 'failed';
         _paymentMessage = e.toString();
       });
+      // 🔔 Notify the in-app notification center
+      NotificationService().showPaymentFailed(
+        reason: e.toString(),
+        paymentMethod: _selectedPaymentMethod.name,
+      );
       Helpers.showToast('Payment failed: ${e.toString()}', isError: true);
     } finally {
       setState(() {
@@ -1628,6 +1635,60 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   // 🏗️ HEADER BUILDERS
   // ============================================================
 
+  // 🔔 Live notification bell with unread badge — opens the notification
+  // center. Used by all three header layouts (mobile/tablet/desktop).
+  Widget _buildNotificationBell(Color primaryColor) {
+    final service = NotificationService();
+    return ListenableBuilder(
+      listenable: service,
+      builder: (context, _) {
+        final unread = service.unreadCount;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                  color: primaryColor,
+                  borderRadius: BorderRadius.circular(12)),
+              child: IconButton(
+                tooltip: 'Notifications',
+                icon: const Icon(Icons.notifications,
+                    color: Colors.white, size: 26),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const NotificationsScreen()),
+                  );
+                },
+              ),
+            ),
+            if (unread > 0)
+              Positioned(
+                right: -2,
+                top: -2,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                      color: Colors.red, shape: BoxShape.circle),
+                  constraints:
+                      const BoxConstraints(minWidth: 18, minHeight: 18),
+                  child: Text(
+                    unread > 9 ? '9+' : '$unread',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildMobileHeader(User? user, ThemeData theme, Color primaryColor) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1649,6 +1710,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: primaryColor)),
+            const Spacer(),
+            _buildNotificationBell(primaryColor),
           ],
         ),
         const SizedBox(height: 5),
@@ -1762,6 +1825,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                     color: primaryColor)),
+            const SizedBox(width: 16),
+            _buildNotificationBell(primaryColor),
           ],
         ),
         Container(
@@ -1858,6 +1923,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                     color: primaryColor)),
+            const SizedBox(width: 16),
+            _buildNotificationBell(primaryColor),
           ],
         ),
         Container(

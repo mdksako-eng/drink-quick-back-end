@@ -1,28 +1,83 @@
 // services/notification_service.dart
-import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
-import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
+// In-app notification center: persists to SharedPreferences, notifies
+// listeners (bell badge updates live), and speaks announcements with a
+// platform-correct TTS (browser SpeechSynthesis on web, flutter_tts natively).
 
-class NotificationService {
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
+import 'package:drinks_calculator_fixed/services/tts/tts_factory.dart'
+    as tts;
+
+class NotificationService extends ChangeNotifier {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterTts _tts = FlutterTts();
-  final List<AppNotification> _notifications = [];
+  static const String _storageKey = 'app_notifications';
+  static const String _soundEnabledKey = 'show_notifications';
+  static const int _maxNotifications = 50;
 
-  List<AppNotification> get notifications => _notifications;
+  final List<AppNotification> _notifications = [];
+  bool _initialized = false;
+  bool _soundEnabled = true;
+
+  List<AppNotification> get notifications => List.unmodifiable(_notifications);
   int get unreadCount => _notifications.where((n) => !n.isRead).length;
+  bool get isInitialized => _initialized;
 
   Future<void> initialize() async {
-    await _tts.setLanguage('en-US');
-    await _tts.setSpeechRate(0.5);
+    if (_initialized) return;
+    _initialized = true;
+
+    await tts.platformInitTts();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _soundEnabled = prefs.getBool(_soundEnabledKey) ?? true;
+      final raw = prefs.getString(_storageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final list = jsonDecode(raw) as List<dynamic>;
+        _notifications
+          ..clear()
+          ..addAll(list
+              .map((e) => AppNotification.fromJson(Map<String, dynamic>.from(e)))
+              .toList());
+      }
+    } catch (e) {
+      debugPrint('⚠️ Notification history load failed: $e');
+    }
+    notifyListeners();
+  }
+
+  /// Honors the "Show Notifications" setting in Storage Settings for voice.
+  Future<void> setSoundEnabled(bool enabled) async {
+    _soundEnabled = enabled;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_soundEnabledKey, enabled);
+    } catch (_) {}
+    notifyListeners();
   }
 
   void _addNotification(AppNotification notification) {
     _notifications.insert(0, notification);
-    if (_notifications.length > 50) {
+    if (_notifications.length > _maxNotifications) {
       _notifications.removeLast();
+    }
+    _persist();
+    notifyListeners();
+  }
+
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_storageKey,
+          jsonEncode(_notifications.map((n) => n.toJson()).toList()));
+    } catch (e) {
+      debugPrint('⚠️ Notification history save failed: $e');
     }
   }
 
@@ -56,17 +111,38 @@ class NotificationService {
   }
 
   void showPaymentFailed({required String reason, required String paymentMethod}) {
-    _addNotification(AppNotification(title: '❌ Failed', message: '$paymentMethod: $reason', type: NotificationType.payment));
+    _addNotification(AppNotification(title: '❌ Payment Failed', message: '$paymentMethod: $reason', type: NotificationType.payment));
     _speak('Payment failed');
   }
 
   Future<void> _speak(String text) async {
-    try { await _tts.speak(text); } catch (e) { print('TTS: $e'); }
+    if (!_soundEnabled) return;
+    try {
+      await tts.platformSpeak(text);
+    } catch (e) {
+      debugPrint('🔇 TTS unavailable: $e');
+    }
   }
 
-  void markAllRead() { for (final n in _notifications) { n.isRead = true; } }
-  void clearAll() { _notifications.clear(); }
-  void dispose() { _tts.stop(); _notifications.clear(); }
+  void markAllRead() {
+    for (final n in _notifications) {
+      n.isRead = true;
+    }
+    _persist();
+    notifyListeners();
+  }
+
+  void clearAll() {
+    _notifications.clear();
+    _persist();
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    tts.platformStopTts();
+    super.dispose();
+  }
 }
 
 class AppNotification {
@@ -77,6 +153,25 @@ class AppNotification {
   bool isRead;
 
   AppNotification({required this.title, required this.message, required this.type, DateTime? time, this.isRead = false}) : time = time ?? DateTime.now();
+
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        'message': message,
+        'type': type.name,
+        'time': time.toIso8601String(),
+        'isRead': isRead,
+      };
+
+  factory AppNotification.fromJson(Map<String, dynamic> json) => AppNotification(
+        title: json['title']?.toString() ?? '',
+        message: json['message']?.toString() ?? '',
+        type: NotificationType.values.firstWhere(
+          (t) => t.name == json['type'],
+          orElse: () => NotificationType.order,
+        ),
+        time: DateTime.tryParse('${json['time']}'),
+        isRead: json['isRead'] == true,
+      );
 }
 
 enum NotificationType { order, stock, payment, reminder }

@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:drinks_calculator_fixed/models/drink_model.dart';
 import 'package:drinks_calculator_fixed/utils/helpers.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
+import 'package:drinks_calculator_fixed/services/notification_service.dart';
 
 class Order {
   final String id;
@@ -293,6 +294,13 @@ class OrderProvider with ChangeNotifier {
 
       _orderHistory.add(order);
       await _saveOrders();
+
+      // 🔔 Notify the in-app notification center
+      NotificationService().showOrderCreated(
+        orderId: order.id,
+        itemCount: copiedItems.length,
+        totalAmount: totalAmount,
+      );
 
       // Sync to Supabase
       if (SupabaseService.canUseSupabase) {

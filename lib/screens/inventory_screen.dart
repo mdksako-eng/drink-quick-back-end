@@ -10,6 +10,7 @@ import 'package:drinks_calculator_fixed/utils/helpers.dart';
 import 'inventory_report_screen.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
+import 'package:drinks_calculator_fixed/services/notification_service.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({Key? key}) : super(key: key);
@@ -166,6 +167,24 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       ? reasonController.text
                       : 'Restock',
                 );
+
+                // 🔔 Notify the in-app notification center
+                final newTotal = item.quantity + quantity;
+                NotificationService().showStockRestocked(
+                  drinkName: item.drinkName,
+                  quantity: quantity,
+                  newTotal: newTotal,
+                );
+                if (newTotal == 0) {
+                  NotificationService()
+                      .showOutOfStockAlert(drinkName: item.drinkName);
+                } else if (newTotal <= item.minStockLevel) {
+                  NotificationService().showLowStockAlert(
+                    drinkName: item.drinkName,
+                    currentStock: newTotal,
+                    minStockLevel: item.minStockLevel,
+                  );
+                }
 
                 // Sync to drink management
                 final drink = drinkProvider.customDrinks
