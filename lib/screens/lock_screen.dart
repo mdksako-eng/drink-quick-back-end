@@ -1032,14 +1032,15 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                       _buildPinPad(context),
                       SizedBox(height: isMobile ? 8 : 12),
                       TextButton(
-                        onPressed: () {
-                          setState(() {
-                            _isPinSetup = true;
-                            _pinInput = '';
-                            _pinConfirm = '';
-                            _pinSetupError = null;
-                          });
-                        },
+                        // ✅ Skip = unlock WITHOUT a PIN. Previously this only
+                        // flipped _isPinSetup while _savedPin stayed empty,
+                        // which rendered NO actionable UI and left the user
+                        // stranded on a dead lock screen. Now it completes
+                        // authentication (LockService().unlock + onAuthenticated)
+                        // so the user gets in; they can set a PIN later.
+                        onPressed: _isAuthenticating
+                            ? null
+                            : () => _handleSuccessfulAuthentication(),
                         child: Text(
                           'Skip PIN Setup',
                           style: TextStyle(
