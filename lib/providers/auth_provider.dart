@@ -26,6 +26,9 @@ class User {
   final String role;
   final int? companyId;
   final bool emailVerified;
+  /// True when this user is the founder/owner of their company
+  /// (set automatically at company creation, or via DB backfill).
+  final bool isOwner;
 
   User({
     required this.id,
@@ -35,6 +38,7 @@ class User {
     this.role = 'Customer',
     this.companyId,
     this.emailVerified = false,
+    this.isOwner = false,
   });
 
   factory User.newUser({
@@ -62,6 +66,7 @@ class User {
       'role': role,
       'companyId': companyId,
       'emailVerified': emailVerified,
+      'isOwner': isOwner,
     };
   }
 
@@ -86,12 +91,13 @@ class User {
       role: json['role']?.toString() ?? 'Customer',
       companyId: json['companyId'] ?? json['company_id'],
       emailVerified: json['emailVerified'] ?? json['email_verified'] ?? false,
+      isOwner: json['isOwner'] == true || json['is_owner'] == true,
     );
   }
 
   @override
   String toString() {
-    return 'User(id: $id, username: $username, email: $email, role: $role, emailVerified: $emailVerified)';
+    return 'User(id: $id, username: $username, email: $email, role: $role, emailVerified: $emailVerified, isOwner: $isOwner)';
   }
 }
 

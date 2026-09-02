@@ -121,6 +121,32 @@ class CustomDrawer extends StatelessWidget {
                             fontWeight: FontWeight.bold,
                             color: isAdmin ? Colors.black87 : Colors.white)),
                   ),
+                  // 👑 Owner badge — distinguishes the company founder from
+                  // managers who joined later via the invite code
+                  if (user?.isOwner ?? false) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.yellow.shade700,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.workspace_premium,
+                              size: 12, color: Colors.black87),
+                          SizedBox(width: 3),
+                          Text('Owner',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87)),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 8),
                   const Icon(Icons.email_outlined,
                       size: 12, color: Colors.white70),

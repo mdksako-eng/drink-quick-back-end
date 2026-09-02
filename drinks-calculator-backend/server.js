@@ -109,6 +109,28 @@ app.use(async (req, res, next) => {
         console.log('✅ Users table already exists');
       }
 
+      // 🔐 OWNERSHIP MIGRATION — add companies.owner_id and backfill the
+      // earliest-created Manager of each company as its founder/owner.
+      try {
+        await pool.query(`
+          ALTER TABLE companies ADD COLUMN IF NOT EXISTS owner_id INTEGER
+        `);
+        await pool.query(`
+          UPDATE companies c
+          SET owner_id = sub.first_manager
+          FROM (
+            SELECT company_id, MIN(id) AS first_manager
+            FROM users
+            WHERE role IN ('Manager', 'Administrator') AND company_id IS NOT NULL
+            GROUP BY company_id
+          ) sub
+          WHERE c.id = sub.company_id AND c.owner_id IS NULL
+        `);
+        console.log('✅ Company ownership column ensured (owner_id backfilled)');
+      } catch (ownErr) {
+        console.log('⚠️ Ownership migration warning:', ownErr.message);
+      }
+
       // Check companies table
       const companiesCheck = await pool.query(`
         SELECT EXISTS (
@@ -387,18 +409,19 @@ app.post('/api/auth/register', async (req, res) => {
     
     let finalCompanyId = null;
     let userRole = 'Customer';
+    let createdNewCompany = false;
     
     if (registerAsManager) {
       userRole = 'Manager';
       if (companyId) {
-        // Joining existing company
+        // Joining existing company — a co-manager, but NOT the owner
         finalCompanyId = companyId;
         await pool.query(
           'UPDATE companies SET email = COALESCE(email, $1), phone = COALESCE(phone, $2) WHERE id = $3',
           [email, phone || null, companyId]
         );
       } else if (companyName && companyCode) {
-        // Creating new company
+        // Creating new company — this user becomes the company OWNER
         const companyResult = await pool.query(
           `INSERT INTO companies (name, code, invite_code, email, phone) 
            VALUES ($1, $2, $2, $3, $4) 
@@ -408,6 +431,7 @@ app.post('/api/auth/register', async (req, res) => {
         );
         if (companyResult.rows.length > 0) {
           finalCompanyId = companyResult.rows[0].id;
+          createdNewCompany = true;
         }
       }
     }
@@ -424,6 +448,15 @@ app.post('/api/auth/register', async (req, res) => {
     );
     
     const newUser = result.rows[0];
+    
+    // 🔐 If this registration created a new company, mark the user as its OWNER
+    if (createdNewCompany && finalCompanyId) {
+      try {
+        await pool.query('UPDATE companies SET owner_id = $1 WHERE id = $2', [newUser.id, finalCompanyId]);
+      } catch (ownErr) {
+        console.log('⚠️ Could not set company owner:', ownErr.message);
+      }
+    }
     
     // Send verification email
     const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -443,7 +476,8 @@ app.post('/api/auth/register', async (req, res) => {
         user: {
           id: newUser.id, _id: newUser.id, username: newUser.username,
           email: newUser.email, phone: newUser.phone, role: newUser.role,
-          companyId: newUser.company_id, isActive: newUser.is_active, emailVerified: false
+          companyId: newUser.company_id, isActive: newUser.is_active, emailVerified: false,
+          isOwner: createdNewCompany
         },
         // ⚠️ Placeholder token — the real session is created on first login.
         token: generateSessionToken()
@@ -524,6 +558,17 @@ app.post('/api/auth/login', async (req, res) => {
     const finalDeviceId = deviceId || req.headers['user-agent'] || 'unknown';
     const finalDeviceName = deviceName || 'Unknown Device';
     
+    // 🔐 Resolve company ownership for this user
+    let isOwner = false;
+    if (user.company_id) {
+      try {
+        const ownRow = await pool.query('SELECT owner_id FROM companies WHERE id = $1', [user.company_id]);
+        isOwner = ownRow.rows.length > 0 && ownRow.rows[0].owner_id === user.id;
+      } catch (e) {
+        console.log('⚠️ Owner lookup failed:', e.message);
+      }
+    }
+    
     // ✅ Clean expired sessions
     await pool.query(
       `UPDATE user_sessions 
@@ -561,7 +606,8 @@ app.post('/api/auth/login', async (req, res) => {
             role: user.role,
             companyId: user.company_id,
             isActive: user.is_active,
-            emailVerified: user.email_verified
+            emailVerified: user.email_verified,
+            isOwner: isOwner
           },
           sessionToken: sessionToken,
           deviceId: finalDeviceId,
@@ -600,7 +646,8 @@ app.post('/api/auth/login', async (req, res) => {
             role: user.role,
             companyId: user.company_id,
             isActive: user.is_active,
-            emailVerified: user.email_verified
+            emailVerified: user.email_verified,
+            isOwner: isOwner
           },
           sessionToken: sessionToken,
           deviceId: finalDeviceId,
@@ -698,7 +745,8 @@ app.post('/api/auth/login', async (req, res) => {
             role: user.role,
             companyId: user.company_id,
             isActive: user.is_active,
-            emailVerified: user.email_verified
+            emailVerified: user.email_verified,
+            isOwner: isOwner
           },
           sessionToken: sessionToken,
           deviceId: finalDeviceId,
@@ -752,7 +800,11 @@ app.get('/api/auth/me', requireSession(pool), async (req, res) => {
     const userId = req.user.id;
     
     const result = await pool.query(
-      'SELECT id, username, email, role, company_id, is_active, last_login, created_at FROM users WHERE id = $1',
+      `SELECT u.id, u.username, u.email, u.role, u.company_id, u.is_active, u.last_login, u.created_at,
+              (c.owner_id = u.id) AS is_owner
+       FROM users u
+       LEFT JOIN companies c ON c.id = u.company_id
+       WHERE u.id = $1`,
       [userId]
     );
     
@@ -765,7 +817,8 @@ app.get('/api/auth/me', requireSession(pool), async (req, res) => {
         user: {
           id: user.id, _id: user.id, username: user.username,
           email: user.email, role: user.role, companyId: user.company_id,
-          isActive: user.is_active, lastLogin: user.last_login, createdAt: user.created_at
+          isActive: user.is_active, lastLogin: user.last_login, createdAt: user.created_at,
+          isOwner: user.is_owner === true
         }
       }
     });
@@ -856,6 +909,16 @@ app.post('/api/auth/block-user/:id', async (req, res) => {
     
     const user = userResult.rows[0];
     if (user.role === 'Administrator') return res.status(403).json({ status: 'error', message: 'Cannot block Administrator' });
+    
+    // 🔐 Company owners cannot be blocked by other managers
+    if (req.user?.company_id) {
+      try {
+        const ownRow = await pool.query('SELECT owner_id FROM companies WHERE id = $1', [req.user.company_id]);
+        if (ownRow.rows.length > 0 && ownRow.rows[0].owner_id === user.id) {
+          return res.status(403).json({ status: 'error', message: 'Cannot block the company owner' });
+        }
+      } catch (e) { /* owner column may not exist yet — fail open */ }
+    }
     
     const result = await pool.query(
       'UPDATE users SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, username, email, role, is_active',
