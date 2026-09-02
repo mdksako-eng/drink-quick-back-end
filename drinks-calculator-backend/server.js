@@ -8,7 +8,7 @@ require('dotenv').config();
 const app = express();
 
 // ========== EMAIL SERVICE ==========
-const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail } = require('./utils/email.service');
+const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail } = require('./utils/email.service');
 
 // ========== SESSION AUTH (DB-backed) ==========
 const { generateSessionToken, getSessionUser, requireSession } = require('./middleware/sessionAuth');
@@ -226,6 +226,36 @@ app.use(async (req, res, next) => {
         console.log('✅ login_requests table already exists');
       }
 
+      // Check company_join_requests table
+      const joinReqCheck = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' AND table_name = 'company_join_requests'
+        );
+      `);
+      const joinReqExist = joinReqCheck.rows[0].exists;
+      if (!joinReqExist) {
+        console.log('📦 Creating company_join_requests table...');
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS company_join_requests (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            requested_role VARCHAR(50) DEFAULT 'Staff',
+            code VARCHAR(10) NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            attempts INTEGER DEFAULT 0,
+            approved_by INTEGER,
+            expires_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TIMESTAMP
+          )
+        `);
+        console.log('✅ company_join_requests table created');
+      } else {
+        console.log('✅ company_join_requests table already exists');
+      }
+
       // Check approval_logs table
       const logsCheck = await pool.query(`
         SELECT EXISTS (
@@ -410,18 +440,35 @@ app.post('/api/auth/register', async (req, res) => {
     let finalCompanyId = null;
     let userRole = 'Customer';
     let createdNewCompany = false;
+    // 🔐 Pending join-request state (invite-code signups require owner approval)
+    let pendingJoinCompanyId = null;
+    let pendingJoinRole = null;
+    let joinTargetCompany = null;
     
     if (registerAsManager) {
-      userRole = 'Manager';
       if (companyId) {
-        // Joining existing company — a co-manager, but NOT the owner
-        finalCompanyId = companyId;
+        // Joining existing company — REQUIRES OWNER VERIFICATION.
+        // The account is created unlinked (no company, Customer role) and a
+        // 6-digit code is emailed to the company owner. The owner approves in
+        // the app; only then does the user get their role/company. If the
+        // owner rejects (or the request expires), the account is DELETED.
+        const companyCheck = await pool.query('SELECT id, name, owner_id, email, phone FROM companies WHERE id = $1 AND is_active = true', [companyId]);
+        if (companyCheck.rows.length === 0) {
+          return res.status(404).json({ status: 'error', message: 'Company not found' });
+        }
+        const company = companyCheck.rows[0];
+        finalCompanyId = null; // held until owner approval
+        pendingJoinCompanyId = companyId;
+        pendingJoinRole = 'Manager';
+        joinTargetCompany = company;
+        // Keep company contact details fresh
         await pool.query(
           'UPDATE companies SET email = COALESCE(email, $1), phone = COALESCE(phone, $2) WHERE id = $3',
           [email, phone || null, companyId]
         );
       } else if (companyName && companyCode) {
         // Creating new company — this user becomes the company OWNER
+        userRole = 'Manager';
         const companyResult = await pool.query(
           `INSERT INTO companies (name, code, invite_code, email, phone) 
            VALUES ($1, $2, $2, $3, $4) 
@@ -457,6 +504,34 @@ app.post('/api/auth/register', async (req, res) => {
         console.log('⚠️ Could not set company owner:', ownErr.message);
       }
     }
+
+    // 🔐 OWNER-APPROVED JOIN: invite-code signup → pending request + code to owner
+    let joinRequestId = null;
+    if (pendingJoinCompanyId && joinTargetCompany) {
+      const joinCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const joinInsert = await pool.query(
+        `INSERT INTO company_join_requests (company_id, user_id, requested_role, code, status, expires_at)
+         VALUES ($1, $2, $3, $4, 'pending', NOW() + INTERVAL '15 minutes') RETURNING id`,
+        [pendingJoinCompanyId, newUser.id, pendingJoinRole, joinCode]
+      );
+      joinRequestId = joinInsert.rows[0].id;
+      // Email the verification code to the company OWNER
+      try {
+        let ownerEmail = joinTargetCompany.email;
+        if (joinTargetCompany.owner_id) {
+          const ownerRow = await pool.query('SELECT email, username FROM users WHERE id = $1', [joinTargetCompany.owner_id]);
+          if (ownerRow.rows.length > 0) ownerEmail = ownerRow.rows[0].email;
+        }
+        if (ownerEmail) {
+          await sendJoinRequestEmail(ownerEmail, joinTargetCompany.name, username, joinTargetCompany.name, joinCode, pendingJoinRole);
+          console.log(`📧 Join verification code sent to company owner (${ownerEmail})`);
+        } else {
+          console.log('⚠️ Company has no owner email — join cannot be verified');
+        }
+      } catch (e) {
+        console.log('⚠️ Join request email failed:', e.message);
+      }
+    }
     
     // Send verification email
     const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -469,10 +544,16 @@ app.post('/api/auth/register', async (req, res) => {
       console.log('⚠️ Verification email failed:', e.message);
     }
     
+    const responseMessage = joinRequestId
+      ? 'Request sent! The company owner must verify you with the code emailed to them before your account is activated.'
+      : (registerAsManager ? 'Business account created! Check email to verify.' : 'Account created! Check email to verify.');
+
     res.status(201).json({
       status: 'success',
-      message: registerAsManager ? 'Business account created! Check email to verify.' : 'Account created! Check email to verify.',
+      message: responseMessage,
       data: {
+        pendingJoinApproval: joinRequestId != null,
+        joinRequestId: joinRequestId,
         user: {
           id: newUser.id, _id: newUser.id, username: newUser.username,
           email: newUser.email, phone: newUser.phone, role: newUser.role,
@@ -869,8 +950,50 @@ app.post('/api/auth/create-staff', requireSession(pool), async (req, res) => {
     const companyId = req.user.company_id;
     console.log(`🏢 Creator company_id: ${companyId}`);
     
+    // 🔐 Resolve whether the creator is the company owner
+    let creatorIsOwner = false;
+    try {
+      const ownRow = await pool.query('SELECT owner_id FROM companies WHERE id = $1', [companyId]);
+      creatorIsOwner = ownRow.rows.length > 0 && ownRow.rows[0].owner_id === creatorId;
+    } catch (e) { /* owner column may not exist yet */ }
+    
     // 🔒 Hash the password before storing
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 🔐 OWNERS can add staff instantly. Co-managers' additions require the
+    // owner to verify with the code emailed to them (join request flow).
+    if (!creatorIsOwner && req.user.role !== 'Administrator') {
+      const created = await pool.query(
+        `INSERT INTO users (username, email, password, role, company_id, security_question1, security_question2) 
+         VALUES ($1, $2, $3, 'Customer', NULL, $4, $5) 
+         RETURNING id`,
+        [username, email, hashedPassword,
+         securityQuestions?.question1 || '', securityQuestions?.question2 || '']
+      );
+      const pendingUser = created.rows[0];
+      const joinCode = Math.floor(100000 + Math.random() * 900000).toString();
+      await pool.query(
+        `INSERT INTO company_join_requests (company_id, user_id, requested_role, code, status, expires_at)
+         VALUES ($1, $2, 'Staff', $3, 'pending', NOW() + INTERVAL '15 minutes')`,
+        [companyId, pendingUser.id, joinCode]
+      );
+      // Email the code to the company owner
+      try {
+        const compRow = await pool.query(
+          `SELECT c.name, c.email AS company_email, u.email AS owner_email
+           FROM companies c LEFT JOIN users u ON u.id = c.owner_id WHERE c.id = $1`, [companyId]);
+        const ownerEmail = compRow.rows[0]?.owner_email || compRow.rows[0]?.company_email;
+        if (ownerEmail) {
+          await sendJoinRequestEmail(ownerEmail, compRow.rows[0].name, username, compRow.rows[0].name, joinCode, 'Staff');
+        }
+      } catch (e) { console.log('⚠️ Join request email failed:', e.message); }
+      
+      return res.status(202).json({
+        status: 'pending_approval',
+        message: 'Staff created but pending owner verification. The owner received a code by email.',
+        data: { userId: pendingUser.id, pendingApproval: true }
+      });
+    }
 
     const result = await pool.query(
       `INSERT INTO users (username, email, password, role, company_id, security_question1, security_question2) 
@@ -1353,6 +1476,139 @@ app.post('/api/auth/validate-session', async (req, res) => {
 });
 
 // ========== MANAGER APPROVAL SYSTEM ==========
+
+// 🔐 GET PENDING JOIN REQUESTS (owner/manager of the company, or Administrator)
+app.get('/api/auth/pending-joins', requireSession(pool), async (req, res) => {
+  try {
+    const isAdmin = req.user.role === 'Administrator';
+    if (req.user.role !== 'Manager' && req.user.role !== 'Administrator') {
+      return res.status(403).json({ status: 'error', message: 'Only managers can view join requests' });
+    }
+    
+    // Expire stale pending requests first
+    await pool.query(`
+      UPDATE company_join_requests SET status = 'expired', resolved_at = NOW()
+      WHERE status = 'pending' AND expires_at < NOW()
+    `);
+    
+    const params = [];
+    let where = `j.status = 'pending' AND j.expires_at > NOW()`;
+    if (!isAdmin) {
+      params.push(req.user.company_id);
+      where += ` AND j.company_id = $1`;
+    }
+    
+    const rows = await pool.query(
+      `SELECT j.id, j.company_id, j.requested_role, j.created_at, j.expires_at,
+              u.id AS user_id, u.username, u.email
+       FROM company_join_requests j
+       JOIN users u ON u.id = j.user_id
+       WHERE ${where}
+       ORDER BY j.created_at DESC`,
+      params
+    );
+    
+    // Never expose the code itself to the app — the owner got it by email
+    res.json({
+      status: 'success',
+      requests: rows.rows.map(r => ({
+        id: r.id,
+        companyId: r.company_id,
+        userId: r.user_id,
+        username: r.username,
+        email: r.email,
+        requestedRole: r.requested_role,
+        createdAt: r.created_at,
+        expiresAt: r.expires_at
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Pending joins error:', error.message);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// 🔐 APPROVE/REJECT A JOIN REQUEST — owner enters the emailed code.
+//    Administrators can override (no code required).
+app.post('/api/auth/approve-join/:id', requireSession(pool), async (req, res) => {
+  try {
+    const requestId = parseInt(req.params.id, 10);
+    const { code, approved } = req.body;
+    const approverId = req.user.id;
+    const isAdmin = req.user.role === 'Administrator';
+    
+    const reqRow = await pool.query('SELECT * FROM company_join_requests WHERE id = $1', [requestId]);
+    if (reqRow.rows.length === 0) return res.status(404).json({ status: 'error', message: 'Join request not found' });
+    const joinReq = reqRow.rows[0];
+    
+    if (joinReq.status !== 'pending') {
+      return res.status(400).json({ status: 'error', message: `Request already ${joinReq.status}` });
+    }
+    if (joinReq.expires_at && new Date(joinReq.expires_at) < new Date()) {
+      await pool.query(`UPDATE company_join_requests SET status = 'expired', resolved_at = NOW() WHERE id = $1`, [requestId]);
+      // Option (a): expired pending account is deleted
+      await pool.query('DELETE FROM users WHERE id = $1', [joinReq.user_id]);
+      return res.status(400).json({ status: 'error', message: 'Request expired. The pending account was deleted.' });
+    }
+    
+    // 🔒 Authorization: company owner OR Administrator (override)
+    let isOwner = false;
+    const ownRow = await pool.query('SELECT owner_id FROM companies WHERE id = $1', [joinReq.company_id]);
+    if (ownRow.rows.length > 0 && ownRow.rows[0].owner_id === approverId) isOwner = true;
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ status: 'error', message: 'Only the company owner can verify join requests' });
+    }
+    
+    if (!approved) {
+      // REJECT → mark rejected and DELETE the pending account (option a)
+      await pool.query(`UPDATE company_join_requests SET status = 'rejected', approved_by = $1, resolved_at = NOW() WHERE id = $2`, [approverId, requestId]);
+      await pool.query('DELETE FROM users WHERE id = $1', [joinReq.user_id]);
+      console.log(`🚫 Join request #${requestId} rejected by user ${approverId} — pending account deleted`);
+      return res.json({ status: 'success', message: 'Request rejected. The pending account has been deleted.' });
+    }
+    
+    // APPROVE → verify code (owners must supply it; Administrators override)
+    if (!isAdmin) {
+      if (!code) return res.status(400).json({ status: 'error', message: 'Verification code required' });
+      if ((joinReq.attempts || 0) >= 5) {
+        await pool.query(`UPDATE company_join_requests SET status = 'expired', resolved_at = NOW() WHERE id = $1`, [requestId]);
+        await pool.query('DELETE FROM users WHERE id = $1', [joinReq.user_id]);
+        return res.status(429).json({ status: 'error', message: 'Too many wrong attempts. Request cancelled and account deleted.' });
+      }
+      if (String(code).trim() !== String(joinReq.code)) {
+        await pool.query('UPDATE company_join_requests SET attempts = attempts + 1 WHERE id = $1', [requestId]);
+        return res.status(400).json({ status: 'error', message: 'Wrong verification code' });
+      }
+    }
+    
+    // ✅ Approve: link the user to the company with the requested role
+    await pool.query(
+      `UPDATE users SET company_id = $1, role = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
+      [joinReq.company_id, joinReq.requested_role, joinReq.user_id]
+    );
+    await pool.query(
+      `UPDATE company_join_requests SET status = 'approved', approved_by = $1, resolved_at = NOW() WHERE id = $2`,
+      [approverId, requestId]
+    );
+    
+    const approvedUser = await pool.query('SELECT username, email FROM users WHERE id = $1', [joinReq.user_id]);
+    try {
+      if (approvedUser.rows.length > 0) {
+        await sendWelcomeEmail(approvedUser.rows[0].email, approvedUser.rows[0].username);
+      }
+    } catch (e) { /* non-fatal */ }
+    
+    console.log(`✅ Join request #${requestId} approved by ${isAdmin ? 'ADMIN (override)' : 'owner'} user ${approverId}`);
+    res.json({
+      status: 'success',
+      message: isAdmin ? 'Approved by administrator override' : 'Member approved and added to your company',
+      data: { userId: joinReq.user_id, role: joinReq.requested_role, companyId: joinReq.company_id }
+    });
+  } catch (error) {
+    console.error('❌ Approve join error:', error.message);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
 
 // ✅ Get pending requests (for Manager)
 app.get('/api/auth/pending-requests', async (req, res) => {

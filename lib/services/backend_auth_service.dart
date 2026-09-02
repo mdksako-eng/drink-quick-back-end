@@ -649,6 +649,71 @@ class BackendAuthService {
     }
   }
 
+  // 🔐 Get pending company JOIN requests (owner verification flow)
+  Future<Map<String, dynamic>> getPendingJoins() async {
+    try {
+      final token = await _getToken();
+      if (token == null) {
+        return {'status': 'error', 'message': 'Not authenticated'};
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/auth/pending-joins'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(_backendTimeout);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      final body = jsonDecode(response.body);
+      return {'status': 'error', 'message': body['message'] ?? 'Failed to get join requests'};
+    } catch (e) {
+      debugPrint('❌ Get pending joins error: $e');
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  // 🔐 Approve/reject a company JOIN request.
+  //    Owners must pass the [code] emailed to them; Administrators override.
+  Future<Map<String, dynamic>> approveJoin({
+    required int requestId,
+    required bool approved,
+    String? code,
+  }) async {
+    try {
+      final token = await _getToken();
+      if (token == null) {
+        return {'status': 'error', 'message': 'Not authenticated'};
+      }
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/approve-join/$requestId'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'approved': approved,
+              if (code != null && code.isNotEmpty) 'code': code,
+            }),
+          )
+          .timeout(_backendTimeout);
+
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return body;
+      }
+      return {'status': 'error', 'message': body['message'] ?? 'Failed to process join request'};
+    } catch (e) {
+      debugPrint('❌ Approve join error: $e');
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
   Future<Map<String, dynamic>> logout() async {
     try {
       final token = await _getToken();

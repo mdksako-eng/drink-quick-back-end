@@ -19,7 +19,9 @@ class ManagerApprovalScreen extends StatefulWidget {
 
 class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
   List<Map<String, dynamic>> _pendingRequests = [];
+  List<Map<String, dynamic>> _pendingJoins = [];
   bool _isLoading = true;
+  bool _showJoins = false;
   Timer? _refreshTimer;
   bool _isDisposed = false;
 
@@ -36,6 +38,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!_isDisposed && mounted) {
         _loadPendingRequests();
+        _loadPendingJoins();
       }
     });
   }
@@ -139,6 +142,195 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
     }
   }
 
+  // 🔐 Load pending company join requests (owner verification)
+  Future<void> _loadPendingJoins() async {
+    if (!mounted || _isDisposed) return;
+    try {
+      final result = await BackendAuthService().getPendingJoins();
+      if (!mounted || _isDisposed) return;
+      if (result['status'] == 'success') {
+        setState(() {
+          _pendingJoins = List<Map<String, dynamic>>.from(result['requests'] ?? []);
+        });
+      }
+    } catch (e) {
+      print('Error loading join requests: $e');
+    }
+  }
+
+  // 🔐 Approve (with emailed code) or reject a join request
+  Future<void> _handleJoinAction(Map<String, dynamic> request, bool approve, {String? code}) async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await BackendAuthService().approveJoin(
+        requestId: request['id'] is int ? request['id'] : int.tryParse('${request['id']}') ?? 0,
+        approved: approve,
+        code: code,
+      );
+      if (!mounted || _isDisposed) return;
+      if (result['status'] == 'success') {
+        Helpers.showToast(approve ? '✅ ${result['message'] ?? 'Member approved'}' : '🚫 ${result['message'] ?? 'Request rejected'}');
+      } else {
+        Helpers.showToast(result['message'] ?? 'Error processing request', isError: true);
+      }
+      await _loadPendingJoins();
+      if (mounted && !_isDisposed) setState(() => _isLoading = false);
+    } catch (e) {
+      print('Join approval error: $e');
+      if (mounted && !_isDisposed) setState(() => _isLoading = false);
+      Helpers.showToast('Error: $e', isError: true);
+    }
+  }
+
+  // 🔐 Ask the owner for the verification code emailed to them, then approve
+  Future<void> _showCodeDialog(Map<String, dynamic> request) async {
+    final codeController = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enter Verification Code'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Approve ${request['username']} as ${request['requestedRole']}?\n\nEnter the 6-digit code sent to the company owner\'s email:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: codeController,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Code',
+                border: OutlineInputBorder(),
+                counterText: '',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            child: const Text('Approve'),
+          ),
+        ],
+      ),
+    );
+    if (result == true && mounted) {
+      await _handleJoinAction(request, true, code: codeController.text.trim());
+    }
+  }
+
+  Widget _buildJoinsList(ThemeData theme) {
+    if (_pendingJoins.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.how_to_reg, size: 60, color: Colors.green),
+            const SizedBox(height: 16),
+            const Text('No pending join requests',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text('New members appear here for owner verification',
+                style: TextStyle(color: theme.hintColor)),
+          ],
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _pendingJoins.length,
+      itemBuilder: (context, index) {
+        final request = _pendingJoins[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 3,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: Colors.orange.shade100,
+                      child: Text(
+                        (request['username'] ?? '?').toString().substring(0, 1).toUpperCase(),
+                        style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${request['username'] ?? 'Unknown'}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          Text('${request['email'] ?? ''}',
+                              style: TextStyle(color: theme.hintColor, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.orange,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text('${request['requestedRole'] ?? 'Staff'}',
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text('Wants to join • ${_getTimeAgo('${request['createdAt'] ?? request['created_at'] ?? ''}')}',
+                    style: TextStyle(color: theme.hintColor)),
+                const SizedBox(height: 4),
+                Text('Verify with the code emailed to the company owner',
+                    style: TextStyle(color: theme.hintColor, fontSize: 12, fontStyle: FontStyle.italic)),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showCodeDialog(request),
+                        icon: const Icon(Icons.check, color: Colors.white),
+                        label: const Text('Approve'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _handleJoinAction(request, false),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        label: const Text('Reject'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   String _getTimeAgo(String timeStr) {
     try {
       final time = DateTime.parse(timeStr);
@@ -171,11 +363,19 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
       behavior: HitTestBehavior.translucent,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Login Approvals'),
+          title: Text(_showJoins ? 'Join Requests' : 'Login Approvals'),
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
           elevation: 4,
           actions: [
+            // 🔐 Toggle between login approvals and join requests
+            TextButton.icon(
+              onPressed: () => setState(() => _showJoins = !_showJoins),
+              icon: Icon(_showJoins ? Icons.login : Icons.how_to_reg,
+                  color: Colors.white, size: 18),
+              label: Text(_showJoins ? 'Logins' : 'Joins${_pendingJoins.isNotEmpty ? ' (${_pendingJoins.length})' : ''}',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
             IconButton(
               icon: _isLoading
                   ? const SizedBox(
@@ -202,7 +402,9 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                   : [Colors.grey[50]!, Colors.white],
             ),
           ),
-          child: _isLoading && _pendingRequests.isEmpty
+          child: _showJoins
+              ? _buildJoinsList(theme)
+              : _isLoading && _pendingRequests.isEmpty
               ? Center(
                   child: CircularProgressIndicator(
                     color: primaryColor,

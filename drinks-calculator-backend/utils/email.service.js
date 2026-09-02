@@ -92,4 +92,28 @@ const sendVerificationEmail = async (userEmail, code, username) => {
   return await sendEmail(userEmail, '✅ Verify Your Email - Drink Quick Cal', html);
 };
 
-module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail };
+// ============================================================
+// COMPANY JOIN REQUEST — verification code sent to the OWNER
+// ============================================================
+const sendJoinRequestEmail = async (ownerEmail, ownerName, requesterName, companyName, code, role) => {
+  const html = `
+    <div style="font-family:Arial;max-width:500px;margin:0 auto;background:white;border-radius:15px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,0.1);">
+      <div style="background:linear-gradient(135deg,#FF9800,#F57C00);padding:30px;text-align:center;">
+        <h1 style="color:white;margin:0;">🍹 Drink Quick Cal</h1>
+        <p style="color:rgba(255,255,255,0.8);">Company Join Verification</p>
+      </div>
+      <div style="padding:30px;">
+        <h2>Hello ${ownerName || 'there'}!</h2>
+        <p><strong>${requesterName}</strong> wants to join your company <strong>${companyName}</strong> as <strong>${role}</strong>.</p>
+        <p>Share nothing — just enter this code in the app to approve:</p>
+        <div style="background:#FF9800;color:white;font-size:36px;font-weight:bold;text-align:center;padding:20px;border-radius:10px;letter-spacing:12px;margin:20px 0;">${code}</div>
+        <p style="text-align:center;color:#888;">⏰ Expires in 15 minutes</p>
+        <div style="background:#FFF8E1;border-left:4px solid #FFA000;padding:12px;border-radius:5px;font-size:12px;color:#8B6914;">
+          ⚠️ If you don't recognize this request, reject it in the app — the pending account will be deleted.
+        </div>
+      </div>
+    </div>`;
+  return await sendEmail(ownerEmail, '🔐 Verify New Member - Drink Quick Cal', html);
+};
+
+module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail };
