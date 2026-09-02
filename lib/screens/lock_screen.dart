@@ -403,15 +403,18 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
   // ============================================================
 
   void _showSessionTerminatedDialog() {
-    final context = this.context;
-    if (!mounted) return;
+    // The lock screen is rendered as a top-level overlay (sibling of the
+    // Navigator), so its own context has no Navigator ancestor. Always show
+    // the dialog from the root navigator context.
+    final navigatorContext = app.navigatorKey.currentContext;
+    if (!mounted || navigatorContext == null) return;
 
     debugPrint('🔴🔴🔴 SHOWING SESSION TERMINATED DIALOG 🔴🔴🔴');
     debugPrint('   Previous Device: ${widget.previousDevice}');
     debugPrint('   Message: ${widget.sessionTerminatedMessage}');
 
     showDialog(
-      context: context,
+      context: navigatorContext,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

@@ -29,6 +29,34 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<MyAppState> appKey = GlobalKey<MyAppState>();
 
 // ============================================================
+// 🔐 GLOBAL LOCK OVERLAY STATE
+// ============================================================
+// The LockScreen must cover EVERY screen that exposes user data. A normal
+// "home route replaces content" approach does NOT cover pushed routes
+// (drinks, inventory, settings, order history, etc.), so we render the lock
+// screen as a true top-level overlay above the entire Navigator via
+// MaterialApp.builder. AuthWrapper publishes the desired lock state here.
+class LockOverlayParams {
+  final bool isBackgroundLock;
+  final String? sessionTerminatedMessage;
+  final String? previousDevice;
+
+  const LockOverlayParams({
+    this.isBackgroundLock = false,
+    this.sessionTerminatedMessage,
+    this.previousDevice,
+  });
+}
+
+/// null = unlocked; non-null = show lock screen on top of all routes.
+final ValueNotifier<LockOverlayParams?> lockOverlayState =
+    ValueNotifier<LockOverlayParams?>(null);
+
+/// Set by AuthWrapper so the overlay's unlock button reaches the same
+/// handler that resets session-termination state.
+VoidCallback? globalLockAuthenticated;
+
+// ============================================================
 // ✅ NEW: ThemeProvider for real-time theme management
 // ============================================================
 class ThemeProvider extends ChangeNotifier {
@@ -220,6 +248,8 @@ class MyAppState extends State<MyApp> {
             theme: _buildLightTheme(primaryColor),
             darkTheme: _buildDarkTheme(primaryColor),
             themeMode: themeMode,
+            builder: (context, child) =>
+                LockScreenOverlay(child: child ?? const SizedBox.shrink()),
             home: const AuthWrapper(),
           );
         },
@@ -373,6 +403,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    globalLockAuthenticated = _onAuthenticated;
     // Defer heavy async init (autoLogin, etc.) until *after* the first frame
     // so the splash screen renders immediately and we don't call
     // notifyListeners() during AuthWrapper's own build (which would throw
@@ -383,8 +414,23 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    globalLockAuthenticated = null;
     LockService().dispose();
     super.dispose();
+  }
+
+  // Publish the current lock intent to the top-level overlay so it covers
+  // every route (including pushed screens), not just the home widget.
+  void _emitLock() {
+    if (_showLockScreen || _sessionTerminated || LockService().isLocked) {
+      lockOverlayState.value = LockOverlayParams(
+        isBackgroundLock: _showLockScreen && !_sessionTerminated,
+        sessionTerminatedMessage: _sessionTerminated ? _terminatedMessage : null,
+        previousDevice: _sessionTerminated ? _previousDevice : null,
+      );
+    } else {
+      lockOverlayState.value = null;
+    }
   }
 
   // ========== LIFECYCLE OBSERVER ==========
@@ -398,6 +444,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           setState(() => _showLockScreen = true);
         }
       }
+      _emitLock();
     } else if (state == AppLifecycleState.resumed) {
       LockService().onResumed();
 
@@ -414,6 +461,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         }
       }
 
+      _emitLock();
       _checkSessionOnResume();
     }
   }
@@ -424,6 +472,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       setState(() {
         _showLockScreen = true;
       });
+      _emitLock();
     }
   }
 
@@ -433,6 +482,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         _showLockScreen = false;
         LockService().resetTimer();
       });
+      _emitLock();
     }
   }
 
@@ -455,6 +505,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 'Your session was terminated on another device.';
             _previousDevice = authProvider.previousDeviceName;
           });
+          _emitLock();
         }
       }
     } catch (e) {
@@ -479,6 +530,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         _isAuthenticated = true;
         _isAuthInProgress = false;
       });
+      _emitLock();
     } else {
       _isAuthInProgress = false;
     }
@@ -531,9 +583,12 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       } else {
         _isAuthenticated = false;
       }
+
+      _emitLock();
     } catch (e) {
       debugPrint('❌ Auth initialization error: $e');
       _isAuthenticated = false;
+      _emitLock();
     }
 
     if (mounted) {
@@ -841,23 +896,6 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       return _buildSplashScreen();
     }
 
-    if (_showLockScreen || _sessionTerminated) {
-      return Consumer<AuthProvider>(
-        builder: (context, authProvider, _) {
-          final user = authProvider.currentUser;
-          final userId = user?.id ?? '';
-
-          return LockScreen(
-            userId: userId,
-            onAuthenticated: _onAuthenticated,
-            isBackgroundLock: _showLockScreen && !_sessionTerminated,
-            sessionTerminatedMessage: _terminatedMessage,
-            previousDevice: _previousDevice,
-          );
-        },
-      );
-    }
-
     return Consumer<AuthProvider>(
       key: ValueKey(Provider.of<AuthProvider>(context).currentUser?.companyId),
       builder: (context, authProvider, _) {
@@ -945,6 +983,51 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           ),
         ),
       ),
+    );
+  }
+}
+// ============================================================================
+// 🔒 LOCK SCREEN OVERLAY
+// ============================================================================
+// Rendered via MaterialApp.builder so it sits ABOVE the entire Navigator.
+// This guarantees the lock screen covers every route that exposes user data
+// (calculator, pushed screens, dialogs, bottom sheets), not just the home
+// widget. It is driven by the global [lockOverlayState] that AuthWrapper
+// publishes whenever the app locks / unlocks / session is terminated.
+class LockScreenOverlay extends StatelessWidget {
+  final Widget child;
+
+  const LockScreenOverlay({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<LockOverlayParams?>(
+      valueListenable: lockOverlayState,
+      builder: (context, lockParams, _) {
+        return Stack(
+          textDirection: TextDirection.ltr,
+          children: [
+            child,
+            if (lockParams != null)
+              Positioned.fill(
+                child: Consumer<AuthProvider>(
+                  builder: (context, authProvider, _) {
+                    final user = authProvider.currentUser;
+                    return LockScreen(
+                      userId: user?.id ?? '',
+                      onAuthenticated: () =>
+                          globalLockAuthenticated?.call(),
+                      isBackgroundLock: lockParams.isBackgroundLock,
+                      sessionTerminatedMessage:
+                          lockParams.sessionTerminatedMessage,
+                      previousDevice: lockParams.previousDevice,
+                    );
+                  },
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
