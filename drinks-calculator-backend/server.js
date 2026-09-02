@@ -256,6 +256,18 @@ app.use(async (req, res, next) => {
         console.log('✅ company_join_requests table already exists');
       }
 
+      // 🔐 Lock down company_join_requests: RLS on + revoke client roles.
+      // The backend connects as the table owner (postgres) and BYPASSES RLS,
+      // so /api/auth flows keep working, while the anon key shipped in the
+      // Flutter app can no longer read join requests or verification codes.
+      try {
+        await pool.query(`ALTER TABLE company_join_requests ENABLE ROW LEVEL SECURITY`);
+        await pool.query(`REVOKE ALL ON company_join_requests FROM anon, authenticated`);
+        console.log('✅ RLS enabled on company_join_requests (anon access revoked)');
+      } catch (rlsErr) {
+        console.log('⚠️ RLS lockdown warning for company_join_requests:', rlsErr.message);
+      }
+
       // Check approval_logs table
       const logsCheck = await pool.query(`
         SELECT EXISTS (
