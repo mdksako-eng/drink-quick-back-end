@@ -155,6 +155,7 @@ class BackendAuthService {
     String? companyId,
     String? companyName,
     String? companyCode,
+    String? companyAddress,
   }) async {
     debugPrint('👤 REGISTER REQUEST');
     debugPrint('🔗 Endpoint: $_registerEndpoint');
@@ -182,6 +183,7 @@ class BackendAuthService {
         'companyId': companyId,
         'companyName': companyName,
         'companyCode': companyCode,
+        'companyAddress': companyAddress,
         'securityQuestions': securityQuestions,
       });
 

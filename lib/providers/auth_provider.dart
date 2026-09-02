@@ -1545,7 +1545,8 @@ class AuthProvider with ChangeNotifier {
       bool registerAsManager = false,
       String? companyId,
       String? companyName,
-      String? companyCode}) async {
+      String? companyCode,
+      String? companyAddress}) async {
     if (_isDisposed) return false;
 
     debugPrint('📝 AuthProvider.signup() called for: $username ($email)');
@@ -1583,6 +1584,7 @@ class AuthProvider with ChangeNotifier {
         companyId: companyId,
         companyName: companyName,
         companyCode: companyCode,
+        companyAddress: companyAddress,
       );
 
       debugPrint(

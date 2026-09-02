@@ -116,6 +116,9 @@ app.use(async (req, res, next) => {
           ALTER TABLE companies ADD COLUMN IF NOT EXISTS owner_id INTEGER
         `);
         await pool.query(`
+          ALTER TABLE companies ADD COLUMN IF NOT EXISTS address TEXT
+        `);
+        await pool.query(`
           UPDATE companies c
           SET owner_id = sub.first_manager
           FROM (
@@ -432,7 +435,7 @@ app.post('/api/auth/reset-password-code', async (req, res) => {
 // REGISTER
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, email, password, phone, securityQuestions, registerAsManager, companyId, companyName, companyCode } = req.body;
+    const { username, email, password, phone, securityQuestions, registerAsManager, companyId, companyName, companyCode, companyAddress } = req.body;
     console.log(`👤 New registration: ${username}`);
     
     if (!username || !email || !password) {
@@ -482,11 +485,11 @@ app.post('/api/auth/register', async (req, res) => {
         // Creating new company — this user becomes the company OWNER
         userRole = 'Manager';
         const companyResult = await pool.query(
-          `INSERT INTO companies (name, code, invite_code, email, phone) 
-           VALUES ($1, $2, $2, $3, $4) 
+          `INSERT INTO companies (name, code, invite_code, email, phone, address) 
+           VALUES ($1, $2, $2, $3, $4, $5) 
            ON CONFLICT (code) DO NOTHING
            RETURNING id`,
-          [companyName, companyCode.toUpperCase(), email, phone || null]
+          [companyName, companyCode.toUpperCase(), email, phone || null, (companyAddress || '').trim() || null]
         );
         if (companyResult.rows.length > 0) {
           finalCompanyId = companyResult.rows[0].id;

@@ -62,6 +62,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _inviteCodeController = TextEditingController();
   final _newCompanyNameController = TextEditingController();
   final _newCompanyCodeController = TextEditingController();
+  final _newCompanyAddressController = TextEditingController();
   String? _verifiedCompanyId;
 
   String? _verifiedCompanyName;
@@ -145,6 +146,7 @@ class _AuthScreenState extends State<AuthScreen> {
     _inviteCodeController.dispose();
     _newCompanyNameController.dispose();
     _newCompanyCodeController.dispose();
+    _newCompanyAddressController.dispose();
     super.dispose();
   }
 
@@ -253,6 +255,7 @@ class _AuthScreenState extends State<AuthScreen> {
       _inviteCodeController.clear();
       _newCompanyNameController.clear();
       _newCompanyCodeController.clear();
+      _newCompanyAddressController.clear();
 
       // Reset manager signup options
       _registerAsManager = false;
@@ -571,6 +574,9 @@ class _AuthScreenState extends State<AuthScreen> {
         companyCode: _newCompanyCodeController.text.trim().isEmpty
             ? null
             : _newCompanyCodeController.text.trim(),
+        companyAddress: _newCompanyAddressController.text.trim().isEmpty
+            ? null
+            : _newCompanyAddressController.text.trim(),
       );
       if (mounted) setState(() => _isSigningUp = false);
       if (success) {
@@ -1502,6 +1508,17 @@ class _AuthScreenState extends State<AuthScreen> {
                             hintText: 'e.g., MYTEX',
                             border: OutlineInputBorder()),
                         textCapitalization: TextCapitalization.characters,
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        enabled: !_isSigningUp,
+                        controller: _newCompanyAddressController,
+                        decoration: const InputDecoration(
+                            labelText: 'Company Address',
+                            hintText: 'Street, city, region',
+                            prefixIcon: Icon(Icons.location_on_outlined),
+                            border: OutlineInputBorder()),
+                        textCapitalization: TextCapitalization.words,
                       ),
                     ],
                   ]),
