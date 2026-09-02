@@ -415,7 +415,10 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     globalLockAuthenticated = null;
-    LockService().dispose();
+    // NOTE: Do NOT call LockService().dispose() here. LockService is an
+    // app-lifetime singleton; disposing it when AuthWrapper's State is
+    // recreated (hot restart, provider rebuild) permanently poisons the
+    // singleton (_isDisposed = true), which silently disables locking.
     super.dispose();
   }
 
@@ -434,11 +437,23 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   }
 
   // ========== LIFECYCLE OBSERVER ==========
+  bool _hasValidUser() {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final user = authProvider.currentUser;
+      return user != null &&
+          user.id.isNotEmpty &&
+          user.id != 'temp_id';
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
       LockService().onPaused();
-      if (_isAuthenticated && !_showLockScreen) {
+      if (_hasValidUser() && !_showLockScreen) {
         LockService().lock();
         if (mounted) {
           setState(() => _showLockScreen = true);
@@ -448,7 +463,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.resumed) {
       LockService().onResumed();
 
-      if (_isAuthenticated) {
+      if (_hasValidUser()) {
         if (LockService().isLocked) {
           if (mounted) {
             setState(() => _showLockScreen = true);
@@ -468,7 +483,11 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
   // ========== LOCK CALLBACKS ==========
   void _onLock() {
-    if (mounted && _isAuthenticated) {
+    // Robustly gate on a real logged-in user rather than the build-time
+    // _isAuthenticated flag, so the inactivity lock reliably engages after
+    // both an interactive login and a startup auto-login.
+    if (mounted && _hasValidUser()) {
+      _isAuthenticated = true;
       setState(() {
         _showLockScreen = true;
       });

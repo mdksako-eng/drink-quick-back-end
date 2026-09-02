@@ -17,7 +17,7 @@ class LockService {
   bool _isInitialized = false;
   VoidCallback? _onLock;
   VoidCallback? _onUnlock;
-  bool _isDisposed = false;
+  final bool _isDisposed = false;
 
   // ========== GETTERS ==========
   bool get isLocked => _isLocked;
@@ -33,7 +33,16 @@ class LockService {
 
     _onLock = onLock;
     _onUnlock = onUnlock;
+    final wasInitialized = _isInitialized;
     _isInitialized = true;
+
+    if (wasInitialized) {
+      // Already running (e.g. AuthWrapper state recreated after hot restart).
+      // Callbacks are rebound above; just make sure the timer is running.
+      if (!_isLocked) _resetTimer();
+      debugPrint('🔒 LockService re-bound callbacks. Locked: $_isLocked');
+      return;
+    }
 
     // ✅ Restore lock state from storage
     await _restoreLockState();
@@ -159,18 +168,14 @@ class LockService {
   }
 
   // ========== DISPOSAL ==========
+  // Intentionally NOT disposing the singleton's core state: this service lives
+  // for the whole app process. Marking it disposed here previously disabled
+  // locking forever after any widget-tree rebuild that disposed AuthWrapper.
+  // Instead, dispose() now just cancels the timer; re-initialize() is allowed.
   void dispose() {
-    if (_isDisposed) return;
-    
-    _isDisposed = true;
     _inactivityTimer?.cancel();
     _inactivityTimer = null;
-    _onLock = null;
-    _onUnlock = null;
-    _isInitialized = false;
-    _saveLockState();
-
-    debugPrint('🔒 LockService disposed');
+    debugPrint('🔒 LockService timers cleared');
   }
 
   // ========== UTILITY ==========
