@@ -62,4 +62,14 @@ drinks-calculator-backend_old_mongo/
 *.bak
 *.iml
 /code.png
+
+# ============================================================
+# 🔐 CREDENTIAL / DEBUG SCRIPTS — NEVER COMMIT
+# These contain hardcoded live credentials (email/password,
+# Supabase service DB connection string with password).
+# ============================================================
+drinks-calculator-backend/scripts/live_smoke.js
+drinks-calculator-backend/scripts/debug_login.js
+drinks-calculator-backend/scripts/reset_test_pwd.js
+
 *.log.*
