@@ -324,7 +324,7 @@ app.use(async (req, res, next) => {
 // ========== MIDDLEWARE ==========
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 // ✅ Database connection middleware - MUST BE BEFORE ROUTES
 app.use(async (req, res, next) => {
   try {
