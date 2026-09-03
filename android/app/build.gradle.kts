@@ -7,12 +7,16 @@ plugins {
 
 android {
     namespace = "com.example.drinks_calculator_fixed"
-    compileSdk = flutter.compileSdkVersion
+    // Plugins (app_links, flutter_tts, local_auth, etc.) require compileSdk 36.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        // flutter_local_notifications needs core library desugaring for
+        // java.time APIs on older Android versions.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -28,6 +32,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        multiDexEnabled = true
     }
 
     buildTypes {
@@ -41,4 +46,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Required by flutter_local_notifications for core library desugaring.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
 }
