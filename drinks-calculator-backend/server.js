@@ -629,8 +629,27 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(403).json({ 
         status: 'error', 
         message: 'Please verify your email first.',
-        code: 'EMAIL_NOT_VERIFIED' 
+        code: 'EMAIL_NOT_VERIFIED'
       });
+    }
+    
+    // 🔒 BLOCK LOGIN for pending join-request users (company_id is NULL until owner approves)
+    if (!user.company_id) {
+      const pendingJoin = await pool.query(
+        `SELECT j.id, j.company_id, j.status, c.name AS company_name
+         FROM company_join_requests j
+         JOIN companies c ON c.id = j.company_id
+         WHERE j.user_id = $1 AND j.status = 'pending' AND j.expires_at > NOW()
+         LIMIT 1`,
+        [user.id]
+      );
+      if (pendingJoin.rows.length > 0) {
+        return res.status(403).json({
+          status: 'error',
+          message: `Your join request for "${pendingJoin.rows[0].company_name}" is awaiting owner verification. You will be able to log in once approved.`,
+          code: 'JOIN_PENDING_APPROVAL'
+        });
+      }
     }
     
     // 🔒 Verify password — supports bcrypt hashes and legacy plaintext (migrates on success)
