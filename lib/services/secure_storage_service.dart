@@ -13,6 +13,10 @@ class SecureStorageService {
   static final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
     aOptions: AndroidOptions(
       encryptedSharedPreferences: true,
+      // Auto-clear a Keystore-backed value that can no longer be decrypted
+      // (e.g. after an app reinstall/restore or key invalidation). Without
+      // this, reads throw AndroidError "BAD_DECRYPT" and crash the login flow.
+      resetOnError: true,
     ),
     iOptions: IOSOptions(
       accessibility: KeychainAccessibility.passcode,
@@ -29,13 +33,56 @@ class SecureStorageService {
   static const String _sessionCreatedKey = 'session_created';
 
   // ============================================================
+  // 🛡️ CORRUPTION-SAFE READS
+  // ============================================================
+
+  /// Reads a value from secure storage but treats decryption failures
+  /// (PlatformException, e.g. Keystore "BAD_DECRYPT" after a reinstall or
+  /// device key change) as "no value" instead of letting the exception bubble
+  /// up and break login. On repeated failures it wipes all secure storage so
+  /// the app can start clean.
+  static Future<String?> _readSafely(String key) async {
+    try {
+      return await _secureStorage.read(key: key);
+    } catch (e) {
+      debugPrint('⚠️ SecureStorage read failed for "$key": $e');
+      try {
+        // Clear the whole encrypted vault — the stored values can no longer
+        // be decrypted anyway, so there is nothing worth keeping.
+        await _secureStorage.deleteAll();
+        _cachedEncryptionKey = null;
+        debugPrint('🧹 Cleared corrupt secure storage (resetOnError path)');
+      } catch (_) {}
+      return null;
+    }
+  }
+
+  /// Safe wrapper for writes — if the Keystore is invalid, don't let a stale
+  /// value persist and never throw into the caller.
+  static Future<void> _writeSafely(String key, String value) async {
+    try {
+      await _secureStorage.write(key: key, value: value);
+    } catch (e) {
+      debugPrint('⚠️ SecureStorage write failed for "$key": $e');
+    }
+  }
+
+  static Future<void> _deleteSafely(String key) async {
+    try {
+      await _secureStorage.delete(key: key);
+    } catch (e) {
+      debugPrint('⚠️ SecureStorage delete failed for "$key": $e');
+    }
+  }
+
+  // ============================================================
   // 🔑 ENCRYPTION METHODS
   // ============================================================
 
   static Future<String> _getOrCreateEncryptionKey() async {
     if (_cachedEncryptionKey != null) return _cachedEncryptionKey!;
 
-    var existingKey = await _secureStorage.read(key: _encryptionKeyKey);
+    var existingKey = await _readSafely(_encryptionKeyKey);
     if (existingKey != null && existingKey.isNotEmpty) {
       _cachedEncryptionKey = existingKey;
       return existingKey;
@@ -45,7 +92,7 @@ class SecureStorageService {
     final bytes = List<int>.generate(32, (i) => random.nextInt(256));
     final key = base64Url.encode(bytes);
 
-    await _secureStorage.write(key: _encryptionKeyKey, value: key);
+    await _writeSafely(_encryptionKeyKey, key);
     _cachedEncryptionKey = key;
 
     debugPrint('🔐 🔑 Generated unique encryption key for this device');
@@ -99,19 +146,19 @@ class SecureStorageService {
   // ============================================================
 
   static Future<String> getDeviceId() async {
-    var deviceId = await _secureStorage.read(key: _deviceIdKey);
+    var deviceId = await _readSafely(_deviceIdKey);
     if (deviceId != null && deviceId.isNotEmpty) return deviceId;
 
     final random = Random.secure();
     final bytes = List<int>.generate(16, (i) => random.nextInt(256));
     deviceId = base64Url.encode(bytes);
 
-    await _secureStorage.write(key: _deviceIdKey, value: deviceId);
+    await _writeSafely(_deviceIdKey, deviceId);
     return deviceId;
   }
 
   static Future<String> getDeviceFingerprint() async {
-    var fingerprint = await _secureStorage.read(key: _deviceFingerprintKey);
+    var fingerprint = await _readSafely(_deviceFingerprintKey);
     if (fingerprint != null && fingerprint.isNotEmpty) return fingerprint;
 
     final deviceId = await getDeviceId();
@@ -123,7 +170,7 @@ class SecureStorageService {
     final digest = sha256.convert(bytes);
     fingerprint = digest.toString();
 
-    await _secureStorage.write(key: _deviceFingerprintKey, value: fingerprint);
+    await _writeSafely(_deviceFingerprintKey, fingerprint);
     return fingerprint;
   }
 
@@ -136,43 +183,43 @@ class SecureStorageService {
     required String sessionToken,
     required String deviceFingerprint,
   }) async {
-    await _secureStorage.write(key: _userIdKey, value: userId.toString());
-    await _secureStorage.write(key: _sessionTokenKey, value: sessionToken);
-    await _secureStorage.write(key: _deviceFingerprintKey, value: deviceFingerprint);
-    await _secureStorage.write(key: _sessionCreatedKey, value: DateTime.now().toIso8601String());
+    await _writeSafely(_userIdKey, userId.toString());
+    await _writeSafely(_sessionTokenKey, sessionToken);
+    await _writeSafely(_deviceFingerprintKey, deviceFingerprint);
+    await _writeSafely(_sessionCreatedKey, DateTime.now().toIso8601String());
   }
 
   static Future<Map<String, String?>> getSession() async {
     return {
-      'userId': await _secureStorage.read(key: _userIdKey),
-      'sessionToken': await _secureStorage.read(key: _sessionTokenKey),
-      'deviceFingerprint': await _secureStorage.read(key: _deviceFingerprintKey),
-      'sessionCreated': await _secureStorage.read(key: _sessionCreatedKey),
+      'userId': await _readSafely(_userIdKey),
+      'sessionToken': await _readSafely(_sessionTokenKey),
+      'deviceFingerprint': await _readSafely(_deviceFingerprintKey),
+      'sessionCreated': await _readSafely(_sessionCreatedKey),
     };
   }
 
   static Future<bool> hasActiveSession() async {
-    final token = await _secureStorage.read(key: _sessionTokenKey);
-    final userId = await _secureStorage.read(key: _userIdKey);
+    final token = await _readSafely(_sessionTokenKey);
+    final userId = await _readSafely(_userIdKey);
     return token != null && token.isNotEmpty && userId != null && userId.isNotEmpty;
   }
 
   static Future<void> clearSession() async {
-    await _secureStorage.delete(key: _userIdKey);
-    await _secureStorage.delete(key: _sessionTokenKey);
-    await _secureStorage.delete(key: _deviceFingerprintKey);
-    await _secureStorage.delete(key: _sessionCreatedKey);
+    await _deleteSafely(_userIdKey);
+    await _deleteSafely(_sessionTokenKey);
+    await _deleteSafely(_deviceFingerprintKey);
+    await _deleteSafely(_sessionCreatedKey);
     debugPrint('🔐 🔓 Session cleared');
   }
 
   static Future<int?> getUserId() async {
-    final userId = await _secureStorage.read(key: _userIdKey);
+    final userId = await _readSafely(_userIdKey);
     if (userId == null) return null;
     return int.tryParse(userId);
   }
 
   static Future<String?> getSessionToken() async {
-    return await _secureStorage.read(key: _sessionTokenKey);
+    return await _readSafely(_sessionTokenKey);
   }
 
   // ============================================================
