@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/config/api_config.dart';
@@ -219,6 +220,17 @@ class _AuthScreenState extends State<AuthScreen> {
       else
         _passwordStrength = 'Strong password';
     });
+  }
+
+  // Opens an external legal page (terms / privacy) in the system browser.
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) await launchUrl(uri);
+    } catch (e) {
+      debugPrint('⚠️ Could not open URL $url: $e');
+    }
   }
 
   void _switchAuthMode(AuthMode mode) {
@@ -1555,6 +1567,36 @@ class _AuthScreenState extends State<AuthScreen> {
                     _isSigningUp ? null : () => _switchAuthMode(AuthMode.login),
                 child: const Text('Login here'))
           ]),
+          const SizedBox(height: 8),
+          // ✅ Consent line + legal links (privacy policy / terms)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text('By creating an account you agree to our',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                TextButton(
+                  style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 4)),
+                  onPressed: () => _openUrl(ApiConfig.termsOfService),
+                  child: const Text('Terms',
+                      style: TextStyle(fontSize: 11)),
+                ),
+                Text('and', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                TextButton(
+                  style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 4)),
+                  onPressed: () => _openUrl(ApiConfig.privacyPolicy),
+                  child: const Text('Privacy Policy',
+                      style: TextStyle(fontSize: 11)),
+                ),
+              ],
+            ),
+          ),
         ]));
   }
 

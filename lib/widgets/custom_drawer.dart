@@ -16,6 +16,7 @@ import 'package:drinks_calculator_fixed/screens/manager_approval_screen.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../widgets/badge_icon.dart';
@@ -394,6 +395,23 @@ class CustomDrawer extends StatelessWidget {
               children: [
                 _buildLogoutButton(context, authProvider, primaryColor),
                 const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () => _openUrl(ApiConfig.privacyPolicy),
+                      child: const Text('Privacy Policy',
+                          style: TextStyle(fontSize: 12)),
+                    ),
+                    Text('|', style: TextStyle(color: theme.hintColor)),
+                    TextButton(
+                      onPressed: () => _openUrl(ApiConfig.termsOfService),
+                      child: const Text('Terms',
+                          style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 Text('Version 1.1.0',
                     style: TextStyle(fontSize: 11, color: theme.hintColor)),
                 const SizedBox(height: 4),
@@ -653,6 +671,21 @@ class CustomDrawer extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // Opens an external URL (privacy policy / terms) in the system browser.
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    try {
+      final ok = await launchUrl(uri,
+          mode: LaunchMode.externalApplication);
+      if (!ok) {
+        // fallback: try in-app
+        await launchUrl(uri);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Could not open URL $url: $e');
+    }
   }
 
   void _showAboutDialog(BuildContext context) {

@@ -33,6 +33,10 @@ class ApiConfig {
   static const String health = '$baseUrl/health';
   static const String ping = '$apiBase/ping';
   static const String test = '$apiBase/test';
+
+  // Legal pages (served as static files from the backend's public/ dir)
+  static const String privacyPolicy = '$baseUrl/privacy.html';
+  static const String termsOfService = '$baseUrl/terms.html';
   // ========== SUPABASE ==========
   // Replace these with your Supabase project details
   static const String supabaseUrl = 'https://hcfhnooabhxbdfgvtqhp.supabase.co';
