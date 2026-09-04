@@ -10,6 +10,7 @@ import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
+import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 
 class SideSlider extends StatefulWidget {
   final bool isOpen;
@@ -62,6 +63,22 @@ class _SideSliderState extends State<SideSlider> {
     super.initState();
     CurrencyHelper.addListener(_refreshCurrency);
     _checkUserRole();
+    _ensureOrdersLoaded();
+  }
+
+  /// If the provider was never able to load from Supabase (e.g. the user's
+  /// company was only just approved), retry when the slider opens.
+  void _ensureOrdersLoaded() {
+    Future.microtask(() async {
+      if (!mounted) return;
+      final orderProvider =
+          Provider.of<OrderProvider>(context, listen: false);
+      if (SupabaseService.canUseSupabase &&
+          !orderProvider.isInitialized) {
+        print('🔄 SideSlider: orders not yet loaded from Supabase - retrying');
+        await orderProvider.initialize();
+      }
+    });
   }
 
   @override

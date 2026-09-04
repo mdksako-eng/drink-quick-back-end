@@ -123,6 +123,13 @@ class OrderProvider with ChangeNotifier {
   // ✅ Initialize when called (after company context is set)
   Future<void> initialize() async {
     print('🔧 OrderProvider.initialize() called');
+    // Don't latch "initialized" without a company context — otherwise the
+    // provider loads 0 local orders and never retries once the company
+    // (e.g. from an approved join) becomes available.
+    if (!SupabaseService.canUseSupabase) {
+      print('   ⏭️ No company context yet - deferring initialization');
+      return;
+    }
     if (_isInitialized) {
       print('   Already initialized, skipping');
       return;
