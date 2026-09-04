@@ -20,6 +20,7 @@ import 'package:drinks_calculator_fixed/screens/lock_screen.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/widgets/activity_detector.dart';
 import 'package:drinks_calculator_fixed/widgets/offline_indicator.dart';
+import 'package:drinks_calculator_fixed/widgets/legal_consent_gate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 // Global navigator key for showing dialogs from anywhere
@@ -929,7 +930,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
           return ActivityDetector(
             child: OfflineIndicator(
-              child: const CalculatorScreen(),
+              child: LegalConsentGate(child: const CalculatorScreen()),
             ),
           );
         } else {

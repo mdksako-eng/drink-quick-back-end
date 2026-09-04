@@ -27,6 +27,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   bool _isLoggingIn = false;
   bool _isSigningUp = false;
+  bool _agreeToTerms = false;
   bool _isSendingCode = false;
   bool _isVerifyingCode = false;
   bool _isResettingPassword = false;
@@ -1537,8 +1538,61 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ],
 
+          // ✅ Mandatory consent checkbox before account creation
+          Container(
+            margin: const EdgeInsets.only(top: 4, bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+                color: _agreeToTerms
+                    ? const Color(0xFFF0FDF4)
+                    : const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: _agreeToTerms
+                        ? const Color(0xFF86EFAC)
+                        : const Color(0xFFFDE68A))),
+            child: CheckboxListTile(
+              value: _agreeToTerms,
+              onChanged: _isSigningUp
+                  ? null
+                  : (v) => setState(() => _agreeToTerms = v ?? false),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text('I agree to the',
+                      style: TextStyle(fontSize: 12)),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 3)),
+                    onPressed: () => _openUrl(ApiConfig.termsOfService),
+                    child: const Text('Terms of Service',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                  const Text('and',
+                      style: TextStyle(fontSize: 12)),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 3)),
+                    onPressed: () => _openUrl(ApiConfig.privacyPolicy),
+                    child: const Text('Privacy Policy',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          ),
           ElevatedButton(
-              onPressed: _isSigningUp ? null : _handleSignup,
+              onPressed:
+                  (_isSigningUp || !_agreeToTerms) ? null : _handleSignup,
               style: ElevatedButton.styleFrom(
                   backgroundColor: _hasInternetConnection
                       ? const Color(0xFF667EEA)
