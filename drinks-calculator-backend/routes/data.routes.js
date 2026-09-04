@@ -27,8 +27,11 @@ function stripSecrets(company) {
 // Columns clients may write, per table (whitelist — column names are
 // interpolated into SQL, so nothing outside these lists is accepted).
 const WRITABLE = {
+  // NOTE: current_stock is intentionally NOT writable on drinks —
+  // inventory.quantity is the single source of truth for stock.
+  // GET /drinks derives current_stock from the inventory table via JOIN.
   drinks: ['id', 'name', 'price', 'category', 'image_url', 'company_id', 'created_by',
-    'is_active', 'current_stock', 'minimum_level', 'purchase_price', 'unit', 'created_at', 'updated_at'],
+    'is_active', 'minimum_level', 'purchase_price', 'unit', 'created_at', 'updated_at'],
   orders: ['id', 'company_id', 'items', 'total_amount', 'amount_paid', 'balance',
     'receipt_number', 'date', 'is_active', 'customer_name', 'created_by', 'created_at'],
   inventory: ['id', 'company_id', 'drink_id', 'drink_name', 'quantity', 'min_stock_level',
@@ -98,8 +101,15 @@ router.get('/drinks', async (req, res) => {
   try {
     const companyId = resolveCompanyId(req, res);
     if (companyId == null) return;
+    // inventory.quantity is the single source of truth for stock:
+    // derive current_stock from inventory, falling back to the legacy
+    // drinks.current_stock only for drinks with no inventory row.
     const result = await req.db.query(
-      'SELECT * FROM drinks WHERE company_id = $1 AND is_active = true ORDER BY name ASC',
+      `SELECT d.*, COALESCE(i.quantity, d.current_stock, 0) AS current_stock
+         FROM drinks d
+         LEFT JOIN inventory i ON i.drink_id = d.id AND i.company_id = d.company_id
+        WHERE d.company_id = $1 AND d.is_active = true
+        ORDER BY d.name ASC`,
       [companyId]
     );
     res.json(result.rows);
@@ -130,7 +140,9 @@ router.patch('/drinks/:id', async (req, res) => {
     if (companyId == null) return;
     const updates = pickWritable('drinks', req.body);
     const cols = Object.keys(updates);
-    if (cols.length === 0) return res.status(400).json({ message: 'No valid fields to update' });
+    // current_stock-only updates are expected (the app optimistically syncs
+    // stock on drinks) — inventory is the source of truth, so just no-op.
+    if (cols.length === 0) return res.status(204).end();
     const sql = `UPDATE drinks SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')} WHERE id = $${cols.length + 1} AND company_id = $${cols.length + 2}`;
     await req.db.query(sql, [...cols.map(c => updates[c]), req.params.id, companyId]);
     res.status(204).end();
