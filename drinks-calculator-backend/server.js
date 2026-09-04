@@ -1058,15 +1058,34 @@ app.post('/api/auth/create-staff', requireSession(pool), async (req, res) => {
 });
 
 // BLOCK USER
-app.post('/api/auth/block-user/:id', async (req, res) => {
+app.post('/api/auth/block-user/:id', requireSession(pool), async (req, res) => {
   try {
     const userId = req.params.id;
-    const userResult = await pool.query('SELECT id, username, role FROM users WHERE id = $1', [userId]);
+    const userResult = await pool.query('SELECT id, username, role, company_id FROM users WHERE id = $1', [userId]);
     if (userResult.rowCount === 0) return res.status(404).json({ status: 'error', message: 'User not found' });
     
     const user = userResult.rows[0];
     if (user.role === 'Administrator') return res.status(403).json({ status: 'error', message: 'Cannot block Administrator' });
     
+    const isAdmin = req.user?.role === 'Administrator';
+
+    // 🔒 Non-admins may only manage users inside their own company
+    if (!isAdmin && req.user?.company_id != null && user.company_id != null && user.company_id !== req.user.company_id) {
+      return res.status(403).json({ status: 'error', message: 'You can only manage users in your own company' });
+    }
+
+    // 🔒 Only the company owner or an Administrator can block another Manager
+    if (user.role === 'Manager' && !isAdmin) {
+      let isOwner = false;
+      try {
+        const ownRow = await pool.query('SELECT owner_id FROM companies WHERE id = $1', [user.company_id]);
+        isOwner = ownRow.rows.length > 0 && ownRow.rows[0].owner_id === req.user?.id;
+      } catch (e) { /* owner column may not exist yet */ }
+      if (!isOwner) {
+        return res.status(403).json({ status: 'error', message: 'Only the company owner can block another manager' });
+      }
+    }
+
     // 🔐 Company owners cannot be blocked by other managers
     if (req.user?.company_id) {
       try {
@@ -1089,11 +1108,31 @@ app.post('/api/auth/block-user/:id', async (req, res) => {
 });
 
 // UNBLOCK USER
-app.post('/api/auth/unblock-user/:id', async (req, res) => {
+app.post('/api/auth/unblock-user/:id', requireSession(pool), async (req, res) => {
   try {
     const userId = req.params.id;
-    const userResult = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
+    const userResult = await pool.query('SELECT id, company_id, role FROM users WHERE id = $1', [userId]);
     if (userResult.rowCount === 0) return res.status(404).json({ status: 'error', message: 'User not found' });
+
+    const user = userResult.rows[0];
+    const isAdmin = req.user?.role === 'Administrator';
+
+    // 🔒 Non-admins may only manage users inside their own company
+    if (!isAdmin && req.user?.company_id != null && user.company_id != null && user.company_id !== req.user.company_id) {
+      return res.status(403).json({ status: 'error', message: 'You can only manage users in your own company' });
+    }
+
+    // 🔒 Only the company owner or an Administrator can unblock another Manager
+    if (user.role === 'Manager' && !isAdmin) {
+      let isOwner = false;
+      try {
+        const ownRow = await pool.query('SELECT owner_id FROM companies WHERE id = $1', [user.company_id]);
+        isOwner = ownRow.rows.length > 0 && ownRow.rows[0].owner_id === req.user?.id;
+      } catch (e) { /* owner column may not exist yet */ }
+      if (!isOwner) {
+        return res.status(403).json({ status: 'error', message: 'Only the company owner can unblock another manager' });
+      }
+    }
     
     const result = await pool.query(
       'UPDATE users SET is_active = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, username, email, role, is_active',
