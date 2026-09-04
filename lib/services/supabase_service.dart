@@ -369,17 +369,32 @@ class SupabaseService {
         print('✅ Found ${data.length} orders in Supabase');
 
         return data
-            .map((order) => {
-                  'id': order['id'],
-                  'items': jsonDecode(order['items'] as String),
-                  'totalAmount': order['total_amount'],
-                  'amountPaid': order['amount_paid'],
-                  'balance': order['balance'],
-                  'receiptNumber': order['receipt_number'],
-                  'date': order['date'],
-                  'isActive': order['is_active'],
-                  'customerName': order['customer_name'],
-                })
+            .map((order) {
+              // `items` may be stored as a JSON string OR as an already-parsed
+              // JSON array (jsonb column) depending on the backend response.
+              final itemsRaw = order['items'];
+              dynamic items;
+              if (itemsRaw is String) {
+                try {
+                  items = jsonDecode(itemsRaw);
+                } catch (_) {
+                  items = [];
+                }
+              } else {
+                items = itemsRaw ?? [];
+              }
+              return {
+                'id': order['id'],
+                'items': items,
+                'totalAmount': order['total_amount'],
+                'amountPaid': order['amount_paid'],
+                'balance': order['balance'],
+                'receiptNumber': order['receipt_number'],
+                'date': order['date'],
+                'isActive': order['is_active'],
+                'customerName': order['customer_name'],
+              };
+            })
             .toList();
       } else {
         print('❌ Failed to get orders: ${response.statusCode}');
