@@ -77,8 +77,10 @@ class _ManagerPanelState extends State<ManagerPanel>
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final userId = authProvider.user?.id ?? '';
       final token = await SecureStorageService.getSessionToken();
-      final response = await http.get(
-        Uri.parse('${ApiConfig.usersUrl}?role=Staff'),
+        // Fetch ALL company users (Managers + Staff). The backend filters by
+        // company for Managers; Administrators get every user.
+        final response = await http.get(
+          Uri.parse(ApiConfig.usersUrl),
         headers: {
           'Content-Type': 'application/json',
           'user-id': userId,
@@ -381,7 +383,10 @@ class _ManagerPanelState extends State<ManagerPanel>
     final authProvider = Provider.of<AuthProvider>(context);
     final isManager = authProvider.user?.role.toLowerCase() == 'manager';
 
-    if (!isManager) {
+    final role = authProvider.user?.role.toLowerCase() ?? '';
+    final isAdmin = role == 'administrator' || role == 'admin';
+
+    if (!isManager && !isAdmin) {
       return Scaffold(
         appBar: AppBar(
             title: const Text('Access Denied'), backgroundColor: Colors.red),
@@ -573,9 +578,49 @@ class _ManagerPanelState extends State<ManagerPanel>
                   style: const TextStyle(
                       color: Colors.white, fontWeight: FontWeight.bold)),
             ),
-            title: Text(s['username'] ?? 'Unknown',
-                style: const TextStyle(fontWeight: FontWeight.w500)),
-            subtitle: Text(s['email'] ?? ''),
+            title: Row(children: [
+              Expanded(
+                  child: Text(s['username'] ?? 'Unknown',
+                      style: const TextStyle(fontWeight: FontWeight.w500))),
+              if (s['id'].toString() ==
+                  Provider.of<AuthProvider>(context, listen: false)
+                      .user
+                      ?.id
+                      .toString())
+                const Padding(
+                    padding: EdgeInsets.only(left: 6),
+                    child: Text('You',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.blue,
+                            fontWeight: FontWeight.bold))),
+            ]),
+            subtitle: Row(children: [
+              Flexible(
+                  child: Text(s['email'] ?? '',
+                      overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: (s['role']?.toString().toLowerCase() == 'manager')
+                      ? Colors.orange.withOpacity(0.15)
+                      : Colors.blueGrey.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  s['role'] ?? 'Staff',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: (s['role']?.toString().toLowerCase() == 'manager')
+                        ? Colors.orange.shade800
+                        : Colors.blueGrey.shade700,
+                  ),
+                ),
+              ),
+            ]),
             trailing: PopupMenuButton<String>(
               onSelected: (action) {
                 if (action == 'block') _blockStaff(s);
