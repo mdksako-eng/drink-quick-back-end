@@ -2005,34 +2005,55 @@ app.post('/api/ai/chat', async (req, res) => {
       { role: 'user', content: prompt },
     ];
 
-    const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        messages,
-        temperature: 0.7,
-        max_tokens: 500,
-      }),
-    });
+    const GROQ_MODELS = [
+      'llama-3.3-70b-versatile',
+      'llama-3.1-70b-versatile',
+      'llama-3.1-8b-instant',
+      'llama3-8b-8192',
+    ];
 
-    const data = await groqResponse.json();
+    // Try candidate models in order; some accounts/plans may lack newer ones.
+    let lastGroqError = null;
+    for (const model of GROQ_MODELS) {
+      try {
+        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: 0.7,
+            max_tokens: 500,
+          }),
+        });
 
-    if (groqResponse.ok) {
-      const content = (data.choices && data.choices[0] && data.choices[0].message
-        ? data.choices[0].message.content
-        : '').trim() || 'No response';
-      return res.json({ success: true, content });
+        const data = await groqResponse.json();
+
+        if (groqResponse.ok) {
+          const content = (data.choices && data.choices[0] && data.choices[0].message
+            ? data.choices[0].message.content
+            : '').trim() || 'No response';
+          return res.json({ success: true, content, model });
+        }
+
+        lastGroqError = { status: groqResponse.status, data };
+        // If the model is unknown/unavailable, try the next candidate; otherwise stop.
+        if (!String(data?.error?.message || '').toLowerCase().includes('does not exist')) {
+          break;
+        }
+      } catch (fetchErr) {
+        lastGroqError = { status: 0, data: { error: { message: fetchErr.message } } };
+      }
     }
 
-    console.error('❌ Groq API error:', groqResponse.status, JSON.stringify(data).slice(0, 300));
+    console.error('❌ Groq API error:', JSON.stringify(lastGroqError).slice(0, 400));
     return res.status(502).json({
       success: false,
-      error: data && data.error && data.error.message
-        ? data.error.message
+      error: lastGroqError && lastGroqError.data && lastGroqError.data.error
+        ? lastGroqError.data.error.message
         : 'AI request failed',
     });
   } catch (error) {
