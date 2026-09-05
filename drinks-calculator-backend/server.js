@@ -2029,8 +2029,10 @@ app.post('/api/ai/chat', async (req, res) => {
     const candidates = PREFERRED.filter((id) => availableModels.includes(id));
     const models = candidates.length > 0
       ? candidates
-      : (availableModels.filter((id) =>
-            /^(llama|llama-3|llama-3\.|meta-|open-mixtral)/i.test(id)));
+      : availableModels.filter((id) =>
+            !/embed|classif|whisper|tts|guard|rerank|vision|audio|speech|distil/i.test(id) &&
+            (/^(llama|meta-llama|open-mixtral|mixtral)/i.test(id) ||
+             /instruct|versatile|8b|70b/i.test(id)));
 
     if (models.length === 0) {
       console.error('❌ Groq: no usable chat model available for this key.');
@@ -2041,21 +2043,47 @@ app.post('/api/ai/chat', async (req, res) => {
     let lastGroqError = null;
     for (const model of models) {
       try {
-        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        // Some models require a single user message (classification style).
+        function buildPayload(msgs) {
+          return {
+            model,
+            messages: msgs,
+            temperature: 0.7,
+            max_tokens: 500,
+          };
+        }
+        let groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            model,
-            messages,
-            temperature: 0.7,
-            max_tokens: 500,
-          }),
+          body: JSON.stringify(buildPayload(messages)),
         });
 
-        const data = await groqResponse.json();
+        let data = await groqResponse.json();
+
+        // If the model insists on a single user message, merge system + history + prompt.
+        const needMerge = !groqResponse.ok &&
+          /single user message|text classification/i.test(String(data?.error?.message || ''));
+        if (needMerge) {
+          const system = messages.find((m) => m.role === 'system');
+          const userParts = messages.filter((m) => m.role !== 'system')
+            .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`);
+          const mergedText = [
+            system ? `System: ${system.content}` : '',
+            ...userParts,
+          ].filter(Boolean).join('\n');
+          groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(buildPayload([{ role: 'user', content: mergedText }])),
+          });
+          data = await groqResponse.json();
+        }
 
         if (groqResponse.ok) {
           const content = (data.choices && data.choices[0] && data.choices[0].message
