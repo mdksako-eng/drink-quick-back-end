@@ -18,6 +18,8 @@ class NotificationsScreen extends StatelessWidget {
         return Colors.blue;
       case NotificationType.reminder:
         return Colors.purple;
+      case NotificationType.system:
+        return Colors.redAccent;
     }
   }
 
@@ -31,6 +33,8 @@ class NotificationsScreen extends StatelessWidget {
         return Icons.payments_outlined;
       case NotificationType.reminder:
         return Icons.alarm;
+      case NotificationType.system:
+        return Icons.error_outline;
     }
   }
 
