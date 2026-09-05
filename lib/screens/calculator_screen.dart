@@ -27,6 +27,7 @@ import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/payment_service.dart';
 import 'package:drinks_calculator_fixed/screens/notifications_screen.dart';
+import '../main.dart' show ThemeProvider;
 
 enum PaymentMethod {
   cash,
@@ -198,8 +199,112 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   // initialized, which would block the real Supabase load later (e.g. for
   // customer/temp logins). Payment/currency refresh is deferred to the next
   // frame to avoid "setState() called during build" from notifyListeners().
+  // ✅ Pull cloud settings (theme, company details, currency, notifications)
+  // into local prefs at startup/login, so they apply WITHOUT the user having
+  // to open the Settings screen first. Company record is authoritative for
+  // company name/email/phone/address (invoice + drawer data).
+  Future<void> _syncCloudSettingsAtStartup() async {
+    try {
+      if (!SupabaseService.canUseSupabase) {
+        debugPrint('⏭️ Cloud settings sync skipped (no company context)');
+        return;
+      }
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final user = authProvider.currentUser;
+      if (user == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      bool changed = false;
+
+      // 1️⃣ Cloud user settings (saved by the Settings screen)
+      final settings = await SupabaseService.getSettings(user.id.toString());
+      if (settings != null) {
+        if (settings['theme_mode'] != null) {
+          await prefs.setInt(
+              'theme_mode', (settings['theme_mode'] as num).toInt());
+          changed = true;
+        }
+        if (settings['primary_color'] != null &&
+            settings['primary_color'].toString().isNotEmpty) {
+          await prefs.setString(
+              'primary_color', settings['primary_color'].toString());
+          changed = true;
+        }
+        if (settings['show_notifications'] != null) {
+          await prefs.setBool('show_notifications',
+              settings['show_notifications'] == true);
+          changed = true;
+        }
+        // Only overwrite company fields when the cloud actually has a value
+        void syncStr(String key, dynamic v) {
+          if (v != null && v.toString().trim().isNotEmpty) {
+            prefs.setString(key, v.toString());
+            changed = true;
+          }
+        }
+
+        syncStr('company_name', settings['company_name']);
+        syncStr('company_email', settings['company_email']);
+        syncStr('company_phone', settings['company_phone']);
+        syncStr('company_address', settings['company_address']);
+      }
+
+      // 2️⃣ Company record (authoritative for business details on invoices)
+      final companyId = SupabaseService.currentCompanyId ?? user.companyId;
+      if (companyId != null) {
+        final company = await SupabaseService.getCompany(companyId);
+        if (company != null) {
+          final name = company['name']?.toString() ?? '';
+          if (name.trim().isNotEmpty) {
+            await prefs.setString('company_name', name);
+            changed = true;
+          }
+          final email = company['email']?.toString() ?? '';
+          if (email.trim().isNotEmpty) {
+            await prefs.setString('company_email', email);
+            changed = true;
+          }
+          final phone = company['phone']?.toString() ?? '';
+          if (phone.trim().isNotEmpty) {
+            await prefs.setString('company_phone', phone);
+            changed = true;
+          }
+          final address = company['address']?.toString() ?? '';
+          if (address.trim().isNotEmpty) {
+            await prefs.setString('company_address', address);
+            changed = true;
+          }
+        }
+      }
+
+      debugPrint(
+          '✅ Cloud settings synced at startup${changed ? " (applied)" : " (no changes)"}');
+
+      // 3️⃣ Re-apply theme from the updated prefs + refresh currency
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        try {
+          // ignore: invalid_use_of_protected_member
+          Provider.of<ThemeProvider>(context, listen: false).loadTheme();
+          debugPrint('🎨 Theme re-applied from cloud settings');
+        } catch (e) {
+          debugPrint('⚠️ Theme re-apply skipped: $e');
+        }
+        PaymentHelper.refresh();
+        CurrencyHelper.refresh();
+      });
+    } catch (e) {
+      debugPrint('❌ Cloud settings sync error: $e');
+    }
+  }
+
+  // ✅ Ensure orders + settings are loaded as soon as login is confirmed.
   Future<void> _initOrdersAndSettingsAfterLogin() async {
     try {
+      // Sync cloud settings (theme, company details) BEFORE refreshing helpers
+      await _syncCloudSettingsAtStartup();
+
       if (SupabaseService.canUseSupabase) {
         final orderProvider =
             Provider.of<OrderProvider>(context, listen: false);
