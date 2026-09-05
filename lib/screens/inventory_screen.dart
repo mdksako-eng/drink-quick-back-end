@@ -798,7 +798,15 @@ class _InventorySkeletonListState extends State<_InventorySkeletonList>
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
-  )..repeat(reverse: true);
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // Start the shimmer AFTER the first build to avoid
+    // "setState() or markNeedsBuild() called during build".
+    _controller.repeat(reverse: true);
+  }
 
   @override
   void dispose() {
@@ -832,16 +840,24 @@ class _InventorySkeletonListState extends State<_InventorySkeletonList>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(height: 16, width: 140, color: Colors.grey[300],
-                          decoration: BoxDecoration(color: Colors.grey[300],
+                      Container(
+                          height: 16,
+                          width: 140,
+                          decoration: BoxDecoration(
+                              color: Colors.grey[300],
                               borderRadius: BorderRadius.circular(6))),
                       const SizedBox(height: 10),
-                      Container(height: 12, color: Colors.grey[200],
-                          decoration: BoxDecoration(color: Colors.grey[200],
+                      Container(
+                          height: 12,
+                          decoration: BoxDecoration(
+                              color: Colors.grey[200],
                               borderRadius: BorderRadius.circular(6))),
                       const SizedBox(height: 8),
-                      Container(width: 90, height: 12, color: Colors.grey[200],
-                          decoration: BoxDecoration(color: Colors.grey[200],
+                      Container(
+                          width: 90,
+                          height: 12,
+                          decoration: BoxDecoration(
+                              color: Colors.grey[200],
                               borderRadius: BorderRadius.circular(6))),
                     ],
                   ),
