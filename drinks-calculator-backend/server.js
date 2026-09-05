@@ -2022,17 +2022,16 @@ app.post('/api/ai/chat', async (req, res) => {
       if (modelsRes.ok) {
         const modelsData = await modelsRes.json();
         availableModels = (modelsData.data || []).map((m) => m.id);
+        console.error('GROQ available models:', JSON.stringify(availableModels));
       }
     } catch (_) {}
 
     // Prefer a known-good model that the key has, else any compatible chat model.
     const candidates = PREFERRED.filter((id) => availableModels.includes(id));
+    const DENY = /embed|classif|whisper|tts|guard|rerank|vision|audio|speech|distil|.gguf/i;
     const models = candidates.length > 0
       ? candidates
-      : availableModels.filter((id) =>
-            !/embed|classif|whisper|tts|guard|rerank|vision|audio|speech|distil/i.test(id) &&
-            (/^(llama|meta-llama|open-mixtral|mixtral)/i.test(id) ||
-             /instruct|versatile|8b|70b/i.test(id)));
+      : availableModels.filter((id) => !DENY.test(id));
 
     if (models.length === 0) {
       console.error('❌ Groq: no usable chat model available for this key.');
