@@ -6,6 +6,7 @@
 // ============================================================
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { getSessionUser } = require('../middleware/sessionAuth');
 
 const MANAGER_ROLES = ['Manager', 'Administrator', 'Admin'];
