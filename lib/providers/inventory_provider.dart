@@ -307,7 +307,22 @@ class InventoryProvider with ChangeNotifier {
       _inventoryItems.add(updatedItem);
     }
 
-    // ✅ Sync to DrinkProvider
+    // ✅ Record transaction WITH companyId
+    final transaction = InventoryTransaction(
+      id: 'txn_${DateTime.now().millisecondsSinceEpoch}',
+      drinkId: drinkId,
+      drinkName: drinkName,
+      quantity: quantity,
+      type: 'in',
+      date: DateTime.now(),
+      reason: reason,
+      performedBy: performedBy,
+      companyId: SupabaseService.currentCompanyId,
+    );
+
+    _transactions.add(transaction);
+
+    // ✅ Update DrinkProvider stock locally; network syncs in background
     try {
       if (_drinkProvider != null) {
         final drink = _drinkProvider!.customDrinks.firstWhere(
@@ -323,52 +338,41 @@ class InventoryProvider with ChangeNotifier {
           final updatedDrink = drink.copyWith(
             currentStock: (drink.currentStock + quantity).clamp(0, 999999),
           );
-          await _drinkProvider!.updateDrink(drinkId, updatedDrink);
-          debugPrint(
-              '✅ DrinkProvider updated: $drinkName stock = ${updatedDrink.currentStock}');
+          // Local feed reflects immediately; server sync runs async.
+          // ignore: unawaited_futures
+          _syncStockToSupabase(updatedDrink, updatedItem, transaction);
         }
       }
     } catch (e) {
       debugPrint('⚠️ Could not update DrinkProvider: $e');
     }
 
-    // Record transaction WITH companyId
-    final transaction = InventoryTransaction(
-      id: 'txn_${DateTime.now().millisecondsSinceEpoch}',
-      drinkId: drinkId,
-      drinkName: drinkName,
-      quantity: quantity,
-      type: 'in',
-      date: DateTime.now(),
-      reason: reason,
-      performedBy: performedBy,
-      companyId: SupabaseService.currentCompanyId,
-    );
-
-    _transactions.add(transaction);
-
     await _saveToLocalStorage();
     notifyListeners();
+  }
 
-    // Sync to Supabase
-    if (SupabaseService.canUseSupabase) {
-      debugPrint('📤 Syncing to Supabase...');
-      try {
-        final upsertResult =
-            await SupabaseService.upsertInventory(updatedItem.toJson());
-        final transactionResult =
-            await SupabaseService.saveTransaction(transaction.toJson());
-
-        if (upsertResult && transactionResult) {
-          debugPrint('✅ Stock added and synced: $drinkName +$quantity');
-        } else {
-          debugPrint('❌ Failed to sync to Supabase');
-          NotificationService().showSyncFailed(action: 'Stock update', detail: drinkName);
-        }
-      } catch (e) {
-        debugPrint('❌ Supabase sync error: $e');
-        NotificationService().showSyncFailed(action: 'Stock update', detail: drinkName);
+  /// ⚡ Background sync so add-stock is instant (no UI blocking).
+  Future<void> _syncStockToSupabase(
+      Drink updatedDrink, InventoryItem updatedItem, InventoryTransaction transaction) async {
+    if (!SupabaseService.canUseSupabase) return;
+    debugPrint('📤 Syncing to Supabase...');
+    try {
+      if (_drinkProvider != null) {
+        await _drinkProvider!.updateDrink(updatedDrink.id, updatedDrink);
       }
+      final upsertResult =
+          await SupabaseService.upsertInventory(updatedItem.toJson());
+      final transactionResult =
+          await SupabaseService.saveTransaction(transaction.toJson());
+      if (upsertResult && transactionResult) {
+        debugPrint('✅ Stock added and synced: ${updatedItem.drinkName} +${updatedItem.quantity}');
+      } else {
+        debugPrint('❌ Failed to sync to Supabase');
+        NotificationService().showSyncFailed(action: 'Stock update', detail: updatedItem.drinkName);
+      }
+    } catch (e) {
+      debugPrint('❌ Supabase sync error: $e');
+      NotificationService().showSyncFailed(action: 'Stock update', detail: updatedItem.drinkName);
     }
   }
 

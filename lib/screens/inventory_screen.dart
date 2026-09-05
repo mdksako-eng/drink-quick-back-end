@@ -155,8 +155,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 // Get providers
                 final inventoryProvider =
                     Provider.of<InventoryProvider>(this.context, listen: false);
-                final drinkProvider =
-                    Provider.of<DrinkProvider>(this.context, listen: false);
 
                 // Add stock to inventory (provider handles everything)
                 await inventoryProvider.addStock(
@@ -186,15 +184,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   );
                 }
 
-                // Sync to drink management
-                final drink = drinkProvider.customDrinks
-                    .where((d) => d.id == item.drinkId)
-                    .firstOrNull;
-                if (drink != null) {
-                  final newStock = drink.currentStock + quantity;
-                  await drinkProvider.updateDrink(
-                      item.drinkId, drink.copyWith(currentStock: newStock));
-                }
                 if (mounted) {
                   Navigator.pop(context);
                   Helpers.showToast(
@@ -497,8 +486,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
               ),
           ],
         ),
-        body: inventoryProvider.isLoading
-            ? const Center(child: CircularProgressIndicator())
+        body: inventoryProvider.isLoading && inventoryProvider.inventoryItems.isEmpty
+            ? const _InventorySkeletonList()
             : Column(
                 children: [
                   // Stats Bar
@@ -788,6 +777,77 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     Text('Set Min Level')
                   ])),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// Skeleton placeholder shown while inventory loads (shimmer-style).
+class _InventorySkeletonList extends StatefulWidget {
+  const _InventorySkeletonList();
+
+  @override
+  State<_InventorySkeletonList> createState() => _InventorySkeletonListState();
+}
+
+class _InventorySkeletonListState extends State<_InventorySkeletonList>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.4, end: 1.0).animate(_controller),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: 8,
+        itemBuilder: (context, index) => Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(height: 16, width: 140, color: Colors.grey[300],
+                          decoration: BoxDecoration(color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(6))),
+                      const SizedBox(height: 10),
+                      Container(height: 12, color: Colors.grey[200],
+                          decoration: BoxDecoration(color: Colors.grey[200],
+                              borderRadius: BorderRadius.circular(6))),
+                      const SizedBox(height: 8),
+                      Container(width: 90, height: 12, color: Colors.grey[200],
+                          decoration: BoxDecoration(color: Colors.grey[200],
+                              borderRadius: BorderRadius.circular(6))),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
