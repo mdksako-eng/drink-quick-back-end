@@ -2005,15 +2005,41 @@ app.post('/api/ai/chat', async (req, res) => {
       { role: 'user', content: prompt },
     ];
 
-    const GROQ_MODELS = [
+    const PREFERRED = [
       'llama3-8b-8192',
       'llama-3.3-70b-versatile',
       'llama-3.1-8b-instant',
+      'llama-3.2-3b-preview',
+      'llama3-70b-8192',
     ];
+
+    // 🎯 Discover which Groq models this key can actually access.
+    let availableModels = [];
+    try {
+      const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+      });
+      if (modelsRes.ok) {
+        const modelsData = await modelsRes.json();
+        availableModels = (modelsData.data || []).map((m) => m.id);
+      }
+    } catch (_) {}
+
+    // Prefer a known-good model that the key has, else any compatible chat model.
+    const candidates = PREFERRED.filter((id) => availableModels.includes(id));
+    const models = candidates.length > 0
+      ? candidates
+      : (availableModels.filter((id) =>
+            /^(llama|llama-3|llama-3\.|meta-|open-mixtral)/i.test(id)));
+
+    if (models.length === 0) {
+      console.error('❌ Groq: no usable chat model available for this key.');
+      return res.status(502).json({ success: false, error: 'AI service has no available models' });
+    }
 
     // Try candidate models in order; some accounts/plans may lack newer ones.
     let lastGroqError = null;
-    for (const model of GROQ_MODELS) {
+    for (const model of models) {
       try {
         const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
