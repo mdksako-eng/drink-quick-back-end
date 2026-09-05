@@ -2006,10 +2006,9 @@ app.post('/api/ai/chat', async (req, res) => {
     ];
 
     const GROQ_MODELS = [
-      'llama-3.3-70b-versatile',
-      'llama-3.1-70b-versatile',
-      'llama-3.1-8b-instant',
       'llama3-8b-8192',
+      'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant',
     ];
 
     // Try candidate models in order; some accounts/plans may lack newer ones.
@@ -2041,7 +2040,12 @@ app.post('/api/ai/chat', async (req, res) => {
 
         lastGroqError = { status: groqResponse.status, data };
         // If the model is unknown/unavailable, try the next candidate; otherwise stop.
-        if (!String(data?.error?.message || '').toLowerCase().includes('does not exist')) {
+        const modelErr = String(data?.error?.message || '').toLowerCase();
+        const retryable = modelErr.includes('does not exist')
+          || modelErr.includes('decommissioned')
+          || modelErr.includes('no longer support')
+          || modelErr.includes('not supported');
+        if (!retryable) {
           break;
         }
       } catch (fetchErr) {
