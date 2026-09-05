@@ -2,6 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class VoiceService {
   final stt.SpeechToText _speech = stt.SpeechToText();
@@ -9,6 +10,26 @@ class VoiceService {
   bool _isListening = false;
   bool _isInitialized = false;
   bool _ttsInitialized = false;
+
+  /// 🌐 Global voice (TTS) switch for the WHOLE app — AI replies, order
+  /// announcements, notifications, everything. Persisted per device.
+  static bool voiceEnabled = true;
+  static const String _voiceEnabledKey = 'app_voice_enabled';
+
+  static Future<void> loadVoiceEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      voiceEnabled = prefs.getBool(_voiceEnabledKey) ?? true;
+    } catch (_) {}
+  }
+
+  static Future<void> setVoiceEnabled(bool enabled) async {
+    voiceEnabled = enabled;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_voiceEnabledKey, enabled);
+    } catch (_) {}
+  }
 
   bool get isListening => _isListening;
   bool get isInitialized => _isInitialized;
@@ -108,6 +129,7 @@ class VoiceService {
 
   Future<void> speak(String text) async {
     if (text.isEmpty) return;
+    if (!voiceEnabled) return; // 🌐 Global app-wide voice switch
     if (!_ttsInitialized) {
       debugPrint('TTS not initialized, cannot speak: $text');
       return;

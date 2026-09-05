@@ -12,6 +12,7 @@ import 'package:drinks_calculator_fixed/services/tts/tts_factory.dart'
     as tts;
 import 'package:drinks_calculator_fixed/services/os_notifications/os_notifications_factory.dart'
     as osn;
+import 'package:drinks_calculator_fixed/services/voice_service.dart';
 
 class NotificationService extends ChangeNotifier {
   static final NotificationService _instance = NotificationService._internal();
@@ -138,6 +139,7 @@ class NotificationService extends ChangeNotifier {
 
   Future<void> _speak(String text) async {
     if (!_soundEnabled) return;
+    if (!VoiceService.voiceEnabled) return; // 🌐 global app-wide voice switch (AI screen toggle)
     try {
       await tts.platformSpeak(text);
     } catch (e) {

@@ -1,4 +1,5 @@
 // screens/ai_assistant_screen.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
@@ -27,7 +28,6 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
   final VoiceService _voiceService = VoiceService();
   final GroqService _groqService = GroqService();
   
-  bool _isTyping = false;
   bool _isListening = false;
   bool _isLoading = false;
   String _voiceStatus = '';
@@ -42,8 +42,52 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
   @override
   void initState() {
     super.initState();
-    _addWelcomeMessage();
-    _loadVoiceSettings();
+    _restoreState();
+    _loadVoicePreferences();
+  }
+
+  /// 🧠 Restores conversation memory + voice settings from previous sessions.
+  Future<void> _restoreState() async {
+    await VoiceService.loadVoiceEnabled();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedMessages = prefs.getString('ai_chat_messages');
+      final savedHistory = prefs.getString('ai_conversation_history');
+      if (!mounted) return;
+      setState(() {
+        // Sync the AI screen's voice toggle with the GLOBAL app voice switch.
+        _voiceFeedbackEnabled = VoiceService.voiceEnabled;
+        if (savedHistory != null && savedHistory.isNotEmpty) {
+          final list = jsonDecode(savedHistory) as List<dynamic>;
+          _conversationHistory = list
+              .map((e) => Map<String, String>.from(e as Map))
+              .toList();
+        }
+        if (savedMessages != null && savedMessages.isNotEmpty) {
+          final list = jsonDecode(savedMessages) as List<dynamic>;
+          _messages.addAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        }
+        if (_messages.isEmpty) _addWelcomeMessage();
+      });
+    } catch (e) {
+      _addWelcomeMessage();
+    }
+    _scrollToBottom();
+  }
+
+  /// 💾 Persists chat + memory so the AI remembers across app restarts.
+  Future<void> _persistMemory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final chatForStorage = _messages
+          .map((m) => {'text': m['text'], 'isUser': m['isUser']})
+          .toList();
+      await prefs.setString('ai_chat_messages', jsonEncode(chatForStorage));
+      await prefs.setString(
+          'ai_conversation_history', jsonEncode(_conversationHistory));
+    } catch (e) {
+      debugPrint('⚠️ AI memory persist failed: $e');
+    }
   }
 
   @override
@@ -295,7 +339,6 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     setState(() {
       _messages.add({'text': message, 'isUser': true});
       _messageController.clear();
-      _isTyping = true;
     });
     _scrollToBottom();
     _conversationHistory.add({'role': 'user', 'content': message});
@@ -308,9 +351,9 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     final response = await _getAIResponseAsync(userMessage);
     setState(() {
       _messages.add({'text': response, 'isUser': false});
-      _isTyping = false;
       _isLoading = false;
     });
+    _persistMemory(); // 💾 remember across restarts
     _scrollToBottom();
   }
 
@@ -410,9 +453,12 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     }).join('\n');
     
     String conversationContext = '';
-    if (_conversationHistory.length > 3) {
-      final lastFew = _conversationHistory.sublist(_conversationHistory.length - 4);
-      conversationContext = '\nPrevious: ${lastFew.map((m) => '${m['role']}: ${m['content']}').join(' | ')}';
+    if (_conversationHistory.isNotEmpty) {
+      // 🧠 Full recent memory (last 10 turns) so the AI remembers the conversation
+      final recent = _conversationHistory.length > 10
+          ? _conversationHistory.sublist(_conversationHistory.length - 10)
+          : _conversationHistory;
+      conversationContext = '\nCONVERSATION MEMORY (oldest first):\n${recent.map((m) => '${m['role']}: ${m['content']}').join('\n')}';
     }
     
     String orderContext = '';
@@ -435,7 +481,6 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
 
     try {
       final response = await _groqService.getResponse(prompt);
-      _conversationHistory.add({'role': 'user', 'content': message});
       _conversationHistory.add({'role': 'assistant', 'content': response});
       if (_conversationHistory.length > 20) {
         _conversationHistory = _conversationHistory.sublist(_conversationHistory.length - 20);
@@ -451,10 +496,12 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
     _sendMessage();
   }
 
-  Future<void> _loadVoiceSettings() async {
+  /// Loads speech rate / language / gender preferences (voice on/off is
+  /// handled globally by `VoiceService.loadVoiceEnabled` in _restoreState).
+  Future<void> _loadVoicePreferences() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
-      _voiceFeedbackEnabled = prefs.getBool('voice_feedback') ?? true;
       _speechRate = prefs.getDouble('speech_rate') ?? 0.5;
       _speechLanguage = prefs.getString('speech_language') ?? 'en-US';
       _voiceGender = prefs.getString('voice_gender') ?? 'female';
@@ -464,6 +511,7 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
   Future<void> _saveVoiceSettings() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('voice_feedback', _voiceFeedbackEnabled);
+    await VoiceService.setVoiceEnabled(_voiceFeedbackEnabled); // 🌐 global key
     await prefs.setDouble('speech_rate', _speechRate);
     await prefs.setString('speech_language', _speechLanguage);
     await prefs.setString('voice_gender', _voiceGender);
@@ -482,6 +530,7 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
       _pendingOrder.clear();
       _addWelcomeMessage();
     });
+    _persistMemory(); // 💾 clear stored memory too
     _showToast('Chat cleared');
   }
 
@@ -532,7 +581,11 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
                 value: _voiceFeedbackEnabled,
                 onChanged: (value) {
                   setDialogState(() {});
-                  setState(() => _voiceFeedbackEnabled = value);
+                  setState(() {
+        _voiceFeedbackEnabled = value;
+        VoiceService.setVoiceEnabled(value); // 🌐 toggles voice for the WHOLE app
+        if (!value) _voiceService.stopSpeaking(); // cut off any speech mid-sentence
+      });
                 },
               ),
               const Divider(),

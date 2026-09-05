@@ -18,6 +18,7 @@ import 'package:drinks_calculator_fixed/utils/payment_helper.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
 import 'package:drinks_calculator_fixed/screens/lock_screen.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
+import 'package:drinks_calculator_fixed/services/voice_service.dart';
 import 'package:drinks_calculator_fixed/widgets/activity_detector.dart';
 import 'package:drinks_calculator_fixed/widgets/offline_indicator.dart';
 import 'package:drinks_calculator_fixed/widgets/legal_consent_gate.dart';
@@ -161,6 +162,7 @@ Future<void> main() async {
   }
   await StorageService.init();
   await CurrencyHelper.initialize();
+  await VoiceService.loadVoiceEnabled(); // 🌐 global voice switch (persisted)
   await NotificationService().initialize();
   await _requestStoragePermission();
 
