@@ -237,6 +237,7 @@ router.post('/inventory', async (req, res) => {
     const companyId = resolveCompanyId(req, res);
     if (companyId == null) return;
     const body = pickWritable('inventory', { ...req.body, company_id: companyId });
+    if (!body.id) body.id = crypto.randomUUID(); // id is a NOT NULL text PK with no DB default
     const cols = Object.keys(body);
     const sql = `INSERT INTO inventory (${cols.join(', ')}) VALUES (${cols.map((c, i) => `$${i + 1}`).join(', ')}) RETURNING *`;
     const result = await req.db.query(sql, cols.map(c => body[c]));
@@ -270,6 +271,7 @@ router.post('/inventory/upsert', async (req, res) => {
     if (companyId == null) return;
     const body = pickWritable('inventory', { ...req.body, company_id: companyId });
     if (!body.drink_id) return res.status(400).json({ message: 'drink_id is required' });
+    if (!body.id) body.id = crypto.randomUUID(); // id is a NOT NULL text PK with no DB default
     const cols = Object.keys(body);
     const updates = cols.filter(c => c !== 'id' && c !== 'created_at');
     const sql = `INSERT INTO inventory (${cols.join(', ')}) VALUES (${cols.map((c, i) => `$${i + 1}`).join(', ')})
