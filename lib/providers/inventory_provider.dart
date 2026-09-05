@@ -5,6 +5,8 @@ import 'dart:convert';
 import '../models/inventory_model.dart';
 import '../services/inventory_service.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
+import '../services/notification_service.dart';
+
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import '../models/drink_model.dart';
 
@@ -235,9 +237,11 @@ class InventoryProvider with ChangeNotifier {
           debugPrint('✅ Inventory synced to Supabase: ${item.drinkName}');
         } else {
           debugPrint('❌ Failed to sync inventory to Supabase');
+          NotificationService().showSyncFailed(action: 'Inventory update', detail: item.drinkName);
         }
       } catch (e) {
         debugPrint('❌ Exception syncing to Supabase: $e');
+        NotificationService().showSyncFailed(action: 'Inventory update', detail: item.drinkName);
       }
     } else {
       debugPrint('⚠️ Cannot sync - Supabase not available');
@@ -359,9 +363,11 @@ class InventoryProvider with ChangeNotifier {
           debugPrint('✅ Stock added and synced: $drinkName +$quantity');
         } else {
           debugPrint('❌ Failed to sync to Supabase');
+          NotificationService().showSyncFailed(action: 'Stock update', detail: drinkName);
         }
       } catch (e) {
         debugPrint('❌ Supabase sync error: $e');
+        NotificationService().showSyncFailed(action: 'Stock update', detail: drinkName);
       }
     }
   }
@@ -461,11 +467,17 @@ class InventoryProvider with ChangeNotifier {
 
     if (SupabaseService.canUseSupabase) {
       try {
-        await SupabaseService.upsertInventory(_inventoryItems[index].toJson());
-        await SupabaseService.saveTransaction(transaction.toJson());
-        debugPrint('✅ Stock removed and synced: $drinkName -$quantity');
+        final upsertOk = await SupabaseService.upsertInventory(_inventoryItems[index].toJson());
+        final txnOk = await SupabaseService.saveTransaction(transaction.toJson());
+        if (upsertOk && txnOk) {
+          debugPrint('✅ Stock removed and synced: $drinkName -$quantity');
+        } else {
+          debugPrint('❌ Failed to sync stock removal to Supabase');
+          NotificationService().showSyncFailed(action: 'Stock removal', detail: drinkName);
+        }
       } catch (e) {
         debugPrint('❌ Supabase sync error: $e');
+        NotificationService().showSyncFailed(action: 'Stock removal', detail: drinkName);
       }
     }
 

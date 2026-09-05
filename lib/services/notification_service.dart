@@ -125,6 +125,17 @@ class NotificationService extends ChangeNotifier {
     osn.osShowNotification('payment_failed', '❌ Payment Failed', '$paymentMethod: $reason');
   }
 
+  /// Surface server-sync failures to the user so they don't assume data saved.
+  void showSyncFailed({required String action, required String detail}) {
+    _addNotification(AppNotification(
+      title: '⚠️ Sync Failed',
+      message: '$action failed to reach the server. Data is saved on this device only and will not appear for other staff: $detail',
+      type: NotificationType.system,
+    ));
+    _speak('Warning: sync failed. Data saved locally only');
+    osn.osShowNotification('sync_failed', '⚠️ Sync Failed', '$action failed — saved on this device only: $detail');
+  }
+
   Future<void> _speak(String text) async {
     if (!_soundEnabled) return;
     try {
@@ -184,4 +195,4 @@ class AppNotification {
       );
 }
 
-enum NotificationType { order, stock, payment, reminder }
+enum NotificationType { order, stock, payment, reminder, system }
