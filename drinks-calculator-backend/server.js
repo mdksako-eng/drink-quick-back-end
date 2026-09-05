@@ -2028,7 +2028,7 @@ app.post('/api/ai/chat', async (req, res) => {
 
     // Prefer a known-good model that the key has, else any compatible chat model.
     const candidates = PREFERRED.filter((id) => availableModels.includes(id));
-    const DENY = /embed|classif|whisper|tts|guard|rerank|vision|audio|speech|distil|.gguf/i;
+    const DENY = /embed|classif|whisper|tts|guard|rerank|vision|audio|speech|distil|.gguf|orpheus|canopylabs|playai|promptspeak/i;
     const models = candidates.length > 0
       ? candidates
       : availableModels.filter((id) => !DENY.test(id));
@@ -2097,7 +2097,10 @@ app.post('/api/ai/chat', async (req, res) => {
         const retryable = modelErr.includes('does not exist')
           || modelErr.includes('decommissioned')
           || modelErr.includes('no longer support')
-          || modelErr.includes('not supported');
+          || modelErr.includes('not supported')
+          || modelErr.includes('terms acceptance')
+          || modelErr.includes('requires terms')
+          || modelErr.includes('accept the terms');
         if (!retryable) {
           break;
         }
