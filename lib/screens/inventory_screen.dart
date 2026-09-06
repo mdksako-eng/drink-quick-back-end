@@ -11,6 +11,7 @@ import 'inventory_report_screen.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/notification_service.dart';
+import 'package:drinks_calculator_fixed/utils/i18n.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({Key? key}) : super(key: key);
@@ -113,20 +114,20 @@ class _InventoryScreenState extends State<InventoryScreen> {
           children: [
             const Icon(Icons.add_shopping_cart, color: Colors.green),
             const SizedBox(width: 10),
-            Expanded(child: Text('Add Stock: ${item.drinkName}')),
+            Expanded(child: Text('${t('addStock')}: ${item.drinkName}')),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Current stock: ${item.quantity}',
+            Text('${t('currentStock')}: ${item.quantity}',
                 style: const TextStyle(fontSize: 14, color: Colors.grey)),
             const SizedBox(height: 16),
             TextField(
               controller: quantityController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Quantity to add',
+              decoration: InputDecoration(
+                labelText: t('quantityToAdd'),
                 prefixIcon: Icon(Icons.numbers),
                 border: OutlineInputBorder(),
               ),
@@ -135,8 +136,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: reasonController,
-              decoration: const InputDecoration(
-                labelText: 'Reason',
+              decoration: InputDecoration(
+                labelText: t('reason'),
                 prefixIcon: Icon(Icons.notes),
                 border: OutlineInputBorder(),
               ),
@@ -146,7 +147,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(t('cancel')),
           ),
           ElevatedButton.icon(
             onPressed: () async {
@@ -193,7 +194,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             },
             icon: const Icon(Icons.check, color: Colors.white),
             label:
-                const Text('Add Stock', style: TextStyle(color: Colors.white)),
+                Text(t('addStock'), style: const TextStyle(color: Colors.white)),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
           ),
         ],
@@ -243,7 +244,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       decoration: BoxDecoration(
                           color: Colors.orange,
                           borderRadius: BorderRadius.circular(10)),
-                      child: const Text('LOW STOCK',
+                      child: Text(t('lowStock'),
                           style: TextStyle(
                               fontSize: 10,
                               color: Colors.white,
@@ -316,7 +317,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       _showAddStockDialog(item);
                     },
                     icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add Stock'),
+                    label: Text(t('addStock')),
                     style:
                         ElevatedButton.styleFrom(backgroundColor: Colors.green),
                   ),
@@ -326,7 +327,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       _showUpdateMinStockDialog(item);
                     },
                     icon: const Icon(Icons.edit, size: 18),
-                    label: const Text('Set Min'),
+                    label: Text(t('setMin')),
                     style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange),
                   ),
@@ -338,7 +339,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(t('close')),
           ),
         ],
       ),
@@ -384,12 +385,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Update Minimum Stock Level'),
+        title: Text(t('updateMinStock')),
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Minimum stock level',
+          decoration: InputDecoration(
+            labelText: t('minimumStockLevel'),
             prefixIcon: Icon(Icons.warning),
             border: OutlineInputBorder(),
           ),
@@ -397,7 +398,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+              child: Text(t('cancel'))),
           ElevatedButton(
             onPressed: () {
               final minLevel = int.tryParse(controller.text);
@@ -413,7 +414,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: const Text('Update', style: TextStyle(color: Colors.white)),
+            child: Text(t('update'), style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -436,7 +437,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       behavior: HitTestBehavior.translucent,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Inventory Management'),
+          title: Text(t('inventoryManagement')),
           backgroundColor: theme.primaryColor,
           foregroundColor: Colors.white,
           actions: [
@@ -450,7 +451,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       builder: (context) => const InventoryReportScreen()),
                 );
               },
-              tooltip: 'Reports',
+              tooltip: t('reports'),
             ),
             // Low stock alert
             if (inventoryProvider.lowStockCount > 0)
@@ -524,7 +525,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         TextField(
                           controller: _searchController,
                           decoration: InputDecoration(
-                            hintText: 'Search inventory...',
+                            hintText: t('searchInventory'),
                             prefixIcon: const Icon(Icons.search),
                             suffixIcon: _searchQuery.isNotEmpty
                                 ? IconButton(
@@ -564,7 +565,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               // Sort
                               PopupMenuButton<String>(
                                 icon: const Icon(Icons.sort),
-                                tooltip: 'Sort by',
+                                tooltip: t('sortBy'),
                                 onSelected: (value) =>
                                     setState(() => _sortBy = value),
                                 itemBuilder: (context) => [
@@ -693,7 +694,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     color: Colors.orange,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Text('LOW',
+                  child: Text(t('low'),
                       style: TextStyle(
                           fontSize: 10,
                           color: Colors.white,
@@ -709,12 +710,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 children: [
                   Icon(Icons.inventory, size: 14, color: Colors.grey[600]),
                   const SizedBox(width: 4),
-                  Text('Stock: ${item.quantity}',
+                  Text('${t('stock')}: ${item.quantity}',
                       style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                   const SizedBox(width: 16),
                   Icon(Icons.shopping_cart, size: 14, color: Colors.grey[600]),
                   const SizedBox(width: 4),
-                  Text('Min: ${item.minStockLevel}',
+                  Text('${t('min')}: ${item.minStockLevel}',
                       style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                 ],
               ),
@@ -727,7 +728,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       style: TextStyle(color: Colors.grey[500], fontSize: 11)),
                   const SizedBox(width: 16),
                   if (item.purchasePrice > 0)
-                    Text('Cost: ${CurrencyHelper.format(item.purchasePrice)}',
+                    Text('${t('cost')}: ${CurrencyHelper.format(item.purchasePrice)}',
                         style:
                             TextStyle(color: Colors.grey[500], fontSize: 11)),
                 ],
@@ -762,19 +763,19 @@ class _InventoryScreenState extends State<InventoryScreen> {
               }
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                   value: 'add',
                   child: Row(children: [
                     Icon(Icons.add, size: 18),
                     SizedBox(width: 8),
-                    Text('Add Stock')
+                    Text(t('addStock'))
                   ])),
-              const PopupMenuItem(
+              PopupMenuItem(
                   value: 'min',
                   child: Row(children: [
                     Icon(Icons.edit, size: 18),
                     SizedBox(width: 8),
-                    Text('Set Min Level')
+                    Text(t('setMinLevel'))
                   ])),
             ],
           ),
