@@ -9,6 +9,7 @@ import 'package:drinks_calculator_fixed/screens/auth_screen.dart';
 import 'package:drinks_calculator_fixed/screens/calculator_screen.dart';
 import 'package:drinks_calculator_fixed/services/storage_service.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
+import 'package:drinks_calculator_fixed/utils/i18n.dart';
 import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import 'package:drinks_calculator_fixed/services/notification_service.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -83,6 +84,7 @@ class ThemeProvider extends ChangeNotifier {
     _compactMode = compactMode;
     _isInitialized = true;
     notifyListeners();
+    await LanguageService.instance.load();
 
     debugPrint(
         '🎨 Theme loaded: ${_themeMode == ThemeMode.dark ? "Dark" : "Light"}');
@@ -244,16 +246,20 @@ class MyAppState extends State<MyApp> {
           final primaryColor = themeProvider.primaryColor;
           final themeMode = themeProvider.themeMode;
 
-          return MaterialApp(
-            navigatorKey: navigatorKey,
-            title: 'Drinks Ordering and Management',
-            debugShowCheckedModeBanner: false,
-            theme: _buildLightTheme(primaryColor),
-            darkTheme: _buildDarkTheme(primaryColor),
-            themeMode: themeMode,
-            builder: (context, child) =>
-                LockScreenOverlay(child: child ?? const SizedBox.shrink()),
-            home: const AuthWrapper(),
+          return ValueListenableBuilder<String>(
+            valueListenable: LanguageService.instance.language,
+            builder: (context, lang, _) => MaterialApp(
+              key: ValueKey('app_$lang'),
+              navigatorKey: navigatorKey,
+              title: 'Drinks Ordering and Management',
+              debugShowCheckedModeBanner: false,
+              theme: _buildLightTheme(primaryColor),
+              darkTheme: _buildDarkTheme(primaryColor),
+              themeMode: themeMode,
+              builder: (context, child) =>
+                  LockScreenOverlay(child: child ?? const SizedBox.shrink()),
+              home: const AuthWrapper(),
+            ),
           );
         },
       ),

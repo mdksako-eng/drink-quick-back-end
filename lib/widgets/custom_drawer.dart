@@ -19,6 +19,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
+import '../utils/i18n.dart';
 import '../widgets/badge_icon.dart';
 
 class CustomDrawer extends StatelessWidget {
@@ -281,14 +282,14 @@ class CustomDrawer extends StatelessWidget {
 
                 // Manage Drinks (Admin, Manager, Customer)
                 if (canManageDrinks)
-                  _buildDrawerItem(context, Icons.local_drink, 'Manage Drinks',
+                  _buildDrawerItem(context, Icons.local_drink, t('drinkManagement'),
                       () {
                     Navigator.pop(context);
                     _showPasswordDialog(context);
                   }, primaryColor: primaryColor),
                 // Inventory (Admin, Manager, Customer)
                 if (canManageDrinks)
-                  _buildDrawerItem(context, Icons.inventory, 'Inventory', () {
+                  _buildDrawerItem(context, Icons.inventory, t('inventory'), () {
                     Navigator.pop(context);
                     Navigator.push(
                         context,
@@ -297,7 +298,7 @@ class CustomDrawer extends StatelessWidget {
                   }, primaryColor: primaryColor),
                 // Settings (Everyone)
                 if (canManageSettings)
-                  _buildDrawerItem(context, Icons.settings, 'Settings', () {
+                  _buildDrawerItem(context, Icons.settings, t('settings'), () {
                     Navigator.pop(context);
                     Navigator.push(
                         context,
@@ -316,7 +317,7 @@ class CustomDrawer extends StatelessWidget {
                       color: theme.dividerColor),
                   _buildDrawerSectionTitle(context, 'MANAGER',
                       color: Colors.orange),
-                  _buildDrawerItem(context, Icons.business, 'Staff Management',
+                  _buildDrawerItem(context, Icons.business, t('staffManagement'),
                       () {
                     Navigator.pop(context);
                     Navigator.push(
@@ -395,6 +396,38 @@ class CustomDrawer extends StatelessWidget {
               children: [
                 _buildLogoutButton(context, authProvider, primaryColor),
                 const SizedBox(height: 12),
+                // 🌐 Language toggle (EN/FR) — rebuilds the whole app via
+                // the ValueListenableBuilder around MaterialApp.
+                ValueListenableBuilder<String>(
+                  valueListenable: LanguageService.instance.language,
+                  builder: (context, lang, _) => InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => LanguageService.instance.toggle(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('🌐', style: TextStyle(fontSize: 16)),
+                          const SizedBox(width: 8),
+                          Text(
+                            lang == LanguageService.fr
+                                ? 'Langue : Français'
+                                : 'Language: English',
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: theme.colorScheme.onSurface),
+                          ),
+                          const SizedBox(width: 6),
+                          Icon(Icons.swap_horiz,
+                              size: 16, color: theme.hintColor),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -529,7 +562,7 @@ class CustomDrawer extends StatelessWidget {
       child: ElevatedButton.icon(
         onPressed: () => _showLogoutDialog(context, authProvider),
         icon: const Icon(Icons.logout, size: 18, color: Colors.white),
-        label: const Text('Logout',
+        label: Text(t('logout'),
             style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -590,7 +623,7 @@ class CustomDrawer extends StatelessWidget {
                 backgroundColor: Colors.red,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10))),
-            child: const Text('Logout'),
+            child: Text(t('logout')),
           ),
         ],
       ),
