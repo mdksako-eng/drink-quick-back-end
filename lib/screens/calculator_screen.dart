@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../utils/i18n.dart' show t;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -587,7 +588,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
     if (scrollToDrink) {
       _scrollTimer?.cancel();
-      _scrollTimer = Timer(const Duration(milliseconds: 200), () {
+      _scrollTimer = Timer(Duration(milliseconds: 200), () {
         if (_selectedDrinksScrollController.hasClients &&
             _selectedDrinks.isNotEmpty) {
           final summary = _getDrinkSummary();
@@ -700,18 +701,18 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
   Future<void> _processPayment() async {
     if (_selectedDrinks.isEmpty) {
-      Helpers.showToast('No drinks selected', isError: true);
+      Helpers.showToast(t('noDrinksSelected'), isError: true);
       return;
     }
 
     if (_selectedPaymentMethod == PaymentMethod.cash) {
       if (_amountPaid < _totalAmount) {
-        Helpers.showToast('Insufficient payment', isError: true);
+        Helpers.showToast(t('insufficientPayment'), isError: true);
         return;
       }
     } else {
       if (_customerPhoneController.text.trim().isEmpty) {
-        Helpers.showToast('Please enter customer phone number', isError: true);
+        Helpers.showToast(t('pleaseEnterCustomerPhone'), isError: true);
         return;
       }
     }
@@ -728,7 +729,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     }
 
     if (customerName == null || customerName.isEmpty) {
-      Helpers.showToast('Customer name is required', isError: true);
+      Helpers.showToast(t('customerNameRequired'), isError: true);
       return;
     }
 
@@ -858,7 +859,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     if (!confirmed) {
       setState(() {
         _paymentStatus = 'failed';
-        _paymentMessage = 'Payment was not completed by customer';
+        _paymentMessage = t('paymentNotCompleted');
       });
       return false;
     }
@@ -934,13 +935,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('⏳ Waiting for Payment'),
+              title: Text('⏳ Waiting for Payment'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.phone_android,
+                  Icon(Icons.phone_android,
                       size: 60, color: Colors.orange),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   Text(
                     'Please check your phone and enter your PIN to approve the payment.',
                     textAlign: TextAlign.center,
@@ -954,15 +955,15 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     ),
                     child: Column(
                       children: [
-                        const Text('Payment Details:'),
+                        Text('Payment Details:'),
                         Text(
                           'Amount: ${CurrencyHelper.format(amount)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                         Text(
                           'To: $companyName',
                           style:
-                              const TextStyle(fontSize: 12, color: Colors.grey),
+                              TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                         Text(
                           'Phone: $customerPhone',
@@ -972,12 +973,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   LinearProgressIndicator(
                     backgroundColor: Colors.grey.shade200,
                     color: Colors.orange,
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Text(
                     'Waiting for confirmation... (${_attempts * 10}s)',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
@@ -995,13 +996,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       completer.complete(false);
                     }
                   },
-                  child: const Text('Cancel'),
+                  child: Text('Cancel'),
                 ),
                 TextButton(
                   onPressed: () {
                     checkStatus();
                   },
-                  child: const Text('Check Status'),
+                  child: Text(t('checkStatus')),
                 ),
               ],
             );
@@ -1062,21 +1063,21 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Customer Information',
+        title: Text(t('customerInformation'),
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.person, size: 50, color: Color(0xFF667EEA)),
-            const SizedBox(height: 16),
-            const Text('Please enter customer name for this invoice',
+            Icon(Icons.person, size: 50, color: Color(0xFF667EEA)),
+            SizedBox(height: 16),
+            Text('Please enter customer name for this invoice',
                 textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             TextField(
               controller: nameController,
               decoration: InputDecoration(
-                labelText: 'Customer Name',
-                hintText: 'Enter customer name',
+                labelText: t('customerName'),
+                hintText: t('enterCustomerName'),
                 prefixIcon: const Icon(Icons.person_outline),
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -1097,23 +1098,23 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, null),
-              child: const Text('Cancel')),
+              child: Text('Cancel')),
           ElevatedButton(
             onPressed: () {
               final name = nameController.text.trim();
               if (name.isNotEmpty) {
                 Navigator.pop(context, name);
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Please enter customer name'),
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(t('pleaseEnterCustomerName')),
                     backgroundColor: Colors.red));
               }
             },
             style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF667EEA),
+                backgroundColor: Color(0xFF667EEA),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12))),
-            child: const Text('Continue'),
+            child: Text(t('continue')),
           ),
         ],
       ),
@@ -1122,7 +1123,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
   void _showResponsiveInvoice() {
     if (_createdOrder == null) {
-      Helpers.showToast('No order to display', isError: true);
+      Helpers.showToast(t('noOrderToDisplay'), isError: true);
       return;
     }
 
@@ -1149,7 +1150,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
   void _showDrinkManagementDialog() {
     _showPasswordDialog(
-      title: 'Password Required',
+      title: t('passwordRequired'),
       message: 'Enter your password to manage drinks:',
       onVerified: () {
         Navigator.push(
@@ -1190,7 +1191,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   child: Icon(Icons.lock,
                       size: 32, color: Theme.of(context).primaryColor),
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: 10),
                 Text(title,
                     style: TextStyle(
                         fontSize: 22,
@@ -1217,7 +1218,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     controller: passwordController,
                     obscureText: obscureText,
                     decoration: InputDecoration(
-                      hintText: 'Enter password',
+                      hintText: t('enterPassword'),
                       hintStyle: TextStyle(color: Theme.of(context).hintColor),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
@@ -1248,9 +1249,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   children: [
                     Icon(Icons.info,
                         size: 14, color: Theme.of(context).hintColor),
-                    const SizedBox(width: 6),
+                    SizedBox(width: 6),
                     Expanded(
-                        child: Text('Enter your login password to continue',
+                        child: Text(t('enterLoginPassword'),
                             style: TextStyle(
                                 color: Theme.of(context).hintColor,
                                 fontSize: 12))),
@@ -1266,13 +1267,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       onPressed: () => Navigator.pop(context),
                       style: TextButton.styleFrom(
                           foregroundColor: Theme.of(context).hintColor,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          padding: EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                               side: BorderSide(
                                   color: Theme.of(context).dividerColor,
                                   width: 1))),
-                      child: const Text('Cancel',
+                      child: Text('Cancel',
                           style: TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
@@ -1301,8 +1302,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.verified, color: Colors.white, size: 20),
-                          const SizedBox(width: 8),
-                          const Text('Verify',
+                          SizedBox(width: 8),
+                          Text(t('verify'),
                               style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -1336,9 +1337,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.red, width: 2)),
               child:
-                  const Icon(Icons.error_outline, size: 32, color: Colors.red),
+                  Icon(Icons.error_outline, size: 32, color: Colors.red),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             Text(title,
                 style: TextStyle(
                     fontSize: 22,
@@ -1356,10 +1357,10 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                      EdgeInsets.symmetric(horizontal: 40, vertical: 12),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10))),
-              child: const Text('Try Again',
+              child: Text(t('tryAgain'),
                   style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -1379,9 +1380,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Column(
           children: [
-            const Icon(Icons.logout, size: 48, color: Color(0xFFFF6B6B)),
-            const SizedBox(height: 10),
-            Text('Confirm Logout',
+            Icon(Icons.logout, size: 48, color: Color(0xFFFF6B6B)),
+            SizedBox(height: 10),
+            Text(t('confirmLogout'),
                 style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -1395,7 +1396,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     color: Theme.of(context).hintColor, fontSize: 16)),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             Text("You'll be redirected to login screen.",
                 textAlign: TextAlign.center,
                 style: TextStyle(
@@ -1411,17 +1412,17 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).primaryColor,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      padding: EdgeInsets.symmetric(vertical: 15),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10))),
-                  child: const Text('Cancel',
+                  child: Text('Cancel',
                       style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 16)),
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton(
                   onPressed: () async {
@@ -1435,11 +1436,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6B6B),
-                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      backgroundColor: Color(0xFFFF6B6B),
+                      padding: EdgeInsets.symmetric(vertical: 15),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10))),
-                  child: const Text('Logout',
+                  child: Text('Logout',
                       style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -1596,7 +1597,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                 else
                                   _buildDesktopHeader(
                                       user, theme, primaryColor),
-                                const SizedBox(height: 30),
+                                SizedBox(height: 30),
                                 if (isMobile)
                                   _buildMobileContent(sortedDrinks,
                                       drinkSummary, theme, primaryColor)
@@ -1635,12 +1636,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                                     CircularProgressIndicator(
                                                         strokeWidth: 2,
                                                         color: Colors.white))
-                                            : const Icon(Icons.check_circle,
+                                            : Icon(Icons.check_circle,
                                                 size: 22, color: Colors.white),
                                         label: Text(
                                             _isProcessingPayment
                                                 ? 'Processing...'
-                                                : 'Finalize Purchase',
+                                                : t('finalizePurchase'),
                                             style: const TextStyle(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.bold,
@@ -1773,11 +1774,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 right: -2,
                 top: -2,
                 child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
+                  padding: EdgeInsets.all(4),
+                  decoration: BoxDecoration(
                       color: Colors.red, shape: BoxShape.circle),
                   constraints:
-                      const BoxConstraints(minWidth: 18, minHeight: 18),
+                      BoxConstraints(minWidth: 18, minHeight: 18),
                   child: Text(
                     unread > 9 ? '9+' : '$unread',
                     textAlign: TextAlign.center,
@@ -1804,22 +1805,22 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               decoration: BoxDecoration(
                   color: primaryColor, borderRadius: BorderRadius.circular(12)),
               child: IconButton(
-                  icon: const Icon(Icons.menu, color: Colors.white, size: 32),
+                  icon: Icon(Icons.menu, color: Colors.white, size: 32),
                   onPressed: () {
                     _scaffoldKey.currentState?.openDrawer();
                   }),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: 16),
             Text('Drinks Quick Cal',
                 style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: primaryColor)),
-            const Spacer(),
+            Spacer(),
             _buildNotificationBell(primaryColor),
           ],
         ),
-        const SizedBox(height: 5),
+        SizedBox(height: 5),
         Text('Professional Drink Ordering & Management',
             style: TextStyle(fontSize: 12, color: theme.hintColor)),
         const SizedBox(height: 15),
@@ -1836,7 +1837,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   Text('Welcome, ',
                       style: TextStyle(color: Colors.green, fontSize: 13)),
                   Icon(Icons.person, color: primaryColor, size: 16),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Text('${user?.username ?? 'User'}',
                       style: TextStyle(color: Colors.green, fontSize: 13)),
                 ],
@@ -1850,13 +1851,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                         onPressed: _showDrinkManagementDialog,
                         style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
-                            padding: const EdgeInsets.symmetric(
+                            padding: EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 8),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20))),
-                        icon: const Icon(Icons.edit_note,
+                        icon: Icon(Icons.edit_note,
                             size: 14, color: Colors.white),
-                        label: const Text('Manage Drinks',
+                        label: Text(t('manageDrinks'),
                             style:
                                 TextStyle(fontSize: 11, color: Colors.white)),
                       ),
@@ -1872,13 +1873,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                         },
                         style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
-                            padding: const EdgeInsets.symmetric(
+                            padding: EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 6),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20))),
-                        icon: const Icon(Icons.receipt_long,
+                        icon: Icon(Icons.receipt_long,
                             size: 16, color: Colors.white),
-                        label: const Text('Invoice History',
+                        label: Text(t('invoiceHistory'),
                             style:
                                 TextStyle(fontSize: 12, color: Colors.white)),
                       ),
@@ -1890,13 +1891,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       onPressed: _showLogoutDialog,
                       style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red.shade400,
-                          padding: const EdgeInsets.symmetric(
+                          padding: EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20))),
-                      icon: const Icon(Icons.logout,
+                      icon: Icon(Icons.logout,
                           size: 14, color: Colors.white),
-                      label: const Text('Logout',
+                      label: Text('Logout',
                           style: TextStyle(fontSize: 11, color: Colors.white)),
                     ),
                   ),
@@ -1919,12 +1920,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               decoration: BoxDecoration(
                   color: primaryColor, borderRadius: BorderRadius.circular(12)),
               child: IconButton(
-                  icon: const Icon(Icons.menu, color: Colors.white, size: 32),
+                  icon: Icon(Icons.menu, color: Colors.white, size: 32),
                   onPressed: () {
                     _scaffoldKey.currentState?.openDrawer();
                   }),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: 16),
             Text('Drinks Quick Cal',
                 style: TextStyle(
                     fontSize: 28,
@@ -1935,7 +1936,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
           ],
         ),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
               color: primaryColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20)),
@@ -1944,7 +1945,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               Text('Welcome, ',
                   style: TextStyle(color: Colors.green, fontSize: 13)),
               Icon(Icons.person, color: primaryColor, size: 18),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text('${user?.username ?? 'User'}',
                   style: TextStyle(color: Colors.green)),
               const SizedBox(width: 12),
@@ -1955,13 +1956,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   onPressed: _showDrinkManagementDialog,
                   style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
-                      padding: const EdgeInsets.symmetric(
+                      padding: EdgeInsets.symmetric(
                           horizontal: 12, vertical: 6),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20))),
-                  icon: const Icon(Icons.edit_note,
+                  icon: Icon(Icons.edit_note,
                       size: 16, color: Colors.white),
-                  label: const Text('Manage Drinks',
+                  label: Text(t('manageDrinks'),
                       style: TextStyle(fontSize: 12, color: Colors.white)),
                 ),
                 const SizedBox(width: 8),
@@ -1975,13 +1976,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     },
                     style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
-                        padding: const EdgeInsets.symmetric(
+                        padding: EdgeInsets.symmetric(
                             horizontal: 16, vertical: 10),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20))),
-                    icon: const Icon(Icons.receipt_long,
+                    icon: Icon(Icons.receipt_long,
                         size: 18, color: Colors.white),
-                    label: const Text('Invoice History',
+                    label: Text(t('invoiceHistory'),
                         style: TextStyle(fontSize: 14, color: Colors.white)),
                   ),
                 ),
@@ -1992,11 +1993,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red.shade400,
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20))),
-                icon: const Icon(Icons.logout, size: 16, color: Colors.white),
-                label: const Text('Logout',
+                icon: Icon(Icons.logout, size: 16, color: Colors.white),
+                label: Text('Logout',
                     style: TextStyle(fontSize: 12, color: Colors.white)),
               ),
             ],
@@ -2017,12 +2018,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               decoration: BoxDecoration(
                   color: primaryColor, borderRadius: BorderRadius.circular(12)),
               child: IconButton(
-                  icon: const Icon(Icons.menu, color: Colors.white, size: 32),
+                  icon: Icon(Icons.menu, color: Colors.white, size: 32),
                   onPressed: () {
                     _scaffoldKey.currentState?.openDrawer();
                   }),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: 16),
             Text('Drinks Quick Cal',
                 style: TextStyle(
                     fontSize: 32,
@@ -2033,7 +2034,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
           ],
         ),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           decoration: BoxDecoration(
               color: primaryColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(25)),
@@ -2042,7 +2043,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               Text('Welcome, ',
                   style: TextStyle(color: Colors.green, fontSize: 13)),
               Icon(Icons.person, color: primaryColor, size: 20),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Text('${user?.username ?? 'User'}',
                   style: TextStyle(color: Colors.green, fontSize: 16)),
               const SizedBox(width: 16),
@@ -2053,13 +2054,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   onPressed: _showDrinkManagementDialog,
                   style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
-                      padding: const EdgeInsets.symmetric(
+                      padding: EdgeInsets.symmetric(
                           horizontal: 16, vertical: 10),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20))),
-                  icon: const Icon(Icons.edit_note,
+                  icon: Icon(Icons.edit_note,
                       size: 18, color: Colors.white),
-                  label: const Text('Manage Drinks',
+                  label: Text(t('manageDrinks'),
                       style: TextStyle(fontSize: 14, color: Colors.white)),
                 ),
                 const SizedBox(width: 12),
@@ -2073,13 +2074,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     },
                     style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
-                        padding: const EdgeInsets.symmetric(
+                        padding: EdgeInsets.symmetric(
                             horizontal: 16, vertical: 10),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20))),
-                    icon: const Icon(Icons.receipt_long,
+                    icon: Icon(Icons.receipt_long,
                         size: 18, color: Colors.white),
-                    label: const Text('Invoice History',
+                    label: Text(t('invoiceHistory'),
                         style: TextStyle(fontSize: 14, color: Colors.white)),
                   ),
                 ),
@@ -2096,13 +2097,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   },
                   style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.purple,
-                      padding: const EdgeInsets.symmetric(
+                      padding: EdgeInsets.symmetric(
                           horizontal: 16, vertical: 10),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20))),
-                  icon: const Icon(Icons.admin_panel_settings,
+                  icon: Icon(Icons.admin_panel_settings,
                       size: 18, color: Colors.white),
-                  label: const Text('Admin Panel',
+                  label: Text(t('adminPanel'),
                       style: TextStyle(fontSize: 14, color: Colors.white)),
                 ),
               ],
@@ -2111,12 +2112,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 onPressed: _showLogoutDialog,
                 style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red.shade400,
-                    padding: const EdgeInsets.symmetric(
+                    padding: EdgeInsets.symmetric(
                         horizontal: 16, vertical: 10),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20))),
-                icon: const Icon(Icons.logout, size: 18, color: Colors.white),
-                label: const Text('Logout',
+                icon: Icon(Icons.logout, size: 18, color: Colors.white),
+                label: Text('Logout',
                     style: TextStyle(fontSize: 14, color: Colors.white)),
               ),
             ],
@@ -2139,7 +2140,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
                 color: theme.textTheme.bodyLarge?.color)),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         CompositedTransformTarget(
           link: _layerLink,
           child: TextField(
@@ -2192,7 +2193,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         if (_showDropdown)
           CompositedTransformFollower(
             link: _layerLink,
-            offset: const Offset(0, 48),
+            offset: Offset(0, 48),
             child: Material(
               elevation: 8,
               borderRadius: BorderRadius.circular(10),
@@ -2204,8 +2205,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   border: Border.all(color: theme.dividerColor),
                 ),
                 child: _filteredDrinks.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.all(20),
+                    ? Padding(
+                        padding: const EdgeInsets.all(20),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -2213,7 +2214,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                 size: 40, color: Colors.grey),
                             SizedBox(height: 8),
                             Text(
-                              'No drinks found, kindly add drinks',
+                              t('noDrinksFound'),
                               style:
                                   TextStyle(color: Colors.grey, fontSize: 14),
                             ),
@@ -2264,8 +2265,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                   ),
                                 ),
                                 if (isOutOfStock)
-                                  const Text(
-                                    'OUT OF STOCK',
+                                  Text(
+                                    t('outOfStock'),
                                     style: TextStyle(
                                       fontSize: 10,
                                       color: Colors.red,
@@ -2307,7 +2308,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               ),
             ),
           ),
-        const SizedBox(height: 20),
+        SizedBox(height: 20),
         Text('Select Quantity:',
             style: TextStyle(
                 fontWeight: FontWeight.bold,
@@ -2368,8 +2369,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
-              child: const Text('Add to Order',
+                      EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+              child: Text(t('addToOrder'),
                   style: TextStyle(fontSize: 14, color: Colors.white)),
             ),
           ],
@@ -2382,10 +2383,10 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     onPressed: _clearAll,
                     style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red.shade400,
-                        padding: const EdgeInsets.symmetric(vertical: 12)),
+                        padding: EdgeInsets.symmetric(vertical: 12)),
                     icon:
-                        const Icon(Icons.delete, size: 18, color: Colors.white),
-                    label: const Text('Clear All',
+                        Icon(Icons.delete, size: 18, color: Colors.white),
+                    label: Text(t('clearAll'),
                         style: TextStyle(fontSize: 14, color: Colors.white)))),
             const SizedBox(width: 10),
             Expanded(
@@ -2393,14 +2394,14 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     onPressed: _showPreviewInvoice,
                     style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
-                        padding: const EdgeInsets.symmetric(vertical: 12)),
-                    icon: const Icon(Icons.receipt,
+                        padding: EdgeInsets.symmetric(vertical: 12)),
+                    icon: Icon(Icons.receipt,
                         size: 18, color: Colors.white),
-                    label: const Text('Preview',
+                    label: Text('Preview',
                         style: TextStyle(fontSize: 14, color: Colors.white)))),
           ],
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: 20),
         _buildSelectedDrinksList(drinkSummary, true, theme, primaryColor),
       ],
     );
@@ -2425,7 +2426,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
                       color: theme.textTheme.bodyLarge?.color)),
-              const SizedBox(height: 15),
+              SizedBox(height: 15),
               CompositedTransformTarget(
                 link: _layerLink,
                 child: TextField(
@@ -2479,7 +2480,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               if (_showDropdown)
                 CompositedTransformFollower(
                   link: _layerLink,
-                  offset: const Offset(0, 48),
+                  offset: Offset(0, 48),
                   child: Material(
                     elevation: 8,
                     borderRadius: BorderRadius.circular(10),
@@ -2491,8 +2492,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                         border: Border.all(color: theme.dividerColor),
                       ),
                       child: _filteredDrinks.isEmpty
-                          ? const Padding(
-                              padding: EdgeInsets.all(20),
+                          ? Padding(
+                              padding: const EdgeInsets.all(20),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -2500,7 +2501,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                       size: 40, color: Colors.grey),
                                   SizedBox(height: 8),
                                   Text(
-                                    'No drink found, kindly add drink',
+                                    t('noDrinkFound'),
                                     style: TextStyle(
                                         color: Colors.grey, fontSize: 14),
                                   ),
@@ -2553,8 +2554,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                         ),
                                       ),
                                       if (isOutOfStock)
-                                        const Text(
-                                          'OUT OF STOCK',
+                                        Text(
+                                          t('outOfStock'),
                                           style: TextStyle(
                                             fontSize: 10,
                                             color: Colors.red,
@@ -2673,7 +2674,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                               padding: EdgeInsets.symmetric(
                                   horizontal: isTablet ? 24 : 32,
                                   vertical: isTablet ? 12 : 16)),
-                          child: Text('Add to Order',
+                          child: Text(t('addToOrder'),
                               style: TextStyle(
                                   fontSize: isTablet ? 14 : 16,
                                   color: Colors.white)),
@@ -2693,9 +2694,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                               backgroundColor: Colors.red.shade400,
                               padding: EdgeInsets.symmetric(
                                   vertical: isTablet ? 12 : 16)),
-                          icon: const Icon(Icons.delete,
+                          icon: Icon(Icons.delete,
                               size: 20, color: Colors.white),
-                          label: Text('Clear All',
+                          label: Text(t('clearAll'),
                               style: TextStyle(
                                   fontSize: isTablet ? 14 : 16,
                                   color: Colors.white)))),
@@ -2707,9 +2708,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                               backgroundColor: Colors.blue,
                               padding: EdgeInsets.symmetric(
                                   vertical: isTablet ? 12 : 16)),
-                          icon: const Icon(Icons.receipt,
+                          icon: Icon(Icons.receipt,
                               size: 20, color: Colors.white),
-                          label: Text('Preview Invoice',
+                          label: Text(t('previewInvoice'),
                               style: TextStyle(
                                   fontSize: isTablet ? 14 : 16,
                                   color: Colors.white)))),
@@ -2718,7 +2719,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             ],
           ),
         ),
-        const SizedBox(width: 30),
+        SizedBox(width: 30),
         Expanded(
             flex: 3,
             child: _buildSelectedDrinksList(
@@ -2755,7 +2756,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('SELECTED DRINKS',
+                Text(t('selectedDrinks'),
                     style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -2779,13 +2780,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   children: [
                     Icon(Icons.shopping_cart,
                         size: isMobile ? 50 : 60, color: theme.hintColor),
-                    const SizedBox(height: 10),
-                    Text('No drinks selected',
+                    SizedBox(height: 10),
+                    Text(t('noDrinksSelected'),
                         style: TextStyle(
                             fontSize: isMobile ? 18 : 20,
                             color: theme.hintColor)),
-                    const SizedBox(height: 5),
-                    Text('Select drinks above',
+                    SizedBox(height: 5),
+                    Text(t('selectDrinksAbove'),
                         style: TextStyle(
                             fontSize: isMobile ? 12 : 14,
                             color: theme.hintColor))
@@ -2880,7 +2881,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                             color: isOutOfStock
                                                 ? Colors.red
                                                 : Colors.grey),
-                                        const SizedBox(width: 4),
+                                        SizedBox(width: 4),
                                         Text(
                                           'Remaining: ${remainingStock > 0 ? remainingStock : 0}',
                                           style: TextStyle(
@@ -2903,7 +2904,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                               borderRadius:
                                                   BorderRadius.circular(8),
                                             ),
-                                            child: const Text('OUT OF STOCK',
+                                            child: Text(t('outOfStock'),
                                                 style: TextStyle(
                                                     fontSize: 8,
                                                     color: Colors.white,
@@ -2945,7 +2946,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                       color: Colors.red.shade400,
                                       size: isMobile ? 20 : 24),
                                   onPressed: () => _clearDrink(drinkName),
-                                  tooltip: 'Remove all'),
+                                  tooltip: t('removeAll')),
                             ]),
                           ),
                           if (isExpanded)
@@ -3083,7 +3084,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             ]),
           ],
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Row(children: [
           Expanded(
             child: TextButton.icon(
@@ -3118,7 +3119,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Order Summary',
+          Text(t('orderSummary'),
               style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
@@ -3152,12 +3153,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Payment Details',
+        Text(t('paymentDetails'),
             style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
                 color: theme.textTheme.bodyLarge?.color)),
-        const SizedBox(height: 15),
+        SizedBox(height: 15),
         Text('Amount Received:',
             style: TextStyle(
                 fontWeight: FontWeight.bold,
@@ -3182,7 +3183,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
           ),
           style: TextStyle(color: theme.textTheme.bodyLarge?.color),
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: 20),
         GestureDetector(
           onTap: () {
             _calculateBalance();
@@ -3226,10 +3227,10 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                             color: _balance >= 0 ? Colors.green : Colors.red)),
                   ],
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 if (_balance >= 0 && _balance > 0)
                   Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
+                      padding: EdgeInsets.only(top: 4.0),
                       child: Text(
                           'Tap to refresh • Change to give back to customer',
                           style: TextStyle(
@@ -3237,7 +3238,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                               fontSize: isMobile ? 12 : 14))),
                 if (_balance < 0)
                   Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
+                      padding: EdgeInsets.only(top: 4.0),
                       child: Text('Tap to refresh • Customer needs to pay more',
                           style: TextStyle(
                               color: Colors.red,
@@ -3255,7 +3256,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Payment Method',
+        Text(t('paymentMethod'),
             style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: isMobile ? 16 : 18,
@@ -3268,7 +3269,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 children: [
                   _buildPaymentMethodOption(
                     icon: Icons.money,
-                    label: 'Cash',
+                    label: t('cash'),
                     isSelected: _selectedPaymentMethod == PaymentMethod.cash,
                     color: Colors.green,
                     onTap: () {
@@ -3317,7 +3318,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   Expanded(
                     child: _buildPaymentMethodOption(
                       icon: Icons.money,
-                      label: 'Cash',
+                      label: t('cash'),
                       isSelected: _selectedPaymentMethod == PaymentMethod.cash,
                       color: Colors.green,
                       onTap: () {
@@ -3372,7 +3373,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 ],
               ),
         if (_selectedPaymentMethod != PaymentMethod.cash) ...[
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           _buildCustomerPhoneInput(
             controller: _customerPhoneController,
             label: _selectedPaymentMethod == PaymentMethod.mtnMobileMoney
@@ -3380,12 +3381,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 : "Customer's Orange Phone Number",
             hint: '237XXXXXXXXX',
             color: _selectedPaymentMethod == PaymentMethod.mtnMobileMoney
-                ? const Color(0xFFFFCC00)
-                : const Color(0xFFFF6600),
+                ? Color(0xFFFFCC00)
+                : Color(0xFFFF6600),
             theme: theme,
             isMobile: isMobile,
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: 4),
           Text(
             'Money will be transferred FROM this number TO your merchant account',
             style: TextStyle(
@@ -3422,7 +3423,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         child: Column(
           children: [
             Icon(icon, color: isSelected ? color : theme.hintColor, size: 24),
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             Text(label,
                 style: TextStyle(
                     fontSize: 12,
@@ -3509,23 +3510,23 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     strokeWidth: 2, color: statusColor))
           else
             Icon(statusIcon, color: statusColor, size: 24),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                     _paymentStatus == 'processing'
-                        ? 'Processing Payment'
+                        ? t('processingPayment')
                         : _paymentStatus == 'success'
-                            ? 'Payment Successful'
-                            : 'Payment Failed',
+                            ? t('paymentSuccessful')
+                            : t('paymentFailed'),
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: statusColor,
                         fontSize: isMobile ? 14 : 16)),
                 if (_paymentMessage != null) ...[
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   Text(_paymentMessage!,
                       style: TextStyle(
                           color: theme.hintColor, fontSize: isMobile ? 12 : 14))
