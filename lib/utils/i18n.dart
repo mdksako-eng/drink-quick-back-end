@@ -107,6 +107,29 @@ const Map<String, String> _en = {
   'reject': 'Reject',
   'blocked': 'Blocked',
   'active': 'Active',
+  // Lock screen
+  'sessionTerminated': 'Session Terminated',
+  // Notifications screen
+  'noNotificationsYet': 'No notifications yet',
+  'unreadCount': 'unread',
+  'markAllRead': 'Mark all read',
+  'clearAll': 'Clear all',
+  // Side slider / invoices
+  'invoices': 'Invoices',
+  'items': 'Items',
+  'revenue': 'Revenue',
+  'searchByOrderId': 'Search by Order ID...',
+  'clearSearch': 'Clear search',
+  'today': 'Today',
+  'thisWeek': 'This Week',
+  'thisMonth': 'This Month',
+  'allTime': 'All Time',
+  'recent': 'Recent',
+  'oldest': 'Oldest',
+  'highAmount': 'High Amount',
+  'lowAmount': 'Low Amount',
+  'activate': 'Activate',
+  'deactivate': 'Deactivate',
   // Calculator / sales
   'addToOrder': 'Add to Order',
   'orderSummary': 'Order Summary',
@@ -115,7 +138,6 @@ const Map<String, String> _en = {
   'noDrinksSelected': 'No drinks selected',
   'finalizePurchase': 'Finalize Purchase',
   'removeAll': 'Remove all',
-  'clearAll': 'Clear All',
   'customerInformation': 'Customer Information',
   'customerName': 'Customer Name',
   'enterCustomerName': 'Enter customer name',
@@ -258,6 +280,28 @@ const Map<String, String> _fr = {
   'approve': 'Approuver',
   'reject': 'Rejeter',
   'blocked': 'Bloqué',
+  // Lock screen
+  'sessionTerminated': 'Session terminée',
+  // Notifications screen
+  'noNotificationsYet': 'Aucune notification pour le moment',
+  'unreadCount': 'non lues',
+  'markAllRead': 'Tout marquer comme lu',
+  // Side slider / invoices
+  'invoices': 'Factures',
+  'items': 'Articles',
+  'revenue': 'Revenus',
+  'searchByOrderId': 'Rechercher par ID de commande...',
+  'clearSearch': 'Effacer la recherche',
+  'today': "Aujourd'hui",
+  'thisWeek': 'Cette semaine',
+  'thisMonth': 'Ce mois',
+  'allTime': 'Tout',
+  'recent': 'Récent',
+  'oldest': 'Plus ancien',
+  'highAmount': 'Montant élevé',
+  'lowAmount': 'Montant faible',
+  'activate': 'Activer',
+  'deactivate': 'Désactiver',
 };
 
 String t(String key) {

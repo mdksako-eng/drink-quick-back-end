@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart';
 import '../services/notification_service.dart';
+import '../utils/i18n.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({Key? key}) : super(key: key);
@@ -54,14 +55,14 @@ class NotificationsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notifications'),
+        title: Text(t('notifications')),
         elevation: 4,
         actions: [
           ListenableBuilder(
             listenable: service,
             builder: (context, _) {
               return IconButton(
-                tooltip: 'Clear all',
+                tooltip: t('clearAll'),
                 icon: const Icon(Icons.delete_sweep_outlined),
                 onPressed:
                     service.notifications.isNotEmpty ? service.clearAll : null,
@@ -82,7 +83,7 @@ class NotificationsScreen extends StatelessWidget {
                   Icon(Icons.notifications_off_outlined,
                       size: 64, color: theme.hintColor),
                   const SizedBox(height: 16),
-                  Text('No notifications yet',
+                  Text(t('noNotificationsYet'),
                       style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   Text('Orders, stock alerts and payments will appear here',
@@ -100,7 +101,7 @@ class NotificationsScreen extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   child: Row(
                     children: [
-                      Text('$unread unread',
+                      Text('$unread ${t('unreadCount')}',
                           style: TextStyle(
                               color: theme.primaryColor,
                               fontWeight: FontWeight.bold)),
@@ -108,7 +109,7 @@ class NotificationsScreen extends StatelessWidget {
                       TextButton.icon(
                         onPressed: service.markAllRead,
                         icon: const Icon(Icons.done_all, size: 18),
-                        label: const Text('Mark all read'),
+                        label: Text(t('markAllRead')),
                       ),
                     ],
                   ),

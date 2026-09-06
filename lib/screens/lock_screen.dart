@@ -10,6 +10,7 @@ import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/utils/helpers.dart';
 import '../main.dart' as app; // ✅ Import for navigatorKey
 import '../screens/auth_screen.dart'; // ✅ Import AuthScreen
+import '../utils/i18n.dart';
 
 class LockScreen extends StatefulWidget {
   final VoidCallback onAuthenticated;
@@ -423,7 +424,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
             const Icon(Icons.warning_amber_rounded,
                 color: Colors.orange, size: 28),
             const SizedBox(width: 10),
-            const Text('Session Terminated'),
+            Text(t('sessionTerminated')),
           ],
         ),
         content: Column(

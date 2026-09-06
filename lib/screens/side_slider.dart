@@ -11,6 +11,7 @@ import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
+import '../utils/i18n.dart';
 
 class SideSlider extends StatefulWidget {
   final bool isOpen;
@@ -325,7 +326,7 @@ class _SideSliderState extends State<SideSlider> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(t('cancel')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -664,7 +665,7 @@ class _SideSliderState extends State<SideSlider> {
                                         children: [
                                           _buildStatItem(
                                             icon: Icons.receipt,
-                                            label: 'Invoices',
+                                            label: t('invoices'),
                                             value: filteredOrders.length
                                                 .toString(),
                                             color: widget.primaryColor,
@@ -672,14 +673,14 @@ class _SideSliderState extends State<SideSlider> {
                                           ),
                                           _buildStatItem(
                                             icon: Icons.shopping_cart,
-                                            label: 'Items',
+                                            label: t('items'),
                                             value: totalItems.toString(),
                                             color: _accentColor,
                                             screenWidth: screenWidth,
                                           ),
                                           _buildStatItem(
                                             icon: Icons.attach_money,
-                                            label: 'Revenue',
+                                            label: t('revenue'),
                                             value:
                                                 _formatCurrency(totalRevenue),
                                             color: _successColor,
@@ -718,7 +719,7 @@ class _SideSliderState extends State<SideSlider> {
                                       child: TextField(
                                         controller: _searchController,
                                         decoration: InputDecoration(
-                                          hintText: 'Search by Order ID...',
+                                          hintText: t('searchByOrderId'),
                                           hintStyle: TextStyle(
                                               color: widget.textSecondaryColor
                                                   .withValues(alpha: 0.7)),
@@ -745,7 +746,7 @@ class _SideSliderState extends State<SideSlider> {
                                         icon: Icon(Icons.clear,
                                             color: _errorColor, size: 20),
                                         onPressed: _clearSearch,
-                                        tooltip: 'Clear search',
+                                        tooltip: t('clearSearch'),
                                       ),
                                   ],
                                 ),
