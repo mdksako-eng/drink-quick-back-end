@@ -11,6 +11,7 @@ import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import 'package:drinks_calculator_fixed/models/inventory_model.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
+import '../utils/i18n.dart';
 
 class DrinkManagementScreen extends StatefulWidget {
   const DrinkManagementScreen({Key? key}) : super(key: key);
@@ -106,7 +107,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
         if (sellingPrice != null && purchasePrice != null) {
           if (sellingPrice <= purchasePrice) {
             _sellingPriceError =
-                'Selling price must be greater than purchase price';
+                t('dm_priceError');
             _showProfitPreview = false;
           } else {
             _sellingPriceError = null;
@@ -139,7 +140,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     drinkProvider.loadDrinksFromSupabase().then((_) {
       if (mounted) {
         setState(() {});
-        Helpers.showToast('🔄 Inventory updated - drinks list refreshed');
+        Helpers.showToast('🔄 ${t('dm_invUpdated')}');
       }
     });
   }
@@ -238,8 +239,8 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
   Future<void> _deleteDrink(String id) async {
     final confirmed = await Helpers.showConfirmationDialog(
       context,
-      'Delete Drink',
-      'Are you sure you want to delete this drink? This action cannot be undone.',
+      t('dm_deleteTitle'),
+      t('dm_deleteConfirm'),
     );
 
     if (confirmed) {
@@ -251,7 +252,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
       await drinkProvider.deleteDrink(id);
       await inventoryProvider.deleteInventoryItem(id);
 
-      Helpers.showToast('${drink.name} deleted successfully');
+      Helpers.showToast('${drink.name} ${t('dm_deleted')}');
       setState(() {});
     }
   }
@@ -280,7 +281,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     });
 
     if (isDuplicate) {
-      Helpers.showToast('A drink with name "$drinkName" already exists!',
+      Helpers.showToast(t('dm_duplicate').replaceAll('@name', drinkName),
           isError: true);
       return;
     }
@@ -348,7 +349,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
         debugPrint('✅ New inventory item created: ${drink.name}');
       }
 
-      Helpers.showToast('${drink.name} updated successfully');
+      Helpers.showToast('${drink.name} ${t('dm_updated')}');
     } else {
       // ✅ Add new drink
       await drinkProvider.addDrink(drink);
@@ -366,7 +367,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
         purchasePrice: drink.purchasePrice,
       ));
 
-      Helpers.showToast('${drink.name} added successfully');
+      Helpers.showToast('${drink.name} ${t('dm_added')}');
     }
 
     _clearForm();
@@ -423,7 +424,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
               IconButton(
                 icon: const Icon(Icons.close, color: Colors.white),
                 onPressed: _clearForm,
-                tooltip: 'Clear Form',
+                tooltip: t('dm_clearForm'),
               ),
           ],
         ),
@@ -516,7 +517,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                     child: TextField(
                       controller: _searchController,
                       decoration: InputDecoration(
-                        hintText: 'Search drinks by name, category or price...',
+                        hintText: t('dm_searchHint'),
                         hintStyle: TextStyle(
                             color: theme.hintColor,
                             fontSize: isMobile ? 14 : 16),
@@ -535,7 +536,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                     IconButton(
                       icon: Icon(Icons.clear, color: Colors.red, size: 22),
                       onPressed: _clearSearch,
-                      tooltip: 'Clear search',
+                      tooltip: t('dm_clearSearch'),
                     ),
                 ],
               ),
@@ -553,7 +554,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Sort Drinks:',
+                    Text(t('dm_sortDrinks'),
                         style: TextStyle(
                             fontSize: isMobile ? 14 : 16,
                             fontWeight: FontWeight.bold,
@@ -563,7 +564,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                       spacing: isMobile ? 8 : 12,
                       runSpacing: isMobile ? 8 : 12,
                       children: [
-                        _buildSortChip('Name', 'name', isMobile, primaryColor),
+                        _buildSortChip(t('sort_name'), 'name', isMobile, primaryColor),
                         _buildSortChip(
                             'Price', 'price', isMobile, primaryColor),
                         _buildSortChip(
@@ -653,7 +654,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'A drink with name "$nameText" already exists!',
+                              t('dm_duplicate').replaceAll('@name', nameText),
                               style: const TextStyle(
                                   color: Colors.red,
                                   fontSize: 13,
@@ -763,11 +764,11 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                             ),
                             const SizedBox(height: 8),
                             _buildStockPreviewRow(
-                                'Total Cost', CurrencyHelper.format(totalCost)),
-                            _buildStockPreviewRow('Potential Revenue',
+                                t('dm_totalCost'), CurrencyHelper.format(totalCost)),
+                            _buildStockPreviewRow(t('dm_potentialRevenue'),
                                 CurrencyHelper.format(totalRevenue)),
                             const Divider(height: 16),
-                            _buildStockPreviewRow('Potential Profit',
+                            _buildStockPreviewRow(t('dm_potentialProfit'),
                                 CurrencyHelper.format(totalProfit),
                                 isBold: true, color: Colors.green),
                           ],
@@ -785,7 +786,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                 children: [
                   Icon(Icons.info, color: primaryColor, size: 14),
                   const SizedBox(width: 6),
-                  Text('Leave empty for default image',
+                  Text(t('dm_emptyImageHint'),
                       style: TextStyle(
                           fontSize: isMobile ? 11 : 12, color: primaryColor)),
                 ],
@@ -824,7 +825,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
           SizedBox(width: isMobile ? 12 : 16),
           Expanded(
             child: Text(
-              _editingDrinkId != null ? 'Edit Drink' : 'Add New Drink',
+              _editingDrinkId != null ? t('dm_editDrink') : t('dm_addNewDrink'),
               style: TextStyle(
                   fontSize: isMobile ? 18 : 22,
                   fontWeight: FontWeight.bold,
@@ -839,7 +840,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: Colors.orange, width: 1),
               ),
-              child: Text('Editing',
+              child: Text(t('dm_editing'),
                   style: TextStyle(
                       fontSize: isMobile ? 12 : 14,
                       fontWeight: FontWeight.bold,
@@ -854,7 +855,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     return TextFormField(
       controller: _nameController,
       decoration: InputDecoration(
-        labelText: 'Drink Name',
+        labelText: t('dm_name'),
         labelStyle: TextStyle(color: theme.hintColor),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         enabledBorder: OutlineInputBorder(
@@ -874,9 +875,9 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
           fontSize: isMobile ? 14 : 16),
       validator: (value) {
         if (value == null || value.trim().isEmpty)
-          return 'Please enter drink name';
+          return t('dm_nameRequired');
         if (value.trim().length < 2)
-          return 'Drink name must be at least 2 characters';
+          return t('dm_nameTooShort');
         return null;
       },
     );
@@ -887,7 +888,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     return TextFormField(
       controller: _purchasePriceController,
       decoration: InputDecoration(
-        labelText: 'Purchase Price (in ${CurrencyHelper.getSymbol()})',
+        labelText: '${t('dm_purchasePrice')} (${CurrencyHelper.getSymbol()})',
         labelStyle: TextStyle(color: theme.hintColor),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         enabledBorder: OutlineInputBorder(
@@ -911,12 +912,12 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
       keyboardType: TextInputType.number,
       validator: (value) {
         if (value == null || value.trim().isEmpty)
-          return 'Please enter purchase price';
+          return t('dm_purchasePriceRequired');
         final price = double.tryParse(value);
-        if (price == null) return 'Please enter a valid number';
-        if (price <= 0) return 'Price must be greater than 0';
+        if (price == null) return t('dm_validNumber');
+        if (price <= 0) return t('dm_pricePositive');
         if (price > 100000)
-          return 'Price cannot exceed 100,000 ${CurrencyHelper.getSymbol()}';
+          return '${t('dm_priceMax')} 100,000 ${CurrencyHelper.getSymbol()}';
         return null;
       },
     );
@@ -927,7 +928,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     return TextFormField(
       controller: _priceController,
       decoration: InputDecoration(
-        labelText: 'Selling Price (in ${CurrencyHelper.getSymbol()})',
+        labelText: '${t('dm_sellingPrice')} (${CurrencyHelper.getSymbol()})',
         labelStyle: TextStyle(color: theme.hintColor),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         enabledBorder: OutlineInputBorder(
@@ -952,12 +953,12 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
       keyboardType: TextInputType.number,
       validator: (value) {
         if (value == null || value.trim().isEmpty)
-          return 'Please enter selling price';
+          return t('dm_sellingPriceRequired');
         final price = double.tryParse(value);
-        if (price == null) return 'Please enter a valid number';
-        if (price <= 0) return 'Price must be greater than 0';
+        if (price == null) return t('dm_validNumber');
+        if (price <= 0) return t('dm_pricePositive');
         if (price > 100000)
-          return 'Price cannot exceed 100,000 ${CurrencyHelper.getSymbol()}';
+          return '${t('dm_priceMax')} 100,000 ${CurrencyHelper.getSymbol()}';
         return null;
       },
     );
@@ -1006,8 +1007,8 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                   ),
                   Text(
                     isGoodProfit
-                        ? 'Good profit margin'
-                        : 'Low profit margin - consider increasing price',
+                        ? t('dm_goodMargin')
+                        : t('dm_lowMargin'),
                     style: TextStyle(
                         fontSize: 11,
                         color: isGoodProfit ? Colors.green : Colors.orange),
@@ -1052,7 +1053,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                 items: _categories.map((category) {
                   return DropdownMenuItem(
                       value: category,
-                      child: Text(category,
+                      child: Text(t('cat_' + category),
                           style: const TextStyle(fontWeight: FontWeight.w500)));
                 }).toList(),
                 onChanged: (String? newValue) {
@@ -1096,7 +1097,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                     fontSize: isMobile ? 14 : 16),
                 items: _units
                     .map((unit) =>
-                        DropdownMenuItem(value: unit, child: Text(unit)))
+                        DropdownMenuItem(value: unit, child: Text(t('unit_' + unit))))
                     .toList(),
                 onChanged: (value) {
                   if (value != null) setState(() => _selectedUnit = value);
@@ -1113,7 +1114,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     return TextFormField(
       controller: _currentStockController,
       decoration: InputDecoration(
-        labelText: 'Current Stock',
+        labelText: t('dm_currentStock'),
         prefixIcon: Icon(Icons.inventory, color: primaryColor),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         focusedBorder: OutlineInputBorder(
@@ -1128,13 +1129,13 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     return TextFormField(
       controller: _minimumLevelController,
       decoration: InputDecoration(
-        labelText: 'Minimum Stock Level',
+        labelText: t('dm_minStock'),
         prefixIcon: Icon(Icons.warning_amber, color: primaryColor),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: primaryColor, width: 2)),
-        helperText: 'Alert when stock goes below this level',
+        helperText: t('dm_minStockHelper'),
       ),
       keyboardType: TextInputType.number,
     );
@@ -1173,7 +1174,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     return TextFormField(
       controller: _imageUrlController,
       decoration: InputDecoration(
-        labelText: 'Image URL (Optional)',
+        labelText: t('dm_imageUrl'),
         labelStyle: TextStyle(color: theme.hintColor),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         enabledBorder: OutlineInputBorder(
@@ -1211,7 +1212,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
               Icon(_editingDrinkId != null ? Icons.save : Icons.add,
                   size: 22, color: Colors.white),
               const SizedBox(width: 8),
-              Text(_editingDrinkId != null ? 'Update Drink' : 'Add Drink',
+              Text(_editingDrinkId != null ? t('dm_updateDrink') : t('dm_addDrink'),
                   style: TextStyle(
                       fontSize: isMobile ? 15 : 17,
                       fontWeight: FontWeight.bold,
@@ -1232,7 +1233,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
             children: [
               Icon(Icons.clear, color: Colors.red, size: 22),
               const SizedBox(width: 8),
-              Text('Clear Form',
+              Text(t('dm_clearForm'),
                   style: TextStyle(
                       fontSize: isMobile ? 15 : 17,
                       color: Colors.red,
@@ -1262,7 +1263,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                 Icon(_editingDrinkId != null ? Icons.save : Icons.add,
                     size: 24, color: Colors.white),
                 const SizedBox(width: 12),
-                Text(_editingDrinkId != null ? 'Update Drink' : 'Add Drink',
+                Text(_editingDrinkId != null ? t('dm_updateDrink') : t('dm_addDrink'),
                     style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
@@ -1285,7 +1286,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
               children: [
                 Icon(Icons.clear, color: Colors.red, size: 24),
                 const SizedBox(width: 10),
-                const Text('Clear',
+                Text(t('dm_clear'),
                     style:
                         TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
               ],
@@ -1323,7 +1324,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Custom Drinks',
+                  Text(t('dm_customDrinks'),
                       style: TextStyle(
                           fontSize: isMobile ? 18 : 22,
                           fontWeight: FontWeight.bold,
@@ -1393,7 +1394,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
             Text(
               _searchQuery.isNotEmpty
                   ? 'No drinks found for "$_searchQuery"'
-                  : 'No custom drinks available',
+                  : t('dm_noCustomDrinks'),
               style: TextStyle(
                   fontSize: isMobile ? 18 : 22,
                   fontWeight: FontWeight.bold,
@@ -1402,8 +1403,8 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
             SizedBox(height: isMobile ? 8 : 12),
             Text(
               _searchQuery.isNotEmpty
-                  ? 'Try a different search term or add a new drink'
-                  : 'Add your first custom drink using the form above!',
+                  ? t('dm_tryDifferent')
+                  : t('dm_addFirst'),
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: isMobile ? 14 : 16, color: theme.hintColor),
@@ -1423,7 +1424,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                   children: [
                     Icon(Icons.clear_all, color: Colors.white, size: 20),
                     const SizedBox(width: 8),
-                    Text('Clear Search',
+                    Text(t('dm_clearSearchBtn'),
                         style: TextStyle(
                             fontSize: isMobile ? 15 : 16,
                             fontWeight: FontWeight.bold,
@@ -1445,18 +1446,18 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                     Row(children: [
                       Icon(Icons.tips_and_updates, color: Colors.orange),
                       const SizedBox(width: 8),
-                      Text('Pro Tips:',
+                      Text(t('dm_proTips'),
                           style: TextStyle(
                               fontSize: isMobile ? 16 : 18,
                               fontWeight: FontWeight.bold,
                               color: Colors.orange))
                     ]),
                     const SizedBox(height: 12),
-                    _buildTipItem('Use the search bar to quickly find drinks',
+                    _buildTipItem(t('dm_tipSearch'),
                         iconColor: primaryColor),
-                    _buildTipItem('Tap sort chips to organize drinks',
+                    _buildTipItem(t('dm_tipSortChips'),
                         iconColor: primaryColor),
-                    _buildTipItem('Leave image URL empty for default image',
+                    _buildTipItem(t('dm_tipImageUrl'),
                         iconColor: primaryColor),
                   ],
                 ),
@@ -1516,7 +1517,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                         color: Colors.white, size: 20)),
                 SizedBox(width: isMobile ? 12 : 16),
                 Expanded(
-                    child: Text('Quick Management Tips',
+                    child: Text(t('dm_quickMgmtTips'),
                         style: TextStyle(
                             fontSize: isMobile ? 16 : 18,
                             fontWeight: FontWeight.bold,
@@ -1525,14 +1526,14 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
             ),
             SizedBox(height: isMobile ? 12 : 16),
             _buildTipItem(
-                'Use search to quickly find drinks by name, category or price',
+                t('dm_tipSearch2'),
                 iconColor: primaryColor),
             _buildTipItem(
-                'Tap sort chips to organize drinks by name, price, or category',
+                t('dm_tipSortChips2'),
                 iconColor: primaryColor),
-            _buildTipItem('Tap any drink card to start editing it',
+            _buildTipItem(t('dm_tipTapCard'),
                 iconColor: primaryColor),
-            _buildTipItem('Empty image URL uses default drink image',
+            _buildTipItem(t('dm_tipEmptyImage'),
                 iconColor: primaryColor),
           ],
         ),
