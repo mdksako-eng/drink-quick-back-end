@@ -59,9 +59,16 @@ Everything is computed client-side from data already in memory (`OrderProvider.o
 
 ---
 
-## Phase 3 — Receipt Printing / Sharing (thermal printer) ⬜
+## Phase 3 — Receipt Printing / Sharing (thermal printer) ✅
 
 **Value:** Medium · **Risk:** Medium (platform) · **Hardware:** thermal printer (optional)
+
+### Delivered
+- `lib/services/receipt_printer.dart` — self-contained ESC/POS generator + Bluetooth printing.
+- `lib/screens/receipt_print_screen.dart` — 58/80mm preview, Bluetooth print, text share/save.
+- `responsive_invoice.dart` — receipt (thermal) action wired from the invoice.
+- `android/app/src/main/AndroidManifest.xml` — Bluetooth permissions.
+- `print_bluetooth_thermal` dependency + EN/FR keys.
 
 ### Approach
 1. **Sharing** — already done via `share_plus` (PDF). Add "share as text" fallback.

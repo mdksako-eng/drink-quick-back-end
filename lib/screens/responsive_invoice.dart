@@ -14,6 +14,7 @@ import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
 import 'package:provider/provider.dart';
 import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
+import 'package:drinks_calculator_fixed/screens/receipt_print_screen.dart';
 import '../utils/i18n.dart';
 class ResponsiveInvoice extends StatefulWidget {
   final List<Drink> drinks;
@@ -88,6 +89,26 @@ class _ResponsiveInvoiceState extends State<ResponsiveInvoice> {
   }
 
   String _formatCurrency(double amount) => CurrencyHelper.format(amount);
+
+  void _openReceipt() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReceiptPrintScreen(
+          drinks: widget.drinks,
+          totalAmount: widget.totalAmount,
+          amountPaid: widget.amountPaid,
+          balance: widget.balance,
+          orderId: widget.orderId,
+          customerName: widget.customerName,
+          companyName: _companyName,
+          companyAddress: _companyAddress,
+          companyPhone: _companyPhone,
+          companyEmail: _companyEmail,
+        ),
+      ),
+    );
+  }
 
   Map<String, Map<String, dynamic>> _groupDrinks() {
     final map = <String, Map<String, dynamic>>{};
@@ -418,6 +439,7 @@ class _ResponsiveInvoiceState extends State<ResponsiveInvoice> {
     child: Scaffold(
       appBar: AppBar(title: Text(widget.isPreview ? t('inv_preview') : '${t('inv_titlePrefix')}$_companyName'), backgroundColor: primaryColor, centerTitle: true, actions: [
         if (!widget.isPreview && !isStaff) IconButton(icon: const Icon(Icons.business), onPressed: () => _showCompanyNameDialog(context)),
+        if (!widget.isPreview) IconButton(icon: const Icon(Icons.receipt_long), onPressed: _openReceipt, tooltip: t('receiptTitle')),
         if (_isGeneratingPDF) const Padding(padding: EdgeInsets.all(8), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))),
       ]),
       body: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [backgroundColor, Colors.white])), child: SingleChildScrollView(padding: const EdgeInsets.all(20), child:

@@ -798,6 +798,19 @@ const Map<String, String> _en = {
   'holidayChristmas': 'Christmas',
   'holidayNewYearEve': 'New Year\'s Eve',
 
+  'receiptTitle': 'Receipt',
+  'receiptPrint': 'Print (Bluetooth)',
+  'receiptShare': 'Share',
+  'receiptSave': 'Save',
+  'receiptPaper': 'Paper',
+  'receiptBtNote': 'Bluetooth thermal printing is available on Android and Windows.',
+  'receiptBtOff': 'Bluetooth is off. Please enable it.',
+  'receiptNoPrinter': 'No paired printer found',
+  'receiptSelectPrinter': 'Select printer',
+  'receiptPrinted': 'Receipt sent to printer',
+  'receiptPrintFailed': 'Print failed',
+  'receiptSaved': 'Receipt saved',
+
 };
 
 const Map<String, String> _fr = {
@@ -1560,6 +1573,19 @@ const Map<String, String> _fr = {
   'holidayChristmasEve': 'Réveillon de Noël',
   'holidayChristmas': 'Noël',
   'holidayNewYearEve': 'Réveillon du Nouvel An',
+
+  'receiptTitle': 'Reçu',
+  'receiptPrint': 'Imprimer (Bluetooth)',
+  'receiptShare': 'Partager',
+  'receiptSave': 'Enregistrer',
+  'receiptPaper': 'Papier',
+  'receiptBtNote': 'L\'impression thermique Bluetooth est disponible sur Android et Windows.',
+  'receiptBtOff': 'Le Bluetooth est désactivé. Veuillez l\'activer.',
+  'receiptNoPrinter': 'Aucune imprimante appairée trouvée',
+  'receiptSelectPrinter': 'Sélectionner une imprimante',
+  'receiptPrinted': 'Reçu envoyé à l\'imprimante',
+  'receiptPrintFailed': 'Échec de l\'impression',
+  'receiptSaved': 'Reçu enregistré',
 
 };
 
