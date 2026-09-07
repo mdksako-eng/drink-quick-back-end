@@ -754,6 +754,22 @@ const Map<String, String> _en = {
   'exp_low': 'LOW',
   'exp_currentStockHeader': 'CURRENT STOCK',
   'exp_transactionsHeader': 'TRANSACTIONS',
+  'analyticsMenu': 'Analytics',
+  'dashTitle': 'Sales Analytics',
+  'dashTotalRevenue': 'Total Revenue',
+  'dashOrders': 'Orders',
+  'dashItemsSold': 'Items Sold',
+  'dashAvgOrder': 'Avg Order',
+  'dashPopularItems': 'Popular Items',
+  'dashPeakHours': 'Peak Hours',
+  'dashRevenueTrend': 'Revenue Trend',
+  'dashCategoryMix': 'Sales by Category',
+  'dashNoData': 'No sales data for this period',
+  'dashPeak': 'Peak',
+  'dashRange7': '7 Days',
+  'dashRange30': '30 Days',
+  'dashRange90': '90 Days',
+
 };
 
 const Map<String, String> _fr = {
@@ -1473,6 +1489,22 @@ const Map<String, String> _fr = {
   'exp_low': 'FAIBLE',
   'exp_currentStockHeader': 'STOCK ACTUEL',
   'exp_transactionsHeader': 'TRANSACTIONS',
+  'analyticsMenu': 'Analyses',
+  'dashTitle': 'Analyses des ventes',
+  'dashTotalRevenue': 'Revenu total',
+  'dashOrders': 'Commandes',
+  'dashItemsSold': 'Articles vendus',
+  'dashAvgOrder': 'Commande moyenne',
+  'dashPopularItems': 'Articles populaires',
+  'dashPeakHours': 'Heures de pointe',
+  'dashRevenueTrend': 'Évolution des revenus',
+  'dashCategoryMix': 'Ventes par catégorie',
+  'dashNoData': 'Aucune donnée de vente pour cette période',
+  'dashPeak': 'Pointe',
+  'dashRange7': '7 jours',
+  'dashRange30': '30 jours',
+  'dashRange90': '90 jours',
+
 };
 
 String t(String key) {

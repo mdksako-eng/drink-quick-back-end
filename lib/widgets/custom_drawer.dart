@@ -8,6 +8,7 @@ import 'package:drinks_calculator_fixed/screens/drink_management_screen.dart';
 import 'package:drinks_calculator_fixed/screens/storage_settings_screen.dart';
 import 'package:drinks_calculator_fixed/screens/admin_panel.dart';
 import 'package:drinks_calculator_fixed/screens/manager_panel.dart';
+import 'package:drinks_calculator_fixed/screens/manager_dashboard.dart';
 import 'package:drinks_calculator_fixed/screens/ai_assistant_screen.dart';
 import 'package:drinks_calculator_fixed/screens/auth_screen.dart';
 import 'package:drinks_calculator_fixed/screens/inventory_screen.dart';
@@ -270,6 +271,16 @@ class CustomDrawer extends StatelessWidget {
                       MaterialPageRoute(
                           builder: (context) => const AIAssistantScreen()));
                 }, primaryColor: primaryColor),
+
+                if (isManager || isAdmin)
+                  _buildDrawerItem(context, Icons.insert_chart_outlined,
+                      t('analyticsMenu'), () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const ManagerDashboard()));
+                  }, primaryColor: primaryColor),
 
                 // ========== MANAGEMENT SECTION ==========
                 Divider(
