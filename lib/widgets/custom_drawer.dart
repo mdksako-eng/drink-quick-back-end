@@ -9,6 +9,7 @@ import 'package:drinks_calculator_fixed/screens/storage_settings_screen.dart';
 import 'package:drinks_calculator_fixed/screens/admin_panel.dart';
 import 'package:drinks_calculator_fixed/screens/manager_panel.dart';
 import 'package:drinks_calculator_fixed/screens/manager_dashboard.dart';
+import 'package:drinks_calculator_fixed/screens/forecast_screen.dart';
 import 'package:drinks_calculator_fixed/screens/ai_assistant_screen.dart';
 import 'package:drinks_calculator_fixed/screens/auth_screen.dart';
 import 'package:drinks_calculator_fixed/screens/inventory_screen.dart';
@@ -280,6 +281,16 @@ class CustomDrawer extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                             builder: (context) => const ManagerDashboard()));
+                  }, primaryColor: primaryColor),
+
+                if (isManager || isAdmin)
+                  _buildDrawerItem(context, Icons.auto_graph, t('forecastMenu'),
+                      () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const ForecastScreen()));
                   }, primaryColor: primaryColor),
 
                 // ========== MANAGEMENT SECTION ==========

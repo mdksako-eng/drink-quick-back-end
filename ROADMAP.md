@@ -29,9 +29,16 @@ Everything is computed client-side from data already in memory (`OrderProvider.o
 
 ---
 
-## Phase 2 — Predictive Analytics / Demand Forecasting ⬜
+## Phase 2 — Predictive Analytics / Demand Forecasting ✅
 
 **Value:** High · **Risk:** Medium · **Hardware:** none
+
+### Delivered
+- `lib/models/forecast_model.dart` — `ForecastItem`, `EventDay`, `ForecastResult`.
+- `lib/utils/forecast_helper.dart` — `computeForecast()` (moving average + weekly seasonality + event multipliers).
+- `lib/utils/holidays.dart` — static holiday calendar + `upcomingStaticEvents()`.
+- `lib/screens/forecast_screen.dart` — forecast list, recommended orders, trend/confidence, custom events, optional AI summary (Groq).
+- Drawer entry (`forecastMenu`) for Manager + Admin; EN/FR keys.
 
 ### Approach
 1. **Deterministic engine (offline, no AI cost):**
