@@ -833,6 +833,8 @@ const Map<String, String> _en = {
   'dashSalesByStaff': 'Sales by Staff',
   'dashExport': 'Export',
 
+  'searchDrinks': 'Search or select a drink...',
+
 };
 
 const Map<String, String> _fr = {
@@ -1630,6 +1632,8 @@ const Map<String, String> _fr = {
   'staffUpdateFailed': 'Échec de la mise à jour',
   'dashSalesByStaff': 'Ventes par personnel',
   'dashExport': 'Exporter',
+
+  'searchDrinks': 'Rechercher ou sélectionner une boisson...',
 
 };
 

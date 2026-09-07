@@ -28,6 +28,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
   void initState() {
     super.initState();
     _snapshot = _compute();
+    _refresh();
   }
 
   AnalyticsSnapshot _compute() {

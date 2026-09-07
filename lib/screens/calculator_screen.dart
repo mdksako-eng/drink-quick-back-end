@@ -305,6 +305,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     try {
       // Sync cloud settings (theme, company details) BEFORE refreshing helpers
       await _syncCloudSettingsAtStartup();
+      if (!mounted) return;
 
       if (SupabaseService.canUseSupabase) {
         final orderProvider =
@@ -2155,7 +2156,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             controller: _searchController,
             focusNode: _searchFocusNode,
             decoration: InputDecoration(
-              hintText: 'Search or select a drink...',
+              hintText: t('searchDrinks'),
               prefixIcon: const Icon(Icons.search, size: 20),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
@@ -2441,7 +2442,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   controller: _searchController,
                   focusNode: _searchFocusNode,
                   decoration: InputDecoration(
-                    hintText: 'Search or select a drink...',
+                    hintText: t('searchDrinks'),
                     prefixIcon: const Icon(Icons.search, size: 20),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(

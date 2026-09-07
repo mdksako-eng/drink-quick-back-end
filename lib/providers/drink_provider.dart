@@ -166,6 +166,7 @@ class DrinkProvider with ChangeNotifier {
     }
     _customDrinks.clear();
     _allDrinks.clear();
+    _isInitialized = false;
 
     if (_currentUserId != null) {
       if (_currentUserRole == 'Customer') {

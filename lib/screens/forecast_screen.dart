@@ -28,7 +28,13 @@ class _ForecastScreenState extends State<ForecastScreen> {
   @override
   void initState() {
     super.initState();
-    _loadEvents();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final inv = Provider.of<InventoryProvider>(context, listen: false);
+    await inv.loadInventory();
+    await _loadEvents();
   }
 
   Future<void> _loadEvents() async {

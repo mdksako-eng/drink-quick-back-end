@@ -412,6 +412,7 @@ class OrderProvider with ChangeNotifier {
       notifyListeners();
 
       _orderHistory.clear();
+      _isInitialized = false;
       await _saveOrders();
       notifyListeners();
       print('🗑️ Cleared all orders');
