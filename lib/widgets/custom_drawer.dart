@@ -23,6 +23,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../utils/i18n.dart';
+import 'language_toggle.dart';
 import '../widgets/badge_icon.dart';
 
 class CustomDrawer extends StatelessWidget {
@@ -431,35 +432,7 @@ class CustomDrawer extends StatelessWidget {
                 const SizedBox(height: 12),
                 // 🌐 Language toggle (EN/FR) — rebuilds the whole app via
                 // the ValueListenableBuilder around MaterialApp.
-                ValueListenableBuilder<String>(
-                  valueListenable: LanguageService.instance.language,
-                  builder: (context, lang, _) => InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () => LanguageService.instance.toggle(),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('🌐', style: TextStyle(fontSize: 16)),
-                          const SizedBox(width: 8),
-                          Text(
-                            lang == LanguageService.fr
-                                ? 'Langue : Français'
-                                : 'Language: English',
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: theme.colorScheme.onSurface),
-                          ),
-                          const SizedBox(width: 6),
-                          Icon(Icons.swap_horiz,
-                              size: 16, color: theme.hintColor),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                const LanguageToggle(),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

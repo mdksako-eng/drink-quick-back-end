@@ -1,5 +1,6 @@
 // screens/auth_screen.dart
 import '../utils/i18n.dart';
+import '../widgets/language_toggle.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -873,6 +874,15 @@ class _AuthScreenState extends State<AuthScreen> {
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: LanguageToggle(
+                    activeColor: Colors.white,
+                    activeTextColor: const Color(0xFF667EEA),
+                    inactiveTextColor: Colors.white,
+                    backgroundColor: Colors.white.withAlpha(30),
+                  ),
+                ),
                 const SizedBox(height: 20),
                 Container(
                     width: 100,
