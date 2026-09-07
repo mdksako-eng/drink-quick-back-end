@@ -197,7 +197,7 @@ class ExportHelper {
 
     await SharePlus.instance.share(ShareParams(
   files: [XFile(file.path)],
-  subject: 'Inventory Report',
+  subject: t('exp_inventoryReport'),
 ));
   }
 
@@ -221,31 +221,31 @@ class ExportHelper {
   static Future<void> _exportAsExcel(InventoryReport report, BuildContext context) async {
     final excel = Excel.createExcel();
     final dateFormat = DateFormat('MMM dd, yyyy');
-    final sheet = excel['Inventory Report'];
+    final sheet = excel[t('exp_inventoryReport')];
 
     // Summary sheet
-    sheet.appendRow(['DRINKS QUICK CAL - INVENTORY REPORT']);
-    sheet.appendRow(['Period: ${dateFormat.format(report.startDate)} - ${dateFormat.format(report.endDate)}']);
-    sheet.appendRow(['Generated: ${dateFormat.format(DateTime.now())}']);
+    sheet.appendRow([t('exp_headerTitle')]);
+    sheet.appendRow(['${t('exp_period')}: ${dateFormat.format(report.startDate)} - ${dateFormat.format(report.endDate)}']);
+    sheet.appendRow(['${t('exp_generated')}: ${dateFormat.format(DateTime.now())}']);
     sheet.appendRow([]);
-    sheet.appendRow(['SUMMARY']);
-    sheet.appendRow(['Metric', 'Value']);
-    sheet.appendRow(['Total Items in Stock', report.currentStock.fold(0, (s, i) => s + i.quantity)]);
-    sheet.appendRow(['Items In', report.totalItemsIn]);
-    sheet.appendRow(['Items Out', report.totalItemsOut]);
-    sheet.appendRow(['Net Change', report.netChange]);
-    sheet.appendRow(['Low Stock Items', report.lowStockCount]);
+    sheet.appendRow([t('exp_summary').toUpperCase()]);
+    sheet.appendRow([t('exp_metric'), t('exp_value')]);
+    sheet.appendRow([t('exp_totalItemsInStock'), report.currentStock.fold(0, (s, i) => s + i.quantity)]);
+    sheet.appendRow([t('exp_itemsIn'), report.totalItemsIn]);
+    sheet.appendRow([t('exp_itemsOut'), report.totalItemsOut]);
+    sheet.appendRow([t('exp_netChange'), report.netChange]);
+    sheet.appendRow([t('exp_lowStockItems'), report.lowStockCount]);
     sheet.appendRow([]);
-    sheet.appendRow(['CURRENT STOCK']);
-    sheet.appendRow(['Drink Name', 'Quantity', 'Min Level', 'Status']);
+    sheet.appendRow([t('exp_currentStockHeader')]);
+    sheet.appendRow([t('exp_drinkName'), t('exp_quantity'), t('exp_minLevel'), t('exp_status')]);
     for (final item in report.currentStock) {
-      sheet.appendRow([item.drinkName, item.quantity, item.minStockLevel, item.isLowStock ? 'LOW' : 'OK']);
+      sheet.appendRow([item.drinkName, item.quantity, item.minStockLevel, item.isLowStock ? t('exp_low') : t('exp_ok')]);
     }
     sheet.appendRow([]);
-    sheet.appendRow(['TRANSACTIONS']);
-    sheet.appendRow(['Date', 'Drink', 'Type', 'Quantity', 'Reason']);
-    for (final t in report.transactions) {
-      sheet.appendRow([dateFormat.format(t.date), t.drinkName, t.isIncoming ? 'IN' : 'OUT', t.quantity, t.reason]);
+    sheet.appendRow([t('exp_transactionsHeader')]);
+    sheet.appendRow([t('exp_date'), t('exp_drink'), t('exp_type'), t('exp_quantityLabel'), t('exp_reason')]);
+    for (final tx in report.transactions) {
+      sheet.appendRow([dateFormat.format(tx.date), tx.drinkName, tx.isIncoming ? t('exp_in') : t('exp_out'), tx.quantity, tx.reason]);
     }
 
     // Save and share
@@ -283,7 +283,7 @@ class ExportHelper {
 
     await SharePlus.instance.share(ShareParams(
   files: [XFile(file.path)],
-  subject: 'Inventory Report',
+  subject: t('exp_inventoryReport'),
 ));
   }
 
@@ -292,28 +292,28 @@ class ExportHelper {
     final dateFormat = DateFormat('MMM dd, yyyy');
     final buffer = StringBuffer();
 
-    buffer.writeln('DRINKS QUICK CAL - INVENTORY REPORT');
-    buffer.writeln('Period:,${dateFormat.format(report.startDate)} - ${dateFormat.format(report.endDate)}');
-    buffer.writeln('Generated:,${dateFormat.format(DateTime.now())}');
+    buffer.writeln(t('exp_headerTitle'));
+    buffer.writeln('${t('exp_period')}:,${dateFormat.format(report.startDate)} - ${dateFormat.format(report.endDate)}');
+    buffer.writeln('${t('exp_generated')}:,${dateFormat.format(DateTime.now())}');
     buffer.writeln();
-    buffer.writeln('SUMMARY');
-    buffer.writeln('Metric,Value');
-    buffer.writeln('Total Items in Stock,${report.currentStock.fold(0, (s, i) => s + i.quantity)}');
-    buffer.writeln('Items In,${report.totalItemsIn}');
-    buffer.writeln('Items Out,${report.totalItemsOut}');
-    buffer.writeln('Net Change,${report.netChange}');
-    buffer.writeln('Low Stock Items,${report.lowStockCount}');
+    buffer.writeln(t('exp_summary').toUpperCase());
+    buffer.writeln('${t('exp_metric')},${t('exp_value')}');
+    buffer.writeln('${t('exp_totalItemsInStock')},${report.currentStock.fold(0, (s, i) => s + i.quantity)}');
+    buffer.writeln('${t('exp_itemsIn')},${report.totalItemsIn}');
+    buffer.writeln('${t('exp_itemsOut')},${report.totalItemsOut}');
+    buffer.writeln('${t('exp_netChange')},${report.netChange}');
+    buffer.writeln('${t('exp_lowStockItems')},${report.lowStockCount}');
     buffer.writeln();
-    buffer.writeln('CURRENT STOCK');
-    buffer.writeln('Drink Name,Quantity,Min Level,Status');
+    buffer.writeln(t('exp_currentStockHeader'));
+    buffer.writeln('${t('exp_drinkName')},${t('exp_quantity')},${t('exp_minLevel')},${t('exp_status')}');
     for (final item in report.currentStock) {
-      buffer.writeln('${item.drinkName},${item.quantity},${item.minStockLevel},${item.isLowStock ? 'LOW' : 'OK'}');
+      buffer.writeln('${item.drinkName},${item.quantity},${item.minStockLevel},${item.isLowStock ? t('exp_low') : t('exp_ok')}');
     }
     buffer.writeln();
-    buffer.writeln('TRANSACTIONS');
-    buffer.writeln('Date,Drink,Type,Quantity,Reason');
-    for (final t in report.transactions) {
-      buffer.writeln('${dateFormat.format(t.date)},${t.drinkName},${t.isIncoming ? 'IN' : 'OUT'},${t.quantity},${t.reason}');
+    buffer.writeln(t('exp_transactionsHeader'));
+    buffer.writeln('${t('exp_date')},${t('exp_drink')},${t('exp_type')},${t('exp_quantityLabel')},${t('exp_reason')}');
+    for (final tx in report.transactions) {
+      buffer.writeln('${dateFormat.format(tx.date)},${tx.drinkName},${tx.isIncoming ? t('exp_in') : t('exp_out')},${tx.quantity},${tx.reason}');
     }
 
     // Save and share
@@ -351,7 +351,7 @@ class ExportHelper {
 
     await SharePlus.instance.share(ShareParams(
   files: [XFile(file.path)],
-  subject: 'Inventory Report',
+  subject: t('exp_inventoryReport'),
 ));
   }
 }

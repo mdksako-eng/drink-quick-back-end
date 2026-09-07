@@ -747,6 +747,13 @@ const Map<String, String> _en = {
   'currentStock': 'Current Stock',
   'stock': 'Stock',
   'min': 'Min',
+
+  'exp_headerTitle': 'DRINKS QUICK CAL - INVENTORY REPORT',
+  'exp_period': 'Period',
+  'exp_generated': 'Generated',
+  'exp_low': 'LOW',
+  'exp_currentStockHeader': 'CURRENT STOCK',
+  'exp_transactionsHeader': 'TRANSACTIONS',
 };
 
 const Map<String, String> _fr = {
@@ -1459,6 +1466,13 @@ const Map<String, String> _fr = {
   'currentStock': 'Stock actuel',
   'stock': 'Stock',
   'min': 'Min',
+
+  'exp_headerTitle': 'DRINKS QUICK CAL - RAPPORT D\'INVENTAIRE',
+  'exp_period': 'Période',
+  'exp_generated': 'Généré',
+  'exp_low': 'FAIBLE',
+  'exp_currentStockHeader': 'STOCK ACTUEL',
+  'exp_transactionsHeader': 'TRANSACTIONS',
 };
 
 String t(String key) {
