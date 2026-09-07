@@ -106,7 +106,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
           ),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(t('cancel'))),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, _passwordController.text),
             style: ElevatedButton.styleFrom(backgroundColor: _primaryColor),
@@ -219,8 +219,8 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
         title: Text(t('admin_blockUser')),
         content: Text('${t('admin_blockUser')} ${user['username']}?\n\n${t('admin_blockBody')}'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text('Block')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t('cancel'))),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: Text(t('admin_blockUser'))),
         ],
       ),
     );
@@ -249,8 +249,8 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
         title: Text(t('admin_unblockUser')),
         content: Text('${t('admin_unblockBody').replaceAll('@u', user['username'] ?? '')}'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text('Unblock')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t('cancel'))),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: Text(t('admin_unblockUser'))),
         ],
       ),
     );
@@ -283,7 +283,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
         title: Text(t('admin_deleteUser')),
         content: Text('${t('admin_deletePermanent')} ${user['username']}?\n\n${t('admin_cannotUndo')}'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t('cancel'))),
           ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: Text(t('admin_deleteForever'))),
         ],
       ),
