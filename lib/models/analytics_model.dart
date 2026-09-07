@@ -20,6 +20,20 @@ class CategorySlice {
   const CategorySlice({required this.category, required this.count});
 }
 
+class StaffSale {
+  final String name;
+  final double revenue;
+  final int orders;
+  final int itemsSold;
+
+  const StaffSale({
+    required this.name,
+    required this.revenue,
+    required this.orders,
+    required this.itemsSold,
+  });
+}
+
 class AnalyticsSnapshot {
   final double totalRevenue;
   final int totalOrders;
@@ -30,6 +44,7 @@ class AnalyticsSnapshot {
   final List<double> revenueValues; // daily totals, ascending
   final List<String> revenueLabels; // e.g. '12/8'
   final List<CategorySlice> categoryMix;
+  final List<StaffSale> staffSales;
   final int topHour;
 
   const AnalyticsSnapshot({
@@ -42,6 +57,7 @@ class AnalyticsSnapshot {
     required this.revenueValues,
     required this.revenueLabels,
     required this.categoryMix,
+    required this.staffSales,
     required this.topHour,
   });
 }

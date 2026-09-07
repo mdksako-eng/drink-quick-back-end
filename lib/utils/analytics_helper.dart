@@ -63,6 +63,25 @@ AnalyticsSnapshot computeAnalytics({
   final averageOrderValue =
       totalOrders == 0 ? 0.0 : totalRevenue / totalOrders;
 
+  // Aggregate sales by staff member.
+  final staffRevenue = <String, double>{};
+  final staffOrders = <String, int>{};
+  final staffItems = <String, int>{};
+  for (final o in active) {
+    if (o.staffName.isEmpty) continue;
+    staffRevenue[o.staffName] = (staffRevenue[o.staffName] ?? 0) + o.totalAmount;
+    staffOrders[o.staffName] = (staffOrders[o.staffName] ?? 0) + 1;
+    staffItems[o.staffName] = (staffItems[o.staffName] ?? 0) + o.items.length;
+  }
+  final staffSales = staffRevenue.entries
+      .map((e) => StaffSale(
+          name: e.key,
+          revenue: e.value,
+          orders: staffOrders[e.key] ?? 0,
+          itemsSold: staffItems[e.key] ?? 0))
+      .toList()
+    ..sort((a, b) => b.revenue.compareTo(a.revenue));
+
   return AnalyticsSnapshot(
     totalRevenue: totalRevenue,
     totalOrders: totalOrders,
@@ -73,6 +92,7 @@ AnalyticsSnapshot computeAnalytics({
     revenueValues: revenueValues,
     revenueLabels: revenueLabels,
     categoryMix: categories,
+    staffSales: staffSales,
     topHour: topHour,
   );
 }

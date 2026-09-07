@@ -185,7 +185,13 @@ class _ManagerPanelState extends State<ManagerPanel>
       try {
         final response = await http.post(
           Uri.parse(ApiConfig.blockUser(staff['id'])),
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            'Content-Type': 'application/json',
+            'user-id':
+                Provider.of<AuthProvider>(context, listen: false).user?.id ?? '',
+            'Authorization':
+                'Bearer ${await SecureStorageService.getSessionToken() ?? ''}',
+          },
         );
         if (response.statusCode == 200) {
           await _loadStaff();
@@ -221,7 +227,13 @@ class _ManagerPanelState extends State<ManagerPanel>
       try {
         final response = await http.post(
           Uri.parse(ApiConfig.unblockUser(staff['id'])),
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            'Content-Type': 'application/json',
+            'user-id':
+                Provider.of<AuthProvider>(context, listen: false).user?.id ?? '',
+            'Authorization':
+                'Bearer ${await SecureStorageService.getSessionToken() ?? ''}',
+          },
         );
         if (response.statusCode == 200) {
           await _loadStaff();
@@ -232,6 +244,88 @@ class _ManagerPanelState extends State<ManagerPanel>
       }
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _editStaff(Map<String, dynamic> staff) async {
+    final usernameController =
+        TextEditingController(text: staff['username'] ?? '');
+    final emailController = TextEditingController(text: staff['email'] ?? '');
+    String role = staff['role']?.toString() ?? 'Staff';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => AlertDialog(
+          title: Text(t('editStaff')),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: usernameController,
+                decoration: InputDecoration(labelText: t('username')),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emailController,
+                decoration: InputDecoration(labelText: t('email')),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: role,
+                decoration: InputDecoration(labelText: t('staffRole')),
+                items: const [
+                  DropdownMenuItem(value: 'Staff', child: Text('Staff')),
+                  DropdownMenuItem(value: 'Manager', child: Text('Manager')),
+                ],
+                onChanged: (v) => setModalState(() => role = v ?? 'Staff'),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(t('cancel'))),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(t('save'))),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.user?.id ?? '';
+      final response = await http
+          .put(
+            Uri.parse(ApiConfig.updateStaff(staff['id'])),
+            headers: {
+              'Content-Type': 'application/json',
+              'user-id': userId,
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+            body: json.encode({
+              'username': usernameController.text.trim(),
+              'email': emailController.text.trim(),
+              'role': role,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final data = json.decode(response.body);
+      if (response.statusCode == 200 || data['status'] == 'success') {
+        await _loadStaff();
+        Helpers.showToast(t('staffUpdated'));
+      } else {
+        Helpers.showToast(data['message'] ?? t('staffUpdateFailed'));
+      }
+    } catch (e) {
+      Helpers.showToast('${t('staffUpdateFailed')}: $e');
+    }
+    setState(() => _isLoading = false);
   }
 
   void _clearForm() {
@@ -624,10 +718,18 @@ class _ManagerPanelState extends State<ManagerPanel>
             ]),
             trailing: PopupMenuButton<String>(
               onSelected: (action) {
+                if (action == 'edit') _editStaff(s);
                 if (action == 'block') _blockStaff(s);
                 if (action == 'unblock') _unblockStaff(s);
               },
               itemBuilder: (ctx) => [
+                PopupMenuItem(
+                    value: 'edit',
+                    child: Row(children: [
+                      const Icon(Icons.edit, size: 18),
+                      const SizedBox(width: 8),
+                      Text(t('edit'))
+                    ])),
                 if (isActive)
                   PopupMenuItem(
                       value: 'block',

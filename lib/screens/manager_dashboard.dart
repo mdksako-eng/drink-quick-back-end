@@ -1,10 +1,15 @@
 // screens/manager_dashboard.dart
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/analytics_model.dart';
 import '../providers/order_provider.dart';
 import '../utils/analytics_helper.dart';
 import '../utils/currency_helper.dart';
+import '../utils/helpers.dart';
 import '../utils/i18n.dart';
 import '../widgets/charts.dart';
 
@@ -57,6 +62,10 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
         backgroundColor: primary,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+              icon: const Icon(Icons.file_download),
+              onPressed: _exportCsv,
+              tooltip: t('dashExport')),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _refresh),
         ],
       ),
@@ -73,6 +82,11 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             _sectionCard(
               title: t('dashPopularItems'),
               child: _buildPopularItems(s.popularItems, primary),
+            ),
+            const SizedBox(height: 16),
+            _sectionCard(
+              title: t('dashSalesByStaff'),
+              child: _buildStaffSales(s.staffSales, primary),
             ),
             const SizedBox(height: 16),
             _sectionCard(
@@ -261,5 +275,75 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             style: TextStyle(color: Colors.grey[600], fontSize: 14)),
       ]),
     );
+  }
+
+  Widget _buildStaffSales(List<StaffSale> staff, Color primary) {
+    if (staff.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(t('dashNoData'),
+            style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+      );
+    }
+    return Column(
+      children: staff.map((s) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(children: [
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(s.name,
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w500)),
+                  Text(
+                      '${s.orders} ${t('dashOrders')} · ${s.itemsSold} ${t('dashItemsSold')}',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                ])),
+            Text(CurrencyHelper.format(s.revenue),
+                style: TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.bold, color: primary)),
+          ]),
+        );
+      }).toList(),
+    );
+  }
+
+  Future<void> _exportCsv() async {
+    final s = _snapshot;
+    final buf = StringBuffer();
+    buf.writeln(t('dashTitle'));
+    buf.writeln('${t('dashTotalRevenue')},${s.totalRevenue}');
+    buf.writeln('${t('dashOrders')},${s.totalOrders}');
+    buf.writeln('${t('dashItemsSold')},${s.totalItemsSold}');
+    buf.writeln('${t('dashAvgOrder')},${s.averageOrderValue}');
+    buf.writeln();
+    buf.writeln(t('dashSalesByStaff'));
+    buf.writeln(
+        '${t('username')},${t('dashOrders')},${t('dashItemsSold')},${t('dashTotalRevenue')}');
+    for (final st in s.staffSales) {
+      buf.writeln('${st.name},${st.orders},${st.itemsSold},${st.revenue}');
+    }
+    buf.writeln();
+    buf.writeln(t('dashPopularItems'));
+    buf.writeln('${t('exp_drinkName')},${t('quantity')}');
+    for (final p in s.popularItems) {
+      buf.writeln('${p.name},${p.quantity}');
+    }
+
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File(
+          '${dir.path}/analytics_${DateTime.now().millisecondsSinceEpoch}.csv');
+      await file.writeAsString(buf.toString());
+      if (!mounted) return;
+      await SharePlus.instance.share(ShareParams(
+        text: t('dashTitle'),
+        files: [XFile(file.path)],
+      ));
+    } catch (e) {
+      if (mounted) Helpers.showToast('$e');
+    }
   }
 }

@@ -1145,6 +1145,48 @@ app.post('/api/auth/unblock-user/:id', requireSession(pool), async (req, res) =>
   }
 });
 
+// UPDATE STAFF (Manager/Administrator can edit their company staff)
+app.put('/api/auth/update-staff/:id', requireSession(pool), async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { username, email, role } = req.body;
+    const isAdmin = req.user?.role === 'Administrator';
+
+    if (!['Manager', 'Administrator'].includes(req.user.role)) {
+      return res.status(403).json({ status: 'error', message: 'Only managers and administrators can update staff' });
+    }
+
+    const userResult = await pool.query('SELECT id, role, company_id FROM users WHERE id = $1', [userId]);
+    if (userResult.rowCount === 0) return res.status(404).json({ status: 'error', message: 'User not found' });
+    const target = userResult.rows[0];
+
+    if (target.role === 'Administrator') return res.status(403).json({ status: 'error', message: 'Cannot edit an Administrator' });
+
+    // 🔒 Non-admins may only manage users inside their own company
+    if (!isAdmin && req.user?.company_id != null && target.company_id != null && target.company_id !== req.user.company_id) {
+      return res.status(403).json({ status: 'error', message: 'You can only manage users in your own company' });
+    }
+
+    // 🔒 Managers can only assign Staff/Manager (never Administrator)
+    const newRole = role && ['Staff', 'Manager'].includes(role) ? role : target.role;
+
+    const result = await pool.query(
+      `UPDATE users SET
+         username = COALESCE($1, username),
+         email = COALESCE($2, email),
+         role = $3,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING id, username, email, role, company_id, is_active`,
+      [username || null, email || null, newRole, userId]
+    );
+
+    res.json({ status: 'success', message: 'Staff updated', data: { user: result.rows[0] } });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 // DELETE USER (Admin)
 app.delete('/api/auth/users/:id', verifyAdmin, async (req, res) => {
   try {

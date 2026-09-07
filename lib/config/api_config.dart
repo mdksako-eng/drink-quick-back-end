@@ -21,6 +21,7 @@ class ApiConfig {
   static String unblockUser(dynamic id) => '$apiBase/auth/unblock-user/$id';
   static String deleteUser(dynamic id) => '$apiBase/auth/users/$id';
   static String updateUser(dynamic id) => '$apiBase/users/$id';
+  static String updateStaff(dynamic id) => '$apiBase/auth/update-staff/$id';
 
   // Admin Endpoints
   static const String adminUsers = '$apiBase/admin/users';

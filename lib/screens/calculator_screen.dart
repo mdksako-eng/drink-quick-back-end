@@ -866,10 +866,14 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
     // ✅ Complete the order
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final staffName =
+        Provider.of<AuthProvider>(context, listen: false).currentUser?.username ??
+            '';
     _createdOrder = await orderProvider.createOrderAndGetOrder(
       _selectedDrinks,
       amount,
       customerName,
+      staffName: staffName,
     );
     await _deductInventoryFromOrder();
 
@@ -1027,10 +1031,14 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
   Future<bool> _processCashPayment(String customerName) async {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final staffName =
+        Provider.of<AuthProvider>(context, listen: false).currentUser?.username ??
+            '';
     _createdOrder = await orderProvider.createOrderAndGetOrder(
       _selectedDrinks,
       _amountPaid,
       customerName,
+      staffName: staffName,
     );
     await _deductInventoryFromOrder();
     return true;
@@ -2135,7 +2143,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       Map<String, int> drinkSummary, ThemeData theme, Color primaryColor) {
     return Column(
       children: [
-        Text('Select Drink:',
+        Text('${t('calcSelectDrink')}:',
             style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -2309,7 +2317,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             ),
           ),
         SizedBox(height: 20),
-        Text('Select Quantity:',
+        Text('${t('calcSelectQuantity')}:',
             style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -2421,7 +2429,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Select Drink & Quantity:',
+              Text('${t('calcSelectDrinkQty')}:',
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
@@ -2605,7 +2613,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Quantity:',
+                        Text('${t('quantity')}:',
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -3023,13 +3031,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Adjust Quantity:',
+                Text('${t('calcAdjustQuantity')}:',
                     style: TextStyle(
                         fontSize: isMobile ? 12 : 14,
                         fontWeight: FontWeight.w600,
                         color: theme.hintColor)),
                 if (remainingStock > 0)
-                  Text('${remainingStock} more available',
+                  Text('$remainingStock ${t('calcMoreAvailable')}',
                       style: TextStyle(
                           fontSize: isMobile ? 10 : 12, color: Colors.green)),
                 if (remainingStock <= 0)
@@ -3090,7 +3098,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             child: TextButton.icon(
               onPressed: () => _clearDrink(drinkName),
               icon: Icon(Icons.delete_forever, size: isMobile ? 16 : 18),
-              label: Text('Remove All',
+              label: Text(t('removeAll'),
                   style: TextStyle(fontSize: isMobile ? 12 : 14)),
               style: TextButton.styleFrom(foregroundColor: Colors.red),
             ),
@@ -3159,7 +3167,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 fontSize: 18,
                 color: theme.textTheme.bodyLarge?.color)),
         SizedBox(height: 15),
-        Text('Amount Received:',
+        Text('${t('inv_amountReceived')}:',
             style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,

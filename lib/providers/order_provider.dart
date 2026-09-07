@@ -19,6 +19,7 @@ class Order {
   final DateTime date;
   final bool isActive;
   final String customerName;
+  final String staffName;
 
   Order({
     required this.id,
@@ -30,6 +31,7 @@ class Order {
     required this.date,
     this.isActive = true,
     this.customerName = '',
+    this.staffName = '',
   });
 
   Map<String, dynamic> toJson() {
@@ -43,6 +45,8 @@ class Order {
       'date': date.toIso8601String(),
       'isActive': isActive,
       'customerName': customerName,
+      'staffName': staffName,
+      'staff_name': staffName,
     };
   }
 
@@ -96,6 +100,9 @@ class Order {
       isActive: json['isActive'] ?? json['is_active'] ?? true,
       customerName: json['customerName']?.toString() ??
           json['customer_name']?.toString() ??
+          '',
+      staffName: json['staffName']?.toString() ??
+          json['staff_name']?.toString() ??
           '',
     );
   }
@@ -263,7 +270,8 @@ class OrderProvider with ChangeNotifier {
   }
 
   Future<Order> createOrderAndGetOrder(
-      List<Drink> items, double amountPaid, String customerName) async {
+      List<Drink> items, double amountPaid, String customerName,
+      {String staffName = ''}) async {
     try {
       _isLoading = true;
       notifyListeners();
@@ -294,6 +302,7 @@ class OrderProvider with ChangeNotifier {
         date: DateTime.now(),
         isActive: true,
         customerName: customerName,
+        staffName: staffName,
       );
 
       print('🔍 Creating order: ${order.id}');

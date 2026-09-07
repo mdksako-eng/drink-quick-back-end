@@ -821,6 +821,18 @@ const Map<String, String> _en = {
   'scanManage': 'Manage inventory',
   'scanCameraError': 'Camera unavailable. Please enable camera access.',
 
+  'calcSelectDrink': 'Select Drink',
+  'calcSelectQuantity': 'Select Quantity',
+  'calcSelectDrinkQty': 'Select Drink & Quantity',
+  'calcAdjustQuantity': 'Adjust Quantity',
+  'calcMoreAvailable': 'more available',
+  'editStaff': 'Edit Staff',
+  'staffRole': 'Role',
+  'staffUpdated': 'Staff updated',
+  'staffUpdateFailed': 'Update failed',
+  'dashSalesByStaff': 'Sales by Staff',
+  'dashExport': 'Export',
+
 };
 
 const Map<String, String> _fr = {
@@ -1606,6 +1618,18 @@ const Map<String, String> _fr = {
   'scanRestock': 'Réapprovisionner +1',
   'scanManage': 'Gérer l\'inventaire',
   'scanCameraError': 'Caméra indisponible. Veuillez autoriser l\'accès à la caméra.',
+
+  'calcSelectDrink': 'Choisir la boisson',
+  'calcSelectQuantity': 'Choisir la quantité',
+  'calcSelectDrinkQty': 'Choisir la boisson et la quantité',
+  'calcAdjustQuantity': 'Ajuster la quantité',
+  'calcMoreAvailable': 'restant(s)',
+  'editStaff': 'Modifier le personnel',
+  'staffRole': 'Rôle',
+  'staffUpdated': 'Personnel mis à jour',
+  'staffUpdateFailed': 'Échec de la mise à jour',
+  'dashSalesByStaff': 'Ventes par personnel',
+  'dashExport': 'Exporter',
 
 };
 
