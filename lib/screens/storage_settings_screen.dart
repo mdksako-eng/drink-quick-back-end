@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../utils/i18n.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/services/storage_service.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
@@ -592,7 +593,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             children: [
               Icon(Icons.check_circle, color: Colors.white, size: 20),
               SizedBox(width: 12),
-              Expanded(child: Text('All settings saved successfully!')),
+              Expanded(child: Text(t('st_saved'))),
             ],
           ),
           backgroundColor: Colors.green,
@@ -714,9 +715,9 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Discard Changes'),
+        title: Text(t('st_discardChanges')),
         content:
-            const Text('Are you sure you want to discard all unsaved changes?'),
+            Text(t('st_discardConfirm')),
         backgroundColor: Theme.of(context).cardColor,
         titleTextStyle: TextStyle(
           color: Theme.of(context).textTheme.bodyLarge?.color,
@@ -726,14 +727,14 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(t('cancel')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
             ),
-            child: const Text('Discard'),
+            child: Text(t('st_discard')),
           ),
         ],
       ),
@@ -742,8 +743,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     if (confirmed == true) {
       await _loadAllSettings();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Changes discarded'),
+        SnackBar(
+          content: Text(t('st_changesDiscarded')),
           backgroundColor: Colors.orange,
         ),
       );
@@ -792,7 +793,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Settings'),
+          title: Text(t('settings')),
           backgroundColor: Theme.of(context).primaryColor,
           foregroundColor: Colors.white,
           elevation: 0,
@@ -838,7 +839,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
           behavior: HitTestBehavior.translucent,
           child: Scaffold(
             appBar: AppBar(
-              title: const Text('Settings'),
+              title: Text(t('settings')),
               foregroundColor: Colors.white,
               backgroundColor: primaryColorValue,
               elevation: 4,
@@ -848,7 +849,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     onPressed: _discardChanges,
                     icon:
                         const Icon(Icons.close, color: Colors.white, size: 20),
-                    label: const Text('Discard',
+                    label: Text(t('st_discard'),
                         style: TextStyle(color: Colors.white)),
                   ),
               ],
@@ -873,7 +874,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         child: OutlinedButton.icon(
                           onPressed: _discardChanges,
                           icon: const Icon(Icons.close, size: 20),
-                          label: const Text('Discard'),
+                          label: Text(t('st_discard')),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.red,
                             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -980,17 +981,17 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
                     Icon(Icons.palette, size: 20),
                     SizedBox(width: 8),
-                    Text('Theme & Appearance',
+                    Text(t('st_themeAppearance'),
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 18)),
                   ],
                 ),
                 const SizedBox(height: 16),
-                Text('Theme Mode',
+                Text(t('st_themeMode'),
                     style: TextStyle(
                         fontWeight: FontWeight.w500,
                         color: theme.textTheme.bodyLarge?.color)),
@@ -1025,7 +1026,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                Text('Primary Color',
+                Text(t('st_primaryColor'),
                     style: TextStyle(
                         fontWeight: FontWeight.w500,
                         color: theme.textTheme.bodyLarge?.color)),
@@ -1086,7 +1087,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                 ),
                 const SizedBox(height: 16),
                 SwitchListTile(
-                  title: Text('Compact Mode',
+                  title: Text(t('st_compactMode'),
                       style:
                           TextStyle(color: theme.textTheme.bodyLarge?.color)),
                   subtitle: Text(
@@ -1315,7 +1316,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             DropdownButtonFormField<String>(
               value: _currencySymbol,
               decoration: InputDecoration(
-                labelText: 'Currency Symbol',
+                labelText: t('st_currencySymbol'),
                 labelStyle: TextStyle(
                   color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                 ),
@@ -1331,7 +1332,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               items: _availableCurrencies.map((currency) {
                 return DropdownMenuItem(
                   value: currency['symbol'],
-                  child: Text('${currency['symbol']} - ${currency['name']}'),
+                  child: Text("${currency['symbol']} - ${t('cur_' + currency['name']!)}"),
                 );
               }).toList(),
               onChanged: (value) {
@@ -1596,7 +1597,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Sample Drink',
+                        Text(t('st_sampleDrink'),
                             style: TextStyle(
                                 color: theme.textTheme.bodyLarge?.color)),
                         Text(
@@ -1619,7 +1620,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Total Amount',
+                        Text(t('st_totalAmount'),
                             style: TextStyle(
                                 color: theme.textTheme.bodyLarge?.color)),
                         Text(
@@ -1756,7 +1757,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             TextField(
               controller: _companyNameController,
               decoration: InputDecoration(
-                labelText: 'Company Name',
+                labelText: t('companyName'),
                 labelStyle: TextStyle(color: theme.hintColor),
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -1811,7 +1812,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       Text(country['flag']!,
                           style: const TextStyle(fontSize: 20)),
                       const SizedBox(width: 8),
-                      Text('${country['name']} (${country['dial']})'),
+                      Text("${t('country_' + country['name']!)} (${country['dial']})"),
                     ],
                   ),
                 );
@@ -1973,7 +1974,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             TextField(
               controller: _companyEmailController,
               decoration: InputDecoration(
-                labelText: 'Email Address',
+                labelText: t('st_emailAddress'),
                 labelStyle: TextStyle(color: theme.hintColor),
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -2003,7 +2004,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             TextField(
               controller: _companyAddressController,
               decoration: InputDecoration(
-                labelText: 'Address',
+                labelText: t('st_address'),
                 labelStyle: TextStyle(color: theme.hintColor),
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -2158,11 +2159,11 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             ),
             const SizedBox(height: 16),
             SwitchListTile(
-              title: Text('Enable Business Payments',
+              title: Text(t('st_enableBusinessPayments'),
                   style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: theme.textTheme.bodyLarge?.color)),
-              subtitle: Text('Allow customers to pay via Mobile Money',
+              subtitle: Text(t('st_allowMobileMoney'),
                   style: TextStyle(color: theme.hintColor)),
               value: _businessPaymentsEnabled,
               onChanged: isManager
@@ -2251,8 +2252,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       TextField(
                         controller: _mtnMerchantPhoneController,
                         decoration: InputDecoration(
-                          labelText: 'Your MTN Phone Number (Receives Money)',
-                          hintText: 'e.g., 237XXXXXXXXX',
+                          labelText: t('st_mtnPhone'),
+                          hintText: t('st_egPhone'),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -2275,8 +2276,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       TextField(
                         controller: _mtnMerchantIdController,
                         decoration: InputDecoration(
-                          labelText: 'Merchant ID',
-                          hintText: 'Enter MTN Merchant ID',
+                          labelText: t('st_merchantId'),
+                          hintText: t('st_enterMtnMerchantId'),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -2296,8 +2297,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       TextField(
                         controller: _mtnApiKeyController,
                         decoration: InputDecoration(
-                          labelText: 'API Key',
-                          hintText: 'Enter MTN API Key',
+                          labelText: t('st_apiKey'),
+                          hintText: t('st_enterMtnApiKey'),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -2318,8 +2319,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       TextField(
                         controller: _mtnSecretKeyController,
                         decoration: InputDecoration(
-                          labelText: 'Secret Key',
-                          hintText: 'Enter MTN Secret Key',
+                          labelText: t('st_secretKey'),
+                          hintText: t('st_enterMtnSecretKey'),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -2338,9 +2339,9 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       ),
                       const SizedBox(height: 8),
                       SwitchListTile(
-                        title: const Text('Sandbox Mode'),
+                        title: Text(t('st_sandboxMode')),
                         subtitle:
-                            const Text('Use test environment for development'),
+                            Text(t('st_useTestEnv')),
                         value: _mtnSandboxMode,
                         onChanged: isManager
                             ? (value) {
@@ -2474,7 +2475,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         decoration: InputDecoration(
                           labelText:
                               'Your Orange Phone Number (Receives Money)',
-                          hintText: 'e.g., 237XXXXXXXXX',
+                          hintText: t('st_egPhone'),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -2497,8 +2498,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       TextField(
                         controller: _orangeMerchantIdController,
                         decoration: InputDecoration(
-                          labelText: 'Merchant ID',
-                          hintText: 'Enter Orange Merchant ID',
+                          labelText: t('st_merchantId'),
+                          hintText: t('st_enterOrangeMerchantId'),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -2518,8 +2519,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       TextField(
                         controller: _orangeApiKeyController,
                         decoration: InputDecoration(
-                          labelText: 'API Key',
-                          hintText: 'Enter Orange API Key',
+                          labelText: t('st_apiKey'),
+                          hintText: t('st_enterOrangeApiKey'),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -2540,8 +2541,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       TextField(
                         controller: _orangeSecretKeyController,
                         decoration: InputDecoration(
-                          labelText: 'Secret Key',
-                          hintText: 'Enter Orange Secret Key',
+                          labelText: t('st_secretKey'),
+                          hintText: t('st_enterOrangeSecretKey'),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -2560,9 +2561,9 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       ),
                       const SizedBox(height: 8),
                       SwitchListTile(
-                        title: const Text('Sandbox Mode'),
+                        title: Text(t('st_sandboxMode')),
                         subtitle:
-                            const Text('Use test environment for development'),
+                            Text(t('st_useTestEnv')),
                         value: _orangeSandboxMode,
                         onChanged: isManager
                             ? (value) {
@@ -2674,7 +2675,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Storage Statistics',
+            Text(t('st_storageStats'),
                 style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
@@ -2725,7 +2726,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Backup Management',
+            Text(t('st_backupMgmt'),
                 style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
@@ -2740,13 +2741,13 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                 Expanded(
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.backup),
-                    label: const Text('Create Backup'),
+                    label: Text(t('st_createBackup')),
                     onPressed: () async {
                       final drinkProvider =
                           Provider.of<DrinkProvider>(context, listen: false);
                       await drinkProvider.createBackup();
                       ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Backup created!')));
+                          SnackBar(content: Text(t('st_backupCreated'))));
                     },
                     style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColorValue),
@@ -2756,7 +2757,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                 Expanded(
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.restore),
-                    label: const Text('Restore Backup'),
+                    label: Text(t('st_restoreBackup')),
                     onPressed: () async {
                       await _showBackupList(context);
                     },
@@ -2785,16 +2786,16 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Sync Settings',
+            Text(t('st_syncSettings'),
                 style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                     color: theme.textTheme.bodyLarge?.color)),
             const SizedBox(height: 12),
             SwitchListTile(
-              title: Text('Auto Sync',
+              title: Text(t('st_autoSync'),
                   style: TextStyle(color: theme.textTheme.bodyLarge?.color)),
-              subtitle: Text('Automatically sync data when online',
+              subtitle: Text(t('st_autoSyncSub'),
                   style: TextStyle(color: theme.hintColor)),
               value: _autoSync,
               onChanged: (value) {
@@ -2807,9 +2808,9 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               inactiveThumbColor: theme.hintColor,
             ),
             SwitchListTile(
-              title: Text('Show Notifications',
+              title: Text(t('st_showNotifications'),
                   style: TextStyle(color: theme.textTheme.bodyLarge?.color)),
-              subtitle: Text('Display notifications when sync completes',
+              subtitle: Text(t('st_showNotifSub'),
                   style: TextStyle(color: theme.hintColor)),
               value: _showNotifications,
               onChanged: (value) {
@@ -2822,12 +2823,12 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               inactiveThumbColor: theme.hintColor,
             ),
             ListTile(
-              title: Text('Sync Now',
+              title: Text(t('st_syncNow'),
                   style: TextStyle(color: theme.textTheme.bodyLarge?.color)),
               subtitle: Consumer<DrinkProvider>(
                 builder: (context, drinkProvider, child) {
                   final stats = drinkProvider.getStorageStats();
-                  return Text('${stats['pendingSync']} items pending',
+                  return Text("${stats['pendingSync']} ${t('st_itemsPendingWord')}",
                       style: TextStyle(color: theme.hintColor));
                 },
               ),
@@ -2844,7 +2845,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                 if (!drinkProvider.isSyncing && !drinkProvider.isOffline) {
                   await drinkProvider.forceSync();
                   ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Sync completed!')));
+                      SnackBar(content: Text(t('st_syncCompleted'))));
                 }
               },
             ),
@@ -2867,13 +2868,13 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Data Management',
+            Text(t('st_dataMgmt'),
                 style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                     color: Colors.red)),
             const SizedBox(height: 12),
-            Text('Warning: These actions cannot be undone.',
+            Text(t('st_warningUndo'),
                 style: TextStyle(color: Colors.red)),
             const SizedBox(height: 16),
             Row(
@@ -2881,7 +2882,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.delete_sweep, color: Colors.red),
-                    label: const Text('Clear All Data',
+                    label: Text(t('st_clearAllData'),
                         style: TextStyle(color: Colors.red)),
                     onPressed: () => _showClearConfirmation(context),
                     style: OutlinedButton.styleFrom(
@@ -2892,7 +2893,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.delete_forever, color: Colors.red),
-                    label: const Text('Delete All Backups',
+                    label: Text(t('st_deleteAllBackups'),
                         style: TextStyle(color: Colors.red)),
                     onPressed: () => _showDeleteBackupsConfirmation(context),
                     style: OutlinedButton.styleFrom(
@@ -2920,7 +2921,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Information',
+            Text(t('st_information'),
                 style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -3020,7 +3021,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
 
     if (backups.isEmpty) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('No backups available')));
+          .showSnackBar(SnackBar(content: Text(t('st_noBackups'))));
       return;
     }
 
@@ -3028,7 +3029,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Select Backup'),
+          title: Text(t('st_selectBackup')),
           backgroundColor: theme.cardColor,
           titleTextStyle: TextStyle(
               color: theme.textTheme.bodyLarge?.color,
@@ -3048,7 +3049,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   color: theme.cardColor,
                   child: ListTile(
-                    title: Text('Backup ${index + 1}',
+                    title: Text('${t('st_backup')} ${index + 1}',
                         style:
                             TextStyle(color: theme.textTheme.bodyLarge?.color)),
                     subtitle: Text(
@@ -3069,7 +3070,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Close'))
+                child: Text(t('close')))
           ],
         );
       },
@@ -3081,8 +3082,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Restore Backup'),
-        content: const Text('This will replace all current data. Continue?'),
+        title: Text(t('st_restoreBackup')),
+        content: Text(t('st_replaceConfirm')),
         backgroundColor: theme.cardColor,
         titleTextStyle: TextStyle(
             color: theme.textTheme.bodyLarge?.color,
@@ -3091,10 +3092,10 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+              child: Text(t('cancel'))),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Restore')),
+              child: Text(t('st_restore'))),
         ],
       ),
     );
@@ -3103,7 +3104,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
       final drinkProvider = Provider.of<DrinkProvider>(context, listen: false);
       await drinkProvider.restoreBackup(backupKey);
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Backup restored successfully!')));
+          SnackBar(content: Text(t('st_backupRestored'))));
     }
   }
 
@@ -3112,7 +3113,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear All Data'),
+        title: Text(t('st_clearAllData')),
         content: const Text(
             'This will delete ALL drinks and orders. This action cannot be undone.'),
         backgroundColor: theme.cardColor,
@@ -3123,18 +3124,18 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+              child: Text(t('cancel'))),
           TextButton(
             onPressed: () async {
               Navigator.pop(context, true);
               await StorageService.clearAllData();
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('All data cleared!')));
+                    SnackBar(content: Text(t('st_dataCleared'))));
                 await _loadAllSettings();
               }
             },
-            child: const Text('Delete All'),
+            child: Text(t('st_deleteAll')),
           ),
         ],
       ),
@@ -3146,8 +3147,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete All Backups'),
-        content: const Text('This will permanently delete ALL backup files.'),
+        title: Text(t('st_deleteAllBackups')),
+        content: Text(t('st_deleteAllConfirm')),
         backgroundColor: theme.cardColor,
         titleTextStyle: TextStyle(
             color: theme.textTheme.bodyLarge?.color,
@@ -3156,18 +3157,18 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+              child: Text(t('cancel'))),
           TextButton(
             onPressed: () async {
               Navigator.pop(context, true);
               await _deleteAllBackups();
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('All backups deleted!')));
+                    SnackBar(content: Text(t('st_allBackupsDeleted'))));
                 await _loadAllSettings();
               }
             },
-            child: const Text('Delete'),
+            child: Text(t('delete')),
           ),
         ],
       ),
