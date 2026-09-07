@@ -7,6 +7,7 @@ import 'dart:convert';
 import '../providers/auth_provider.dart';
 import '../utils/helpers.dart';
 import '../config/api_config.dart';
+import '../utils/i18n.dart';
 
 class AdminPanel extends StatefulWidget {
   const AdminPanel({Key? key}) : super(key: key);
@@ -84,16 +85,16 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
         title: Column(children: [
           Icon(Icons.admin_panel_settings, size: 60, color: _primaryColor),
           const SizedBox(height: 12),
-          const Text('Admin Authentication', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text(t('admin_authTitle'), style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         ]),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Enter your admin password', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: Colors.grey)),
+          Text(t('admin_enterPasswordHint'), textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: Colors.grey)),
           const SizedBox(height: 20),
           TextField(
             controller: _passwordController,
             obscureText: true,
             decoration: InputDecoration(
-              labelText: 'Password',
+              labelText: t('password'),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               prefixIcon: const Icon(Icons.lock_outline),
               focusedBorder: OutlineInputBorder(
@@ -109,7 +110,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
           ElevatedButton(
             onPressed: () => Navigator.pop(context, _passwordController.text),
             style: ElevatedButton.styleFrom(backgroundColor: _primaryColor),
-            child: const Text('Verify', style: TextStyle(color: Colors.white)),
+            child: Text(t('verify'), style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -121,9 +122,9 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
         setState(() => _isAuthenticated = true);
         _adminToken = result;
         await _loadUsers();
-        Helpers.showToast('Admin access granted');
+        Helpers.showToast(t('admin_granted'));
       } else {
-        Helpers.showToast('Wrong password!');
+        Helpers.showToast(t('admin_wrongPassword'));
         _showPasswordDialog();
       }
     }
@@ -209,14 +210,14 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
 
   Future<void> _blockUser(Map<String, dynamic> user) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    if (authProvider.user?.id == user['id']) { Helpers.showToast('Cannot block yourself'); return; }
-    if (user['role'] == 'Administrator' || user['role'] == 'Admin') { Helpers.showToast('Cannot block Administrator'); return; }
+    if (authProvider.user?.id == user['id']) { Helpers.showToast(t('admin_cannotBlockSelf')); return; }
+    if (user['role'] == 'Administrator' || user['role'] == 'Admin') { Helpers.showToast(t('admin_cannotBlockAdmin')); return; }
     
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Block User'),
-        content: Text('Block ${user['username']}?\n\nThey cannot login.'),
+        title: Text(t('admin_blockUser')),
+        content: Text('${t('admin_blockUser')} ${user['username']}?\n\n${t('admin_blockBody')}'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text('Block')),
@@ -233,7 +234,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
         ).timeout(const Duration(seconds: 10));
         
         if (response.statusCode == 200) {
-          Helpers.showToast('${user['username']} blocked');
+          Helpers.showToast('${user['username']} ${t('admin_blockedToast')}');
           await _loadUsers();
         }
       } catch (e) { Helpers.showToast('Error: $e'); }
@@ -245,8 +246,8 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Unblock User'),
-        content: Text('Allow ${user['username']} to login?'),
+        title: Text(t('admin_unblockUser')),
+        content: Text('${t('admin_unblockBody').replaceAll('@u', user['username'] ?? '')}'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text('Unblock')),
@@ -263,7 +264,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
         ).timeout(const Duration(seconds: 10));
         
         if (response.statusCode == 200) {
-          Helpers.showToast('${user['username']} unblocked');
+          Helpers.showToast('${user['username']} ${t('admin_unblockedToast')}');
           await _loadUsers();
         }
       } catch (e) { Helpers.showToast('Error: $e'); }
@@ -273,17 +274,17 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
 
   Future<void> _deleteUser(Map<String, dynamic> user) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    if (authProvider.user?.id == user['id']) { Helpers.showToast('Cannot delete yourself'); return; }
-    if (user['role'] == 'Administrator' || user['role'] == 'Admin') { Helpers.showToast('Cannot delete Administrator'); return; }
+    if (authProvider.user?.id == user['id']) { Helpers.showToast(t('admin_cannotDeleteSelf')); return; }
+    if (user['role'] == 'Administrator' || user['role'] == 'Admin') { Helpers.showToast(t('admin_cannotDeleteAdmin')); return; }
     
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('⚠ Delete User'),
-        content: Text('Permanently delete ${user['username']}?\n\nThis CANNOT be undone!'),
+        title: Text(t('admin_deleteUser')),
+        content: Text('${t('admin_deletePermanent')} ${user['username']}?\n\n${t('admin_cannotUndo')}'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text('Delete Forever')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: Text(t('admin_deleteForever'))),
         ],
       ),
     );
@@ -300,7 +301,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
         ).timeout(const Duration(seconds: 10));
         
         if (response.statusCode == 200) {
-          Helpers.showToast('${user['username']} deleted');
+          Helpers.showToast('${user['username']} ${t('admin_deletedToast')}');
           await _loadUsers();
         }
       } catch (e) { Helpers.showToast('Error: $e'); }
@@ -313,7 +314,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
     String? newRole = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Change Role for ${user['username']}'),
+        title: Text('${t('admin_changeRole')} ${user['username']}'),
         content: Column(mainAxisSize: MainAxisSize.min, children: roles.map((r) => ListTile(
           title: Text(r),
           leading: Radio<String>(
@@ -339,7 +340,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
         ).timeout(const Duration(seconds: 10));
         
         if (response.statusCode == 200) {
-          Helpers.showToast('Role changed to $newRole');
+          Helpers.showToast('${t('admin_roleChanged')} $newRole');
           await _loadUsers();
         }
       } catch (e) { Helpers.showToast('Error: $e'); }
@@ -369,31 +370,31 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
 
     if (!authProvider.isAdmin) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Access Denied'), backgroundColor: Colors.red),
-        body: const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        appBar: AppBar(title: Text(t('admin_accessDenied')), backgroundColor: Colors.red),
+        body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(Icons.block, size: 80, color: Colors.red),
           SizedBox(height: 20),
-          Text('Admin Access Required', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          Text(t('admin_adminAccessRequired'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
         ])),
       );
     }
 
     if (!_isAuthenticated) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Admin Panel'), backgroundColor: _primaryColor),
+        appBar: AppBar(title: Text(t('admin_title')), backgroundColor: _primaryColor),
         body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(Icons.lock, size: 60, color: Colors.grey[400]),
           const SizedBox(height: 20),
-          const Text('Authentication Required', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(t('admin_authRequired'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 20),
-          ElevatedButton.icon(onPressed: _showPasswordDialog, icon: const Icon(Icons.lock_open), label: const Text('Enter Password'), style: ElevatedButton.styleFrom(backgroundColor: _primaryColor)),
+          ElevatedButton.icon(onPressed: _showPasswordDialog, icon: const Icon(Icons.lock_open), label: Text(t('admin_enterPassword')), style: ElevatedButton.styleFrom(backgroundColor: _primaryColor)),
         ])),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Admin Panel'),
+        title: Text(t('admin_title')),
         backgroundColor: _primaryColor,
         foregroundColor: Colors.white,
         actions: [
@@ -406,8 +407,8 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           tabs: [
-            Tab(child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.people, size: 18), const SizedBox(width: 6), Text('Active (${_activeUsers.length})')])),
-            Tab(child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.block, size: 18), const SizedBox(width: 6), Text('Blocked (${_blockedUsers.length})')])),
+            Tab(child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.people, size: 18), const SizedBox(width: 6), Text('${t('admin_activeTab')} (${_activeUsers.length})')])),
+            Tab(child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.block, size: 18), const SizedBox(width: 6), Text('${t('admin_blockedTab')} (${_blockedUsers.length})')])),
           ],
         ),
       ),
@@ -428,8 +429,8 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
                 child: Row(children: [
                   Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: _primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(Icons.admin_panel_settings, color: _primaryColor, size: 30)),
                   const SizedBox(width: 12),
-                  Expanded(child: Text('Welcome, ${authProvider.user?.username ?? 'Admin'}!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: _primaryColor, borderRadius: BorderRadius.circular(12)), child: const Text('ADMIN', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))),
+                  Expanded(child: Text('${t('admin_welcome')} ${authProvider.user?.username ?? t('role_Admin')}!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: _primaryColor, borderRadius: BorderRadius.circular(12)), child: Text(t('admin_adminBadge'), style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))),
                 ]),
               ),
             ),
@@ -437,12 +438,12 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
-              _statCard('Total', '${_stats['totalUsers']}', Icons.people, Colors.blue),
-              _statCard('Active', '${_stats['activeUsers']}', Icons.check_circle, Colors.green),
-              _statCard('Blocked', '${_stats['blockedUsers']}', Icons.block, Colors.red),
-              _statCard('Admins', '${_stats['admins']}', Icons.admin_panel_settings, _primaryColor),
-              _statCard('Managers', '${_stats['managers']}', Icons.business, Colors.orange),
-              _statCard('Staff', '${_stats['staff']}', Icons.badge, Colors.blue),
+              _statCard(t('admin_statTotal'), '${_stats['totalUsers']}', Icons.people, Colors.blue),
+              _statCard(t('admin_activeTab'), '${_stats['activeUsers']}', Icons.check_circle, Colors.green),
+              _statCard(t('admin_blockedTab'), '${_stats['blockedUsers']}', Icons.block, Colors.red),
+              _statCard(t('admin_statAdmins'), '${_stats['admins']}', Icons.admin_panel_settings, _primaryColor),
+              _statCard(t('admin_statManagers'), '${_stats['managers']}', Icons.business, Colors.orange),
+              _statCard(t('admin_statStaff'), '${_stats['staff']}', Icons.badge, Colors.blue),
             ])),
           ),
           const SizedBox(height: 12),
@@ -453,7 +454,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
               Expanded(flex: 3, child: TextField(
                 style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
                 decoration: InputDecoration(
-                  hintText: 'Search...',
+                  hintText: t('admin_search'),
                   hintStyle: TextStyle(color: Theme.of(context).hintColor),
                   prefixIcon: Icon(Icons.search, color: Theme.of(context).hintColor),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -490,7 +491,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
                     ),
                     items: ['All', 'Administrator', 'Manager', 'Staff', 'Customer'].map((r) => DropdownMenuItem(
                       value: r,
-                      child: Text(r, style: TextStyle(
+                      child: Text(t('role_' + r), style: TextStyle(
                         fontSize: 13,
                         color: Theme.of(context).textTheme.bodyLarge?.color,
                       )),
@@ -537,7 +538,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(Icons.people_outline, size: 60, color: Colors.grey[400]),
         const SizedBox(height: 12),
-        Text('No users found', style: TextStyle(fontSize: 16, color: Colors.grey[500])),
+        Text(t('admin_noUsers'), style: TextStyle(fontSize: 16, color: Colors.grey[500])),
       ]));
     }
 
@@ -557,7 +558,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
             leading: CircleAvatar(backgroundColor: roleColor, child: Text((user['username'] ?? '?')[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
             title: Row(children: [
               Expanded(child: Text(user['username'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.w500))),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: roleColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: Text(role, style: TextStyle(fontSize: 10, color: roleColor, fontWeight: FontWeight.bold))),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: roleColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: Text(t('role_' + role), style: TextStyle(fontSize: 10, color: roleColor, fontWeight: FontWeight.bold))),
             ]),
             subtitle: Text(user['email'] ?? '', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
             children: [
@@ -565,21 +566,21 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Divider(), const SizedBox(height: 4),
-                  Row(children: [Icon(Icons.calendar_today, size: 14, color: Colors.grey[500]), const SizedBox(width: 6), Text('Joined: ${_formatDate(user['createdAt'])}', style: TextStyle(fontSize: 12, color: Colors.grey[600]))]),
-                  if (user['companyId'] != null) ...[const SizedBox(height: 4), Row(children: [Icon(Icons.business, size: 14, color: Colors.grey[500]), const SizedBox(width: 6), Text('Company: ${user['companyId']}', style: TextStyle(fontSize: 12, color: Colors.grey[600]))])],
+                  Row(children: [Icon(Icons.calendar_today, size: 14, color: Colors.grey[500]), const SizedBox(width: 6), Text('${t('admin_joined')} ${_formatDate(user['createdAt'])}', style: TextStyle(fontSize: 12, color: Colors.grey[600]))]),
+                  if (user['companyId'] != null) ...[const SizedBox(height: 4), Row(children: [Icon(Icons.business, size: 14, color: Colors.grey[500]), const SizedBox(width: 6), Text('${t('admin_company')} ${user['companyId']}', style: TextStyle(fontSize: 12, color: Colors.grey[600]))])],
                   const SizedBox(height: 8),
                   Row(children: [
                     Expanded(child: OutlinedButton.icon(
                       onPressed: () => isActive ? _blockUser(user) : _unblockUser(user),
                       icon: Icon(isActive ? Icons.block : Icons.check_circle, size: 16),
-                      label: Text(isActive ? 'Block' : 'Unblock'),
+                      label: Text(isActive ? t('b3_block') : t('b3_unblock')),
                       style: OutlinedButton.styleFrom(foregroundColor: isActive ? Colors.red : Colors.green, side: BorderSide(color: isActive ? Colors.red : Colors.green), padding: const EdgeInsets.symmetric(vertical: 8)),
                     )),
                     const SizedBox(width: 4),
                     Expanded(child: OutlinedButton.icon(
                       onPressed: () => _changeRole(user),
                       icon: const Icon(Icons.edit, size: 16),
-                      label: const Text('Role'),
+                      label: Text(t('admin_roleLabel')),
                       style: OutlinedButton.styleFrom(foregroundColor: Colors.orange, side: const BorderSide(color: Colors.orange), padding: const EdgeInsets.symmetric(vertical: 8)),
                     )),
                     if (role != 'Administrator' && role != 'Admin') ...[
@@ -588,7 +589,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
                         onPressed: () => _deleteUser(user),
                         style: ElevatedButton.styleFrom(backgroundColor: Colors.red, padding: const EdgeInsets.symmetric(vertical: 8)),
                         icon: const Icon(Icons.delete_forever, color: Colors.white, size: 16),
-                        label: const Text('Del', style: TextStyle(color: Colors.white, fontSize: 12)),
+                        label: Text(t('admin_del'), style: TextStyle(color: Colors.white, fontSize: 12)),
                       )),
                     ],
                   ]),
