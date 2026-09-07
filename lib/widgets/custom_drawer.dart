@@ -212,9 +212,9 @@ class CustomDrawer extends StatelessWidget {
                                 onTap: () {
                                   syncProvider.manualSync();
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Manual sync started...'),
-                                      duration: Duration(seconds: 2),
+                                    SnackBar(
+                                      content: Text(t('syncStarted')),
+                                      duration: const Duration(seconds: 2),
                                     ),
                                   );
                                 },
@@ -248,9 +248,9 @@ class CustomDrawer extends StatelessWidget {
                 const SizedBox(height: 8),
 
                 // ========== MAIN SECTION ==========
-                _buildDrawerSectionTitle(context, 'MAIN'),
+                _buildDrawerSectionTitle(context, t('menuMain')),
 
-                _buildDrawerItem(context, Icons.dashboard, 'Dashboard', () {
+                _buildDrawerItem(context, Icons.dashboard, t('dashboard'), () {
                   Navigator.pop(context);
                   Navigator.pushReplacement(
                       context,
@@ -258,12 +258,12 @@ class CustomDrawer extends StatelessWidget {
                           builder: (context) => const CalculatorScreen()));
                 }, isActive: true, primaryColor: primaryColor),
 
-                _buildDrawerItem(context, Icons.history, 'Invoice History', () {
+                _buildDrawerItem(context, Icons.history, t('invoiceHistoryDrawer'), () {
                   Navigator.pop(context);
                   if (onInvoiceHistoryTap != null) onInvoiceHistoryTap!();
                 }, primaryColor: primaryColor),
 
-                _buildDrawerItem(context, Icons.assistant, 'AI Assistant', () {
+                _buildDrawerItem(context, Icons.assistant, t('aiAssistantMenu'), () {
                   Navigator.pop(context);
                   Navigator.push(
                       context,
@@ -315,7 +315,7 @@ class CustomDrawer extends StatelessWidget {
                       indent: 16,
                       endIndent: 16,
                       color: theme.dividerColor),
-                  _buildDrawerSectionTitle(context, 'MANAGER',
+                  _buildDrawerSectionTitle(context, t('menuManager'),
                       color: Colors.orange),
                   _buildDrawerItem(context, Icons.business, t('staffManagement'),
                       () {
@@ -329,7 +329,7 @@ class CustomDrawer extends StatelessWidget {
                     _buildDrawerItem(
                       context,
                       Icons.verified,
-                      'Login Approvals',
+                      t('loginApprovalsMenu'),
                       () {
                         Navigator.pop(context);
                         Navigator.push(
@@ -354,7 +354,7 @@ class CustomDrawer extends StatelessWidget {
                       indent: 16,
                       endIndent: 16,
                       color: theme.dividerColor),
-                  _buildDrawerSectionTitle(context, 'ADMIN',
+                  _buildDrawerSectionTitle(context, t('menuAdmin'),
                       color: Colors.purple),
                   _buildDrawerItem(
                       context, Icons.admin_panel_settings, 'Admin Panel', () {
@@ -376,10 +376,10 @@ class CustomDrawer extends StatelessWidget {
                 // ========== SUPPORT SECTION ==========
                 _buildDrawerSectionTitle(context, 'SUPPORT'),
 
-                _buildDrawerItem(context, Icons.info_outline, 'About', () {
+                _buildDrawerItem(context, Icons.info_outline, t('aboutMenu'), () {
                   _showAboutDialog(context);
                 }, primaryColor: primaryColor),
-                _buildDrawerItem(context, Icons.help_outline, 'Help & Support',
+                _buildDrawerItem(context, Icons.help_outline, t('helpSupportMenu'),
                     () {
                   _showHelpDialog(context);
                 }, primaryColor: primaryColor),
@@ -587,13 +587,13 @@ class CustomDrawer extends StatelessWidget {
         title: Column(children: [
           const Icon(Icons.logout, size: 48, color: Colors.red),
           const SizedBox(height: 10),
-          Text('Confirm Logout',
+          Text(t('confirmLogoutDialog'),
               style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: theme.textTheme.bodyLarge?.color)),
         ]),
-        content: Text('Are you sure you want to logout?',
+        content: Text(t('areYouSureLogout'),
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 16, color: theme.hintColor)),
         actions: [
@@ -646,14 +646,14 @@ class CustomDrawer extends StatelessWidget {
           title: Column(children: [
             Icon(Icons.lock, size: 48, color: primaryColor),
             const SizedBox(height: 10),
-            Text('Password Required',
+            Text(t('passwordRequiredDialog'),
                 style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: theme.textTheme.bodyLarge?.color)),
           ]),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('Enter your password to access drink management:',
+            Text(t('enterPasswordAccess'),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: theme.hintColor)),
             const SizedBox(height: 16),
@@ -661,7 +661,7 @@ class CustomDrawer extends StatelessWidget {
               controller: passwordController,
               obscureText: obscureText,
               decoration: InputDecoration(
-                hintText: 'Enter password',
+                hintText: t('enterPasswordHint'),
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 prefixIcon: Icon(Icons.password, color: primaryColor),
@@ -689,8 +689,8 @@ class CustomDrawer extends StatelessWidget {
                       MaterialPageRoute(
                           builder: (context) => const DrinkManagementScreen()));
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Incorrect password!'),
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(t('incorrectPassword')),
                       backgroundColor: Colors.red));
                 }
               },
@@ -698,7 +698,7 @@ class CustomDrawer extends StatelessWidget {
                   backgroundColor: primaryColor,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10))),
-              child: const Text('Verify'),
+              child: Text(t('verify')),
             ),
           ],
         ),
@@ -732,31 +732,31 @@ class CustomDrawer extends StatelessWidget {
         title: Row(children: [
           Icon(Icons.local_drink, color: primaryColor),
           const SizedBox(width: 10),
-          Text('About Drink Quick',
+          Text(t('aboutTitle'),
               style: TextStyle(color: theme.textTheme.bodyLarge?.color))
         ]),
         content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Professional Drink Calculator & Management System',
+              Text(t('aboutDesc'),
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                       color: theme.textTheme.bodyLarge?.color)),
               const SizedBox(height: 12),
-              Text('• Quick drink selection and ordering',
+              Text(t('aboutQuickSelection'),
                   style: TextStyle(color: theme.hintColor)),
-              Text('• Invoice generation with PDF support',
+              Text(t('aboutInvoiceGen'),
                   style: TextStyle(color: theme.hintColor)),
-              Text('• Offline data storage',
+              Text(t('aboutOfflineStorage'),
                   style: TextStyle(color: theme.hintColor)),
-              Text('• Cloud sync capabilities',
+              Text(t('aboutCloudSync'),
                   style: TextStyle(color: theme.hintColor)),
-              Text('• AI-powered drink assistant',
+              Text(t('aboutAIAssistant'),
                   style: TextStyle(color: theme.hintColor)),
               const SizedBox(height: 16),
-              Text('Version: 1.1.0',
+              Text(t('versionLabel') + ' 1.1.0',
                   style: TextStyle(fontSize: 12, color: theme.hintColor)),
               Text('© 2026 Drink Quick Cal',
                   style: TextStyle(fontSize: 12, color: theme.hintColor)),
@@ -1047,20 +1047,20 @@ class CustomDrawer extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Quick Tips:',
+              Text(t('quickTips'),
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: theme.textTheme.bodyLarge?.color)),
               const SizedBox(height: 8),
-              Text('• Select drinks from dropdown and add to order',
+              Text(t('tipSelectDrinks'),
                   style: TextStyle(color: theme.hintColor)),
-              Text('• Enter amount received to calculate change',
+              Text(t('tipEnterAmount'),
                   style: TextStyle(color: theme.hintColor)),
-              Text('• Tap History to view past invoices',
+              Text(t('tapHistory'),
                   style: TextStyle(color: theme.hintColor)),
-              Text('• Use AI Assistant for recommendations',
+              Text(t('useAIForRecs'),
                   style: TextStyle(color: theme.hintColor)),
-              Text('• Manage drinks from Settings',
+              Text(t('manageDrinksSettings'),
                   style: TextStyle(color: theme.hintColor)),
               const SizedBox(height: 16),
               Text('For support, contact: mbundaderick@gmail.com',
@@ -1100,24 +1100,24 @@ class CustomDrawer extends StatelessWidget {
   String _getSyncStatusText(SyncStatus status) {
     switch (status) {
       case SyncStatus.syncing:
-        return 'Syncing...';
+        return t('syncSyncing');
       case SyncStatus.success:
-        return 'Synced';
+        return t('syncSynced');
       case SyncStatus.error:
-        return 'Sync failed';
+        return t('syncFailed');
       case SyncStatus.offline:
-        return 'Offline';
+        return t('syncOffline');
       case SyncStatus.idle:
-        return 'Cloud ready';
+        return t('syncCloudReady');
     }
   }
 
   String _formatTimeAgo(DateTime time) {
     final now = DateTime.now();
     final diff = now.difference(time);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+    if (diff.inSeconds < 60) return t('justNow');
+    if (diff.inMinutes < 60) return '${diff.inMinutes}${t('mAgo')}';
+    if (diff.inHours < 24) return '${diff.inHours}${t('hAgo')}';
+    return '${diff.inDays}${t('dAgo')}';
   }
 }

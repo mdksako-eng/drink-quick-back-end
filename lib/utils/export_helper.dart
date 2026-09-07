@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import '../models/inventory_model.dart';
+import 'i18n.dart';
 
 class ExportHelper {
   // Export as PDF
@@ -16,20 +17,20 @@ class ExportHelper {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Export Report'),
-        content: const Text('Choose export format:'),
+        title: Text(t('exportReport')),
+        content: Text(t('chooseFormat')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, 'pdf'),
-            child: const Text('PDF'),
+            child: Text(t('exportPdf')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, 'excel'),
-            child: const Text('Excel'),
+            child: Text(t('exportExcel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, 'csv'),
-            child: const Text('CSV'),
+            child: Text(t('exportCsv')),
           ),
         ],
       ),
@@ -52,7 +53,7 @@ class ExportHelper {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(t('refreshFailed') + ': $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -77,7 +78,7 @@ class ExportHelper {
                 children: [
                   pw.Text('Drinks Quick Cal', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
                   pw.SizedBox(height: 4),
-                  pw.Text('Inventory Report', style: pw.TextStyle(fontSize: 18)),
+                  pw.Text(t('exp_inventoryReport'), style: pw.TextStyle(fontSize: 18)),
                   pw.SizedBox(height: 4),
                   pw.Text(
                     '${dateFormat.format(report.startDate)} - ${dateFormat.format(report.endDate)}',
@@ -89,31 +90,31 @@ class ExportHelper {
             ),
 
             // Summary
-            pw.Header(level: 1, text: 'Summary'),
+            pw.Header(level: 1, text: t('exp_summary')),
             pw.Table(
               border: pw.TableBorder.all(),
               children: [
-                _pdfTableRow(['Metric', 'Value'], isHeader: true),
-                _pdfTableRow(['Total Items in Stock', '${report.currentStock.fold(0, (s, i) => s + i.quantity)}']),
-                _pdfTableRow(['Items In', '${report.totalItemsIn}']),
-                _pdfTableRow(['Items Out', '${report.totalItemsOut}']),
-                _pdfTableRow(['Net Change', '${report.netChange}']),
-                _pdfTableRow(['Low Stock Items', '${report.lowStockCount}']),
+                _pdfTableRow([t('exp_metric'), t('exp_value')], isHeader: true),
+                _pdfTableRow([t('exp_totalItemsInStock'), '${report.currentStock.fold(0, (s, i) => s + i.quantity)}']),
+                _pdfTableRow([t('exp_itemsIn'), '${report.totalItemsIn}']),
+                _pdfTableRow([t('exp_itemsOut'), '${report.totalItemsOut}']),
+                _pdfTableRow([t('exp_netChange'), '${report.netChange}']),
+                _pdfTableRow([t('exp_lowStockItems'), '${report.lowStockCount}']),
               ],
             ),
             pw.SizedBox(height: 20),
 
             // Current Stock
-            pw.Header(level: 1, text: 'Current Stock Levels'),
+            pw.Header(level: 1, text: t('exp_currentStockLevels')),
             pw.Table(
               border: pw.TableBorder.all(),
               children: [
-                _pdfTableRow(['Drink Name', 'Quantity', 'Min Level', 'Status'], isHeader: true),
+                _pdfTableRow([t('exp_drinkName'), t('exp_quantity'), t('exp_minLevel'), t('exp_status')], isHeader: true),
                 ...report.currentStock.map((item) => _pdfTableRow([
                   item.drinkName,
                   '${item.quantity}',
                   '${item.minStockLevel}',
-                  item.isLowStock ? 'LOW STOCK' : 'OK',
+                  item.isLowStock ? t('exp_lowStock') : t('exp_ok'),
                 ])),
               ],
             ),
@@ -121,11 +122,11 @@ class ExportHelper {
 
             // Sales by Category
             if (report.salesByCategory.isNotEmpty) ...[
-              pw.Header(level: 1, text: 'Sales by Category'),
+              pw.Header(level: 1, text: t('exp_salesByCategory')),
               pw.Table(
                 border: pw.TableBorder.all(),
                 children: [
-                  _pdfTableRow(['Category', 'Items Sold'], isHeader: true),
+                  _pdfTableRow([t('exp_category'), t('exp_itemsSold')], isHeader: true),
                   ...report.salesByCategory.entries.map((e) => _pdfTableRow([e.key, '${e.value}'])),
                 ],
               ),
@@ -133,17 +134,17 @@ class ExportHelper {
             ],
 
             // Recent Transactions
-            pw.Header(level: 1, text: 'Recent Transactions'),
+            pw.Header(level: 1, text: t('exp_recentTransactions')),
             pw.Table(
               border: pw.TableBorder.all(),
               children: [
-                _pdfTableRow(['Date', 'Drink', 'Type', 'Quantity', 'Reason'], isHeader: true),
-                ...report.transactions.take(20).map((t) => _pdfTableRow([
-                  dateFormat.format(t.date),
-                  t.drinkName,
-                  t.isIncoming ? 'IN' : 'OUT',
-                  '${t.quantity}',
-                  t.reason,
+                _pdfTableRow([t('exp_date'), t('exp_drink'), t('exp_type'), t('exp_quantityLabel'), t('exp_reason')], isHeader: true),
+                ...report.transactions.take(20).map((tx) => _pdfTableRow([
+                  dateFormat.format(tx.date),
+                  tx.drinkName,
+                  tx.isIncoming ? t('exp_in') : t('exp_out'),
+                  '${tx.quantity}',
+                  tx.reason,
                 ])),
               ],
             ),
@@ -152,7 +153,7 @@ class ExportHelper {
             pw.SizedBox(height: 40),
             pw.Divider(),
             pw.Text(
-              'Generated on ${dateFormat.format(DateTime.now())}',
+              t('exp_generatedOn').replaceAll('@date', dateFormat.format(DateTime.now())),
               style: pw.TextStyle(fontSize: 10, color: PdfColors.grey400),
               textAlign: pw.TextAlign.center,
             ),
@@ -190,7 +191,7 @@ class ExportHelper {
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('PDF saved: $fileName'), backgroundColor: Colors.green),
+        SnackBar(content: Text(t('exportPdf') + ' ' + t('exportSaved') + ': $fileName'), backgroundColor: Colors.green),
       );
     }
 
@@ -276,7 +277,7 @@ class ExportHelper {
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Excel saved: $fileName'), backgroundColor: Colors.green),
+        SnackBar(content: Text(t('exportExcel') + ' ' + t('exportSaved') + ': $fileName'), backgroundColor: Colors.green),
       );
     }
 
@@ -344,7 +345,7 @@ class ExportHelper {
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('CSV saved: $fileName'), backgroundColor: Colors.green),
+        SnackBar(content: Text(t('exportCsv') + ' ' + t('exportSaved') + ': $fileName'), backgroundColor: Colors.green),
       );
     }
 

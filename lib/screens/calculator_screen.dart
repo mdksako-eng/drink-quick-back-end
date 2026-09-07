@@ -935,7 +935,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text('⏳ Waiting for Payment'),
+              title: Text(t('waitingForPayment')),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -955,7 +955,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     ),
                     child: Column(
                       children: [
-                        Text('Payment Details:'),
+                        Text(t('paymentDetails')),
                         Text(
                           'Amount: ${CurrencyHelper.format(amount)}',
                           style: TextStyle(fontWeight: FontWeight.bold),

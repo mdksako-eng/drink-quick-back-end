@@ -166,7 +166,7 @@ class _ManagerPanelState extends State<ManagerPanel>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Block Staff'),
+        title: Text(t('blockStaff')),
         content: Text('Block ${staff['username']}?\n\nThey cannot login.'),
         actions: [
           TextButton(
@@ -202,7 +202,7 @@ class _ManagerPanelState extends State<ManagerPanel>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Unblock Staff'),
+        title: Text(t('unblockStaff')),
         content: Text('Allow ${staff['username']} to login?'),
         actions: [
           TextButton(
@@ -441,7 +441,7 @@ class _ManagerPanelState extends State<ManagerPanel>
           onPressed: _showCreateDialog,
           backgroundColor: _primaryColor,
           icon: const Icon(Icons.person_add),
-          label: const Text('Add Staff'),
+          label: Text(t('addStaff')),
         ),
         body: Container(
           decoration: BoxDecoration(

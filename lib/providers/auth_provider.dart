@@ -11,6 +11,7 @@ import '../services/supabase_service.dart';
 import '../services/secure_storage_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../utils/helpers.dart';
+import '../utils/i18n.dart';
 import '../main.dart' as app;
 import '../screens/auth_screen.dart';
 import '../screens/calculator_screen.dart';
@@ -453,7 +454,7 @@ class AuthProvider with ChangeNotifier {
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('⏳ Waiting for Approval'),
+        title: Text(t('waitingForApproval')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -517,7 +518,7 @@ class AuthProvider with ChangeNotifier {
               Navigator.pop(dialogContext);
               _checkApprovalStatus(requestToken);
             },
-            child: const Text('Check Status'),
+            child: Text(t('checkStatus')),
           ),
           TextButton(
             onPressed: () {
@@ -751,7 +752,7 @@ class AuthProvider with ChangeNotifier {
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('❌ Login Rejected'),
+        title: Text(t('loginRejected')),
         content: const Text(
           'Your login request was rejected by the manager.',
           textAlign: TextAlign.center,

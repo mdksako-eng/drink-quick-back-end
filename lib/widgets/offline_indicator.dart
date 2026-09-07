@@ -9,6 +9,7 @@ import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/providers/order_provider.dart';
 import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
+import '../utils/i18n.dart';
 
 class OfflineIndicator extends StatefulWidget {
   final Widget child;
@@ -296,10 +297,10 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
     if (_isOffline) {
       if (mounted && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please connect to the internet first.'),
+          SnackBar(
+            content: Text(t('connectInternet')),
             backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -327,7 +328,7 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Text('Refreshing data...'),
+                Text(t('refreshingData')),
               ],
             ),
             backgroundColor: Colors.blue,
@@ -352,7 +353,7 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
               children: [
                 const Icon(Icons.check_circle, color: Colors.white, size: 20),
                 const SizedBox(width: 12),
-                const Text('✅ Data refreshed successfully!'),
+                Text(t('dataRefreshed')),
               ],
             ),
             backgroundColor: Colors.green,
@@ -376,7 +377,7 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
                 const Icon(Icons.error, color: Colors.white, size: 20),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text('❌ Failed to refresh: $e'),
+                  child: Text(t('refreshFailed') + ': $e'),
                 ),
               ],
             ),

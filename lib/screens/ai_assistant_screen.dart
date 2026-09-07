@@ -123,7 +123,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
 
   void _copyToClipboard(String text) {
     Clipboard.setData(ClipboardData(text: text));
-    _showToast('Copied to clipboard');
+    _showToast(t('ai_copiedToClipboard'));
   }
 
   void _shareResponse(String text) async {
@@ -137,17 +137,17 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Edit Message'),
+        title: Text(t('ai_editTitle')),
         content: TextField(
           controller: editController,
           maxLines: 5,
           decoration: InputDecoration(
-            hintText: 'Edit your message...',
+            hintText: t('ai_editYourMessage'),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(t('ai_cancel'))),
           ElevatedButton(
             onPressed: () {
               final newText = editController.text.trim();
@@ -162,7 +162,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text('Send Edited'),
+            child: Text(t('ai_sendEditedBtn')),
           ),
         ],
       ),
@@ -171,7 +171,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
 
   void _goToCalculator() {
     if (_pendingOrder.isEmpty) {
-      _showToast('No pending order. Type "order 2 beer" first.', isError: true);
+      _showToast(t('ai_noPendingOrder'), isError: true);
       return;
     }
 
@@ -186,7 +186,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
       orderBridge.setCustomerName(_pendingCustomerName);
     }
 
-    _showToast('${_pendingOrder.length} item(s) transferred to checkout');
+    _showToast(t('ai_itemsTransferred').replaceAll('@count', '${_pendingOrder.length}'));
     
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) {
@@ -228,24 +228,24 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
       return;
     }
 
-    setState(() { _isLoading = true; _voiceStatus = 'Initializing...'; });
+    setState(() { _isLoading = true; _voiceStatus = t('ai_initializing'); });
     _scrollToBottom();
 
     final initialized = await _voiceService.initialize();
     setState(() => _isLoading = false);
 
     if (!initialized) {
-      _showToast('Speech recognition not available', isError: true);
+      _showToast(t('ai_speechNotAvailable'), isError: true);
       setState(() => _voiceStatus = '');
       return;
     }
 
-    setState(() { _isListening = true; _voiceStatus = 'Listening...'; });
+    setState(() { _isListening = true; _voiceStatus = t('ai_listening'); });
     _scrollToBottom();
 
     await _voiceService.startListening(
       onResult: (text) {
-        setState(() { _isListening = false; _voiceStatus = 'Heard: "$text"'; });
+        setState(() { _isListening = false; _voiceStatus = t('ai_heard').replaceAll('@text', text); });
         _processVoiceCommand(text);
       },
       onError: (error) {
@@ -273,28 +273,28 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
             _addToOrder(matchedDrink, command.quantity);
           } else {
             _messages.add({
-              'text': 'Drink "${command.drinkName}" not found.',
+              'text': t('ai_drinkNotFoundSimple').replaceAll('@name', command.drinkName!),
               'isUser': false,
             });
-            if (_voiceFeedbackEnabled) _voiceService.speak('Drink not found');
+            if (_voiceFeedbackEnabled) _voiceService.speak(t('ai_drinkNotFoundShort'));
           }
         }
         break;
 
       case VoiceCommandType.clear:
         setState(() { _pendingOrder.clear(); });
-        _messages.add({'text': 'Order cleared. Ready for new order.', 'isUser': false});
-        if (_voiceFeedbackEnabled) _voiceService.speak('Order cleared');
+        _messages.add({'text': t('ai_orderClearedLong'), 'isUser': false});
+        if (_voiceFeedbackEnabled) _voiceService.speak(t('ai_orderClearedShort'));
         break;
 
       case VoiceCommandType.finalize:
         if (_pendingOrder.isNotEmpty) _goToCalculator();
-        else _showToast('No order to finalize', isError: true);
+        else _showToast(t('ai_noOrderFinalize'), isError: true);
         break;
 
       default:
         _messages.add({
-          'text': 'Try saying: "Add 2 beer", "Clear all", or "Search for Fanta"',
+          'text': t('ai_trySaying'),
           'isUser': false,
         });
         break;
@@ -323,7 +323,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     
     _messages.add({'text': responseText, 'isUser': false});
     _conversationHistory.add({'role': 'assistant', 'content': responseText});
-    if (_voiceFeedbackEnabled) _voiceService.speak('Added ${quantity} ${drink.name}');
+    if (_voiceFeedbackEnabled) _voiceService.speak(t('ai_addedToOrder').replaceAll('@count', '${quantity}').replaceAll('@name', '${drink.name}'));
     _scrollToBottom();
   }
 
@@ -532,7 +532,7 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
       _addWelcomeMessage();
     });
     _persistMemory(); // 💾 clear stored memory too
-    _showToast('Chat cleared');
+    _showToast(t('ai_chatCleared'));
   }
 
   void _showAboutAI() {
@@ -540,24 +540,24 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('About AI Assistant'),
-        content: const Column(
+        title: Text(t('ai_aboutTitle')),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Drink Quick Cal AI', style: TextStyle(fontWeight: FontWeight.bold)),
             SizedBox(height: 8),
-            Text('• Smart order placement'),
-            Text('• Real-time stock checks'),
-            Text('• Price & profit analysis'),
-            Text('• Voice commands supported'),
-            Text('• Recommendations engine'),
+            Text(t('ai_featureOrder')),
+            Text(t('ai_featureStock')),
+            Text(t('ai_featurePrice')),
+            Text(t('ai_featureVoice')),
+            Text(t('ai_featureRecommend')),
             SizedBox(height: 12),
-            Text('Powered by Groq AI', style: TextStyle(color: Colors.grey, fontSize: 12)),
+            Text(t('ai_poweredBy'), style: TextStyle(color: Colors.grey, fontSize: 12)),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(t('ai_close'))),
         ],
       ),
     );
@@ -572,13 +572,13 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Voice Settings'),
+          title: Text(t('ai_voiceSettingsTitle')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               SwitchListTile(
-                title: const Text('Voice Feedback'),
-                subtitle: Text(_voiceFeedbackEnabled ? 'On' : 'Off'),
+                title: Text(t('ai_voiceFeedbackSwitch')),
+                subtitle: Text(_voiceFeedbackEnabled ? t('ai_onState') : t('ai_offState')),
                 value: _voiceFeedbackEnabled,
                 onChanged: (value) {
                   setDialogState(() {});
@@ -591,12 +591,12 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
               ),
               const Divider(),
               ListTile(
-                title: const Text('Voice Gender'),
-                subtitle: Text(tempGender == 'male' ? 'Male' : 'Female'),
+                title: Text(t('ai_voiceGenderTitle')),
+                subtitle: Text(tempGender == 'male' ? t('ai_maleOpt') : t('ai_femaleOpt')),
                 trailing: SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'female', label: Text('Female')),
-                    ButtonSegment(value: 'male', label: Text('Male')),
+                  segments: [
+                    ButtonSegment(value: 'female', label: Text(t('ai_femaleOpt'))),
+                    ButtonSegment(value: 'male', label: Text(t('ai_maleOpt'))),
                   ],
                   selected: {tempGender},
                   onSelectionChanged: (set) => setDialogState(() => tempGender = set.first),
@@ -607,7 +607,7 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Speech Speed'),
+                    Text(t('ai_speechSpeedLabel')),
                     Slider(
                       value: tempRate,
                       min: 0.25,
@@ -622,7 +622,7 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(t('ai_cancel'))),
             ElevatedButton(
               onPressed: () {
                 setState(() {
@@ -633,9 +633,9 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
                 _voiceService.setVoiceGender(_voiceGender);
                 _saveVoiceSettings();
                 Navigator.pop(context);
-                _showToast('Voice settings saved');
+                _showToast(t('ai_voiceSettingsSaved'));
               },
-              child: const Text('Save'),
+              child: Text(t('ai_saveBtn')),
             ),
           ],
         ),
@@ -666,7 +666,7 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: _clearChat,
-            tooltip: 'Clear Chat',
+            tooltip: t('b3_clearChat'),
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.settings),
@@ -677,8 +677,8 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
               }
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(value: 'voice_settings', child: Text('Voice Settings')),
-              const PopupMenuItem(value: 'about', child: Text('About')),
+              PopupMenuItem(value: 'voice_settings', child: Text(t('ai_voiceSettings'))),
+              PopupMenuItem(value: 'about', child: Text(t('ai_aboutAI'))),
             ],
           ),
         ],
@@ -704,7 +704,7 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
                     children: [
                       const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
                       const SizedBox(width: 8),
-                      Text('AI is thinking...', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                      Text(t('ai_thinking'), style: const TextStyle(color: Colors.white, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -751,13 +751,13 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      _buildChip('Order beer', isMobile),
+                      _buildChip(t('ai_orderBeer'), isMobile),
                       const SizedBox(width: 6),
-                      _buildChip('Check prices', isMobile),
+                      _buildChip(t('ai_checkPrices'), isMobile),
                       const SizedBox(width: 6),
-                      _buildChip('Stock levels', isMobile),
+                      _buildChip(t('ai_stockLevels'), isMobile),
                       const SizedBox(width: 6),
-                      _buildChip('Recommend', isMobile),
+                      _buildChip(t('ai_recommend'), isMobile),
                     ],
                   ),
                 ),
@@ -770,12 +770,12 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
                   runSpacing: 4,
                   alignment: WrapAlignment.center,
                   children: [
-                    _buildChip('Order beer', isMobile),
-                    _buildChip('Check prices', isMobile),
-                    _buildChip('Stock levels', isMobile),
-                    _buildChip('Recommend', isMobile),
-                    _buildChip('Clear order', isMobile),
-                    _buildChip('Checkout', isMobile),
+                    _buildChip(t('ai_orderBeer'), isMobile),
+                    _buildChip(t('ai_checkPrices'), isMobile),
+                    _buildChip(t('ai_stockLevels'), isMobile),
+                    _buildChip(t('ai_recommend'), isMobile),
+                    _buildChip(t('ai_clearOrder'), isMobile),
+                    _buildChip(t('ai_checkout'), isMobile),
                   ],
                 ),
               ),
@@ -807,7 +807,7 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
                     child: TextField(
                       controller: _messageController,
                       decoration: InputDecoration(
-                        hintText: 'Ask me anything...',
+                        hintText: t('ai_askMe'),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(25),
                           borderSide: BorderSide.none,

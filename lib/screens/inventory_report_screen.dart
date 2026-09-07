@@ -9,6 +9,7 @@ import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/models/drink_model.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
+import '../utils/i18n.dart';
 
 class InventoryReportScreen extends StatefulWidget {
   const InventoryReportScreen({Key? key}) : super(key: key);
@@ -211,7 +212,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
       behavior: HitTestBehavior.translucent,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Reports & Analytics'),
+          title: Text(t('rpt_title')),
           backgroundColor: theme.primaryColor,
           foregroundColor: Colors.white,
           bottom: TabBar(
@@ -219,9 +220,9 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
             indicatorColor: Colors.white,
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
-            tabs: const [
-              Tab(icon: Icon(Icons.inventory), text: 'Inventory'),
-              Tab(icon: Icon(Icons.analytics), text: 'Profit'),
+            tabs: [
+              Tab(icon: Icon(Icons.inventory), text: t('rpt_tabInventory')),
+              Tab(icon: Icon(Icons.analytics), text: t('rpt_tabProfit')),
             ],
           ),
           actions: [
@@ -232,7 +233,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
                   ExportHelper.exportInventoryReport(_report!, context);
                 }
               },
-              tooltip: 'Export Report',
+              tooltip: t('rpt_export'),
             ),
           ],
         ),
@@ -266,14 +267,14 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
             children: [
               Expanded(
                   child: _buildSummaryCard(
-                      'Total Stock',
+                      t('rpt_totalStock'),
                       '${_report!.currentStock.fold(0, (s, i) => s + i.quantity)}',
                       Icons.inventory,
                       Colors.blue)),
               const SizedBox(width: 8),
               Expanded(
                   child: _buildSummaryCard(
-                      'Items In',
+                      t('rpt_itemsIn'),
                       '${_report!.totalItemsIn}',
                       Icons.add_shopping_cart,
                       Colors.green)),
@@ -284,14 +285,14 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
             children: [
               Expanded(
                   child: _buildSummaryCard(
-                      'Items Out',
+                      t('rpt_itemsOut'),
                       '${_report!.totalItemsOut}',
                       Icons.remove_shopping_cart,
                       Colors.red)),
               const SizedBox(width: 8),
               Expanded(
                   child: _buildSummaryCard(
-                      'Low Stock',
+                      t('rpt_lowStock'),
                       '${_report!.lowStockCount}',
                       Icons.warning,
                       Colors.orange)),
@@ -300,13 +301,13 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
           const SizedBox(height: 24),
 
           // Current Stock
-          const Text('Current Stock Levels',
+          Text(t('rpt_currentStockLevels'),
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           ...(_report!.currentStock.isEmpty
               ? [
-                  const Center(
-                      child: Text('No items in inventory',
+                  Center(
+                      child: Text(t('rpt_noItems'),
                           style: TextStyle(color: Colors.grey)))
                 ]
               : _report!.currentStock
@@ -315,7 +316,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
           if (_report!.currentStock.length > 10)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text('+ ${_report!.currentStock.length - 10} more items',
+              child: Text('+ ${_report!.currentStock.length - 10} ${t('rpt_moreItems')}',
                   style: TextStyle(
                       color: Colors.grey[500], fontStyle: FontStyle.italic)),
             ),
@@ -323,7 +324,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
 
           // Sales by Category
           if (_report!.salesByCategory.isNotEmpty) ...[
-            const Text('Sales by Category',
+            Text(t('rpt_salesByCategory'),
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             ..._report!.salesByCategory.entries
@@ -332,13 +333,13 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
           const SizedBox(height: 24),
 
           // Recent Transactions
-          const Text('Recent Transactions',
+          Text(t('rpt_recentTransactions'),
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           ...(_report!.transactions.isEmpty
               ? [
-                  const Center(
-                      child: Text('No transactions in this period',
+                  Center(
+                      child: Text(t('rpt_noTransactions'),
                           style: TextStyle(color: Colors.grey)))
                 ]
               : _report!.transactions
@@ -374,14 +375,14 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
             children: [
               Expanded(
                   child: _buildProfitCard(
-                      'Revenue',
+                      t('rpt_revenue'),
                       CurrencyHelper.format(totalRevenue),
                       Icons.trending_up,
                       Colors.blue)),
               const SizedBox(width: 8),
               Expanded(
                   child: _buildProfitCard(
-                      'Cost',
+                      t('rpt_cost'),
                       CurrencyHelper.format(totalCost),
                       Icons.trending_down,
                       Colors.red)),
@@ -392,14 +393,14 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
             children: [
               Expanded(
                   child: _buildProfitCard(
-                      'Profit',
+                      t('rpt_profit'),
                       CurrencyHelper.format(totalProfit),
                       Icons.savings,
                       Colors.green)),
               const SizedBox(width: 8),
               Expanded(
                   child: _buildProfitCard(
-                      'Margin',
+                      t('rpt_margin'),
                       '${profitMargin.toStringAsFixed(1)}%',
                       Icons.pie_chart,
                       Colors.purple)),
@@ -409,7 +410,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
 
           // Profit by Category
           if (profitByCategory.isNotEmpty) ...[
-            const Text('Profit by Category',
+            Text(t('rpt_profitByCategory'),
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             Card(
@@ -462,7 +463,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
 
           // Top 5 Profitable Drinks
           if (topDrinks.isNotEmpty) ...[
-            const Text('Top 5 Most Profitable Drinks',
+            Text(t('rpt_top5'),
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             ...topDrinks.asMap().entries.map((entry) {
@@ -518,7 +519,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Report Period',
+                  Text(t('rpt_reportPeriod'),
                       style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
@@ -631,7 +632,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
       child: Row(
         children: [
           Expanded(child: Text(category, style: const TextStyle(fontSize: 14))),
-          Text('$count sold',
+          Text('$count ${t('rpt_sold')}',
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,

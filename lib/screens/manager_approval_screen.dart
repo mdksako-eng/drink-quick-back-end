@@ -189,7 +189,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Enter Verification Code'),
+        title: Text(t('enterVerificationCode')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -441,7 +441,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                           ElevatedButton.icon(
                             onPressed: _loadPendingRequests,
                             icon: const Icon(Icons.refresh),
-                            label: const Text('Refresh'),
+                            label: Text(t('refresh')),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: primaryColor,
                               foregroundColor: Colors.white,

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
+import '../utils/i18n.dart';
 
 class ProfessionalSyncIndicator extends StatefulWidget {
   final Widget child;
@@ -243,7 +244,7 @@ class _ProfessionalSyncIndicatorState extends State<ProfessionalSyncIndicator>
           children: [
             const Icon(Icons.sync, color: Colors.white, size: 18),
             const SizedBox(width: 12),
-            const Expanded(child: Text('Manual sync started...')),
+            Expanded(child: Text(t('syncStarted'))),
           ],
         ),
         duration: const Duration(seconds: 2),

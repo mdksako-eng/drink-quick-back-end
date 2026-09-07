@@ -762,7 +762,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 children: [
                   const Icon(Icons.check_circle, color: Colors.white, size: 20),
                   const SizedBox(width: 12),
-                  const Text('Data loaded successfully!'),
+                  Text(t('dataLoaded')),
                 ],
               ),
               backgroundColor: Colors.green,
@@ -786,7 +786,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                   const Icon(Icons.error, color: Colors.white, size: 20),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(' Failed to load data: $e'),
+                    child: Text(t('dataLoadFailed') + ": $e"),
                   ),
                 ],
               ),
