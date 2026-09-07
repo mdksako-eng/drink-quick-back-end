@@ -1,5 +1,6 @@
 // screens/manager_approval_screen.dart
 import 'dart:async';
+import '../utils/i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
@@ -212,7 +213,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-            child: const Text('Approve'),
+            child: Text(t('b3_approve')),
           ),
         ],
       ),
@@ -298,7 +299,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                       child: ElevatedButton.icon(
                         onPressed: () => _showCodeDialog(request),
                         icon: const Icon(Icons.check, color: Colors.white),
-                        label: const Text('Approve'),
+                        label: Text(t('b3_approve')),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
                           foregroundColor: Colors.white,
@@ -312,7 +313,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                       child: ElevatedButton.icon(
                         onPressed: () => _handleJoinAction(request, false),
                         icon: const Icon(Icons.close, color: Colors.white),
-                        label: const Text('Reject'),
+                        label: Text(t('b3_reject')),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red,
                           foregroundColor: Colors.white,
@@ -363,7 +364,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
       behavior: HitTestBehavior.translucent,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_showJoins ? 'Join Requests' : 'Login Approvals'),
+          title: Text(_showJoins ? 'Join Requests' : t('b3_loginApprovals')),
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
           elevation: 4,
@@ -422,7 +423,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'No pending requests',
+                            t('b3_noRequests'),
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -547,7 +548,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                                           ),
                                           icon: const Icon(Icons.check,
                                               color: Colors.white),
-                                          label: const Text('Approve'),
+                                          label: Text(t('b3_approve')),
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: Colors.green,
                                             foregroundColor: Colors.white,
@@ -570,7 +571,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                                           ),
                                           icon: const Icon(Icons.close,
                                               color: Colors.white),
-                                          label: const Text('Reject'),
+                                          label: Text(t('b3_reject')),
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: Colors.red,
                                             foregroundColor: Colors.white,

@@ -1,5 +1,6 @@
 // screens/ai_assistant_screen.dart
 import 'dart:convert';
+import '../utils/i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
@@ -658,7 +659,7 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
     behavior: HitTestBehavior.translucent,
     child:Scaffold(
       appBar: AppBar(
-        title: const Text('AI Assistant'),
+        title: Text(t('b3_aiAssistant')),
         foregroundColor: Colors.white,
         backgroundColor: theme.primaryColor,
         actions: [

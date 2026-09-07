@@ -1,5 +1,6 @@
 // screens/manager_panel.dart
 import 'package:flutter/material.dart';
+import '../utils/i18n.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -174,7 +175,7 @@ class _ManagerPanelState extends State<ManagerPanel>
           ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Block')),
+              child: Text(t('b3_block'))),
         ],
       ),
     );
@@ -188,7 +189,7 @@ class _ManagerPanelState extends State<ManagerPanel>
         );
         if (response.statusCode == 200) {
           await _loadStaff();
-          Helpers.showToast('Blocked');
+          Helpers.showToast(t('b3_blocked'));
         }
       } catch (e) {
         Helpers.showToast('Error: $e');
@@ -210,7 +211,7 @@ class _ManagerPanelState extends State<ManagerPanel>
           ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-              child: const Text('Unblock')),
+              child: Text(t('b3_unblock'))),
         ],
       ),
     );
@@ -389,7 +390,7 @@ class _ManagerPanelState extends State<ManagerPanel>
     if (!isManager && !isAdmin) {
       return Scaffold(
         appBar: AppBar(
-            title: const Text('Access Denied'), backgroundColor: Colors.red),
+            title: Text(t('b3_accessDenied')), backgroundColor: Colors.red),
         body: const Center(
             child:
                 Column(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -409,7 +410,7 @@ class _ManagerPanelState extends State<ManagerPanel>
       behavior: HitTestBehavior.translucent,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Staff Management'),
+          title: Text(t('b3_staffMgmt')),
           backgroundColor: _primaryColor,
           foregroundColor: Colors.white,
           actions: [
@@ -498,10 +499,10 @@ class _ManagerPanelState extends State<ManagerPanel>
                 _statCard('Total Staff', '${_stats['totalStaff']}',
                     Icons.people, Colors.blue),
                 const SizedBox(width: 10),
-                _statCard('Active', '${_stats['activeStaff']}',
+                _statCard(t('b3_active'), '${_stats['activeStaff']}',
                     Icons.check_circle, Colors.green),
                 const SizedBox(width: 10),
-                _statCard('Blocked', '${_stats['blockedStaff']}', Icons.block,
+                _statCard(t('b3_blocked'), '${_stats['blockedStaff']}', Icons.block,
                     Colors.red),
               ]),
             ),
@@ -628,20 +629,20 @@ class _ManagerPanelState extends State<ManagerPanel>
               },
               itemBuilder: (ctx) => [
                 if (isActive)
-                  const PopupMenuItem(
+                  PopupMenuItem(
                       value: 'block',
                       child: Row(children: [
-                        Icon(Icons.block, color: Colors.red, size: 18),
+                        const Icon(Icons.block, color: Colors.red, size: 18),
                         const SizedBox(width: 8),
-                        const Text('Block')
+                        Text(t('b3_block'))
                       ])),
                 if (!isActive)
-                  const PopupMenuItem(
+                  PopupMenuItem(
                       value: 'unblock',
                       child: Row(children: [
-                        Icon(Icons.check_circle, color: Colors.green, size: 18),
+                        const Icon(Icons.check_circle, color: Colors.green, size: 18),
                         const SizedBox(width: 8),
-                        const Text('Unblock')
+                        Text(t('b3_unblock'))
                       ])),
               ],
             ),
