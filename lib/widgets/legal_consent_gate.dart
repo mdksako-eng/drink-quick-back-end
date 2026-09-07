@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../config/api_config.dart';
+import '../utils/i18n.dart';
 
 /// Shows a one-time Terms & Privacy Policy consent dialog before the app
 /// can be used. The user's acceptance is stored locally so they only see
@@ -68,19 +69,16 @@ class _LegalConsentGateState extends State<LegalConsentGate> {
                       const Icon(Icons.verified_user_outlined,
                           size: 48, color: Color(0xFF667EEA)),
                       const SizedBox(height: 16),
-                      const Text('Before you continue',
+                      Text(t('legal_beforeContinue'),
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold)),
                       const SizedBox(height: 12),
-                      const Text(
-                        'To use Drink Quick Cal you must review and accept '
-                        'our Terms of Service and Privacy Policy, which '
-                        'explain how your account, business and '
-                        'transaction data are collected, stored and used.',
+                      Text(
+                        t('legal_body'),
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 13, height: 1.4),
+                        style: const TextStyle(fontSize: 13, height: 1.4),
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -88,11 +86,11 @@ class _LegalConsentGateState extends State<LegalConsentGate> {
                         children: [
                           TextButton(
                             onPressed: () => _open(ApiConfig.termsOfService),
-                            child: const Text('View Terms'),
+                            child: Text(t('legal_viewTerms')),
                           ),
                           TextButton(
                             onPressed: () => _open(ApiConfig.privacyPolicy),
-                            child: const Text('View Privacy Policy'),
+                            child: Text(t('legal_viewPrivacy')),
                           ),
                         ],
                       ),
@@ -111,7 +109,7 @@ class _LegalConsentGateState extends State<LegalConsentGate> {
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.check_circle_outline),
-                        label: const Text('I Accept'),
+                        label: Text(t('legal_accept')),
                       ),
                     ],
                   ),

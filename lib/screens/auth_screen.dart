@@ -1,4 +1,5 @@
 // screens/auth_screen.dart
+import '../utils/i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -215,11 +216,11 @@ class _AuthScreenState extends State<AuthScreen> {
       if (password.isEmpty)
         _passwordStrength = '';
       else if (strength <= 1)
-        _passwordStrength = 'Weak password';
+        _passwordStrength = t('auth_weakPassword');
       else if (strength <= 3)
-        _passwordStrength = 'Medium strength password';
+        _passwordStrength = t('auth_mediumPassword');
       else
-        _passwordStrength = 'Strong password';
+        _passwordStrength = t('auth_strongPassword');
     });
   }
 
@@ -281,7 +282,7 @@ class _AuthScreenState extends State<AuthScreen> {
   // ========== EMAIL CODE PASSWORD RESET ==========
   Future<void> _sendResetCode() async {
     if (_forgotEmailController.text.isEmpty) {
-      _showErrorDialog('Error', 'Enter your email', Icons.error, Colors.red);
+      _showErrorDialog('Error', t('auth_enterYourEmail'), Icons.error, Colors.red);
       return;
     }
     setState(() => _isSendingCode = true);
@@ -297,7 +298,7 @@ class _AuthScreenState extends State<AuthScreen> {
       if (response.statusCode == 200) {
         setState(() => _codeSent = true);
         _showSuccessDialog(
-            'Code Sent!',
+            t('auth_codeSent'),
             'Check your email for the 6-digit code.\n\nIf you don\'t see it, check spam or try again.',
             Icons.email,
             Colors.green,
@@ -305,26 +306,26 @@ class _AuthScreenState extends State<AuthScreen> {
       } else {
         final data = json.decode(response.body);
         _showErrorDialog(
-            'Server Error',
-            data['message'] ?? 'Failed to send code. Try again.',
+            t('auth_serverError'),
+            data['message'] ?? t('auth_sendCodeFailed'),
             Icons.error,
             Colors.red);
       }
     } on http.ClientException catch (e) {
       _showErrorDialog(
-          'Network Error',
-          'Cannot reach server. Check your internet connection and try again.',
+          t('auth_networkError'),
+          t('auth_cannotReachServer'),
           Icons.wifi_off,
           Colors.orange);
     } catch (e) {
       if (e.toString().contains('TimeoutException')) {
         _showErrorDialog(
-            'Connection Slow',
+            t('auth_connectionSlow'),
             'Server taking too long. Try again in a moment.',
             Icons.hourglass_empty,
             Colors.orange);
       } else {
-        _showErrorDialog('Error', 'Something went wrong. Try again.',
+        _showErrorDialog('Error', t('auth_somethingWrong'),
             Icons.error, Colors.red);
       }
     }
@@ -334,7 +335,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _verifyResetCode() async {
     if (_resetCodeController.text.isEmpty) {
       _showErrorDialog(
-          'Error', 'Enter the 6-digit code', Icons.error, Colors.red);
+          'Error', t('enterCode'), Icons.error, Colors.red);
       return;
     }
     setState(() => _isVerifyingCode = true);
@@ -355,26 +356,26 @@ class _AuthScreenState extends State<AuthScreen> {
       } else {
         final data = json.decode(response.body);
         _showErrorDialog(
-            'Invalid Code',
-            data['message'] ?? 'The code is incorrect or expired.',
+            t('auth_invalidCode'),
+            data['message'] ?? t('auth_codeIncorrectExpired'),
             Icons.error,
             Colors.red);
       }
     } on http.ClientException catch (e) {
       _showErrorDialog(
-          'Network Error',
-          'Cannot reach server. Check your connection.',
+          t('auth_networkError'),
+          t('auth_cannotReachServerShort'),
           Icons.wifi_off,
           Colors.orange);
     } catch (e) {
       if (e.toString().contains('TimeoutException')) {
         _showErrorDialog(
-            'Connection Slow',
-            'Server taking too long. Try again.',
+            t('auth_connectionSlow'),
+            t('auth_serverSlow'),
             Icons.hourglass_empty,
             Colors.orange);
       } else {
-        _showErrorDialog('Error', 'Something went wrong. Try again.',
+        _showErrorDialog('Error', t('auth_somethingWrong'),
             Icons.error, Colors.red);
       }
     }
@@ -384,11 +385,11 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _resetPasswordWithCode() async {
     if (_newPasswordController.text != _confirmNewPasswordController.text) {
       _showErrorDialog(
-          'Error', 'Passwords do not match', Icons.error, Colors.red);
+          'Error', t('auth_passwordsNoMatch'), Icons.error, Colors.red);
       return;
     }
     if (_newPasswordController.text.length < 6) {
-      _showErrorDialog('Error', 'Password must be at least 6 characters',
+      _showErrorDialog('Error', t('auth_passwordTooShort'),
           Icons.error, Colors.red);
       return;
     }
@@ -409,7 +410,7 @@ class _AuthScreenState extends State<AuthScreen> {
       if (response.statusCode == 200) {
         _showSuccessDialog(
             'Success!',
-            'Password reset! Please login with your new password.',
+            t('auth_passwordResetDone'),
             Icons.check_circle,
             Colors.green,
             () => _switchAuthMode(AuthMode.login));
@@ -417,25 +418,25 @@ class _AuthScreenState extends State<AuthScreen> {
         final data = json.decode(response.body);
         _showErrorDialog(
             'Error',
-            data['message'] ?? 'Failed to reset password.',
+            data['message'] ?? t('auth_resetFailed2'),
             Icons.error,
             Colors.red);
       }
     } on http.ClientException catch (e) {
       _showErrorDialog(
-          'Network Error',
-          'Cannot reach server. Check your connection.',
+          t('auth_networkError'),
+          t('auth_cannotReachServerShort'),
           Icons.wifi_off,
           Colors.orange);
     } catch (e) {
       if (e.toString().contains('TimeoutException')) {
         _showErrorDialog(
-            'Connection Slow',
-            'Server taking too long. Try again.',
+            t('auth_connectionSlow'),
+            t('auth_serverSlow'),
             Icons.hourglass_empty,
             Colors.orange);
       } else {
-        _showErrorDialog('Error', 'Something went wrong. Try again.',
+        _showErrorDialog('Error', t('auth_somethingWrong'),
             Icons.error, Colors.red);
       }
     }
@@ -446,16 +447,16 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _resetPasswordWithSecurity() async {
     if (_forgotUsernameController.text.isEmpty ||
         _forgotEmailController.text.isEmpty) {
-      _showErrorDialog('Error', 'Fill all fields', Icons.error, Colors.red);
+      _showErrorDialog('Error', t('auth_fillAllFields'), Icons.error, Colors.red);
       return;
     }
     if (_newPasswordController.text != _confirmNewPasswordController.text) {
       _showErrorDialog(
-          'Error', 'Passwords do not match', Icons.error, Colors.red);
+          'Error', t('auth_passwordsNoMatch'), Icons.error, Colors.red);
       return;
     }
     if (_newPasswordController.text.length < 6) {
-      _showErrorDialog('Error', 'Password must be at least 6 characters',
+      _showErrorDialog('Error', t('auth_passwordTooShort'),
           Icons.error, Colors.red);
       return;
     }
@@ -472,8 +473,8 @@ class _AuthScreenState extends State<AuthScreen> {
       if (mounted) setState(() => _isResettingWithSecurity = false);
       if (success) {
         _showSuccessDialog(
-            'Password Reset',
-            'Password reset! You can now login.',
+            t('auth_passwordResetTitle'),
+            t('auth_passwordResetNowLogin'),
             Icons.lock_open,
             Colors.green, () {
           _switchAuthMode(AuthMode.login);
@@ -481,15 +482,15 @@ class _AuthScreenState extends State<AuthScreen> {
         });
       } else {
         _showErrorDialog(
-            'Reset Failed',
-            'Security answers incorrect or user not found',
+            t('auth_resetFailedTitle'),
+            t('auth_securityAnswersWrong'),
             Icons.security,
             Colors.red);
       }
     } catch (e) {
       if (mounted) setState(() => _isResettingWithSecurity = false);
       _showErrorDialog(
-          'Error', 'An error occurred', Icons.error, Colors.orange);
+          'Error', t('auth_errorOccurred'), Icons.error, Colors.orange);
     }
   }
 
@@ -515,7 +516,7 @@ class _AuthScreenState extends State<AuthScreen> {
           );
         }
       } else {
-        final errorMsg = authProvider.error ?? 'Invalid username or password';
+        final errorMsg = authProvider.error ?? t('auth_invalidCredentials');
 
         if (mounted) {
           // ✅ Handle email verification error from provider
@@ -527,7 +528,7 @@ class _AuthScreenState extends State<AuthScreen> {
             _showVerificationRequiredDialog(errorMsg);
           } else {
             _showErrorDialog(
-                'Login Failed', errorMsg, Icons.error_outline, Colors.red);
+                t('auth_loginFailed'), errorMsg, Icons.error_outline, Colors.red);
           }
         }
       }
@@ -537,18 +538,18 @@ class _AuthScreenState extends State<AuthScreen> {
         if (e.toString().contains('SocketException') ||
             e.toString().contains('Connection refused')) {
           _showErrorDialog(
-              'No Internet',
-              'Please check your connection and try again.',
+              t('auth_noInternet'),
+              t('auth_checkConnection'),
               Icons.wifi_off,
               Colors.orange);
         } else if (e.toString().contains('Timeout')) {
           _showErrorDialog(
-              'Connection Slow',
-              'Server taking too long. Try again.',
+              t('auth_connectionSlow'),
+              t('auth_serverSlow'),
               Icons.hourglass_empty,
               Colors.orange);
         } else {
-          _showErrorDialog('Error', 'Something went wrong. Try again.',
+          _showErrorDialog('Error', t('auth_somethingWrong'),
               Icons.error, Colors.red);
         }
       }
@@ -559,7 +560,7 @@ class _AuthScreenState extends State<AuthScreen> {
     if (!_signupFormKey.currentState!.validate()) return;
     if (_signupPasswordController.text != _confirmPasswordController.text) {
       _showErrorDialog(
-          'Error', 'Passwords do not match', Icons.error_outline, Colors.red);
+          'Error', t('auth_passwordsNoMatch'), Icons.error_outline, Colors.red);
       return;
     }
     await _checkConnectivity();
@@ -595,8 +596,8 @@ class _AuthScreenState extends State<AuthScreen> {
       if (success) {
         if (mounted) {
           _showSuccessDialog(
-              'Verify Your Email',
-              'Account created! We have sent a verification email to ${_signupEmailController.text.trim()}.\n\nPlease check your inbox and click the verify button to activate your account.',
+              t('auth_verifyEmailTitle'),
+              '${t('auth_accountCreated')} ${_signupEmailController.text.trim()}.\n\n${t('auth_verifyEmailInstr')}',
               Icons.mark_email_read,
               Colors.blue, () {
             _switchAuthMode(AuthMode.login);
@@ -606,16 +607,16 @@ class _AuthScreenState extends State<AuthScreen> {
       } else {
         if (mounted) {
           final errorMsg =
-              authProvider.error ?? 'Registration failed. Please try again.';
+              authProvider.error ?? t('auth_registerFailed');
           _showErrorDialog(
-              'Signup Failed', errorMsg, Icons.person_off, Colors.red);
+              t('auth_signupFailed'), errorMsg, Icons.person_off, Colors.red);
         }
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSigningUp = false);
         _showErrorDialog(
-            'Error', 'An error occurred', Icons.error, Colors.orange);
+            'Error', t('auth_errorOccurred'), Icons.error, Colors.orange);
       }
     }
   }
@@ -633,7 +634,7 @@ class _AuthScreenState extends State<AuthScreen> {
           children: [
             Icon(Icons.mark_email_unread, color: Colors.orange, size: 28),
             const SizedBox(width: 10),
-            const Text('Email Not Verified'),
+            Text(t('auth_emailNotVerified')),
           ],
         ),
         content: Column(
@@ -684,7 +685,7 @@ class _AuthScreenState extends State<AuthScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            child: Text(t('ok')),
           ),
           ElevatedButton.icon(
             onPressed: () {
@@ -692,7 +693,7 @@ class _AuthScreenState extends State<AuthScreen> {
               _resendVerificationEmail(email);
             },
             icon: const Icon(Icons.email, size: 18),
-            label: const Text('Resend Email'),
+            label: Text(t('auth_resendEmail')),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
@@ -719,8 +720,8 @@ class _AuthScreenState extends State<AuthScreen> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         _showSuccessDialog(
-          '✅ Email Sent!',
-          data['message'] ?? 'Verification email resent to $email',
+          '✅ ${t('auth_emailSent')}',
+          data['message'] ?? '${t('auth_resentTo')} $email',
           Icons.email,
           Colors.green,
           () {},
@@ -728,8 +729,8 @@ class _AuthScreenState extends State<AuthScreen> {
       } else {
         final data = json.decode(response.body);
         _showErrorDialog(
-          'Failed',
-          data['message'] ?? 'Could not resend verification email.',
+          t('failed'),
+          data['message'] ?? t('auth_resendFailed'),
           Icons.error,
           Colors.red,
         );
@@ -737,22 +738,22 @@ class _AuthScreenState extends State<AuthScreen> {
     } catch (e) {
       if (e is http.ClientException) {
         _showErrorDialog(
-          'Network Error',
-          'Cannot reach server. Check your connection.',
+          t('auth_networkError'),
+          t('auth_cannotReachServerShort'),
           Icons.wifi_off,
           Colors.orange,
         );
       } else if (e.toString().contains('Timeout')) {
         _showErrorDialog(
-          'Connection Slow',
-          'Server taking too long. Try again.',
+          t('auth_connectionSlow'),
+          t('auth_serverSlow'),
           Icons.hourglass_empty,
           Colors.orange,
         );
       } else {
         _showErrorDialog(
           'Error',
-          'Something went wrong. Try again.',
+          t('auth_somethingWrong'),
           Icons.error,
           Colors.red,
         );
@@ -778,7 +779,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       shape: BoxShape.circle),
                   child: const Icon(Icons.wifi_off,
                       size: 36, color: Colors.orange)),
-              title: const Text('No Internet Connection',
+              title: Text(t('auth_noConnection'),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       fontWeight: FontWeight.bold, color: Colors.orange)),
@@ -792,12 +793,12 @@ class _AuthScreenState extends State<AuthScreen> {
                       await _checkConnectivity();
                     },
                     icon: const Icon(Icons.refresh, size: 20),
-                    label: const Text('Retry'),
+                    label: Text(t('retry')),
                     style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange)),
                 TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel')),
+                    child: Text(t('cancel'))),
               ],
             ));
   }
@@ -823,7 +824,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ElevatedButton(
                     onPressed: () => Navigator.pop(context),
                     style: ElevatedButton.styleFrom(backgroundColor: color),
-                    child: const Text('OK'))
+                    child: Text(t('ok')))
               ],
             ));
   }
@@ -852,7 +853,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       onOk();
                     },
                     style: ElevatedButton.styleFrom(backgroundColor: color),
-                    child: const Text('OK'))
+                    child: Text(t('ok')))
               ],
             ));
   }
@@ -883,12 +884,12 @@ class _AuthScreenState extends State<AuthScreen> {
                             image: AssetImage('assets/icons/icon.png'),
                             fit: BoxFit.contain))),
                 const SizedBox(height: 10),
-                const Text('Drinks Quick Cal',
+                Text(t('appName'),
                     style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
                         color: Colors.white)),
-                const Text('Professional Drink Ordering & Management',
+                Text(t('auth_tagline'),
                     style: TextStyle(fontSize: 16, color: Colors.white70)),
                 _buildConnectionStatus(),
                 const SizedBox(height: 20),
@@ -925,14 +926,14 @@ class _AuthScreenState extends State<AuthScreen> {
         decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.2),
             borderRadius: BorderRadius.circular(20)),
-        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
           SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(
                   strokeWidth: 2, color: Colors.white)),
           SizedBox(width: 8),
-          Text('Checking...',
+          Text(t('auth_checking'),
               style: TextStyle(color: Colors.white, fontSize: 12)),
         ]),
       );
@@ -945,10 +946,10 @@ class _AuthScreenState extends State<AuthScreen> {
         decoration: BoxDecoration(
             color: Colors.orange.withOpacity(0.9),
             borderRadius: BorderRadius.circular(20)),
-        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.wifi_off, size: 16, color: Colors.white),
           SizedBox(width: 8),
-          Text('No Internet',
+          Text(t('auth_noInternet'),
               style: TextStyle(
                   color: Colors.white,
                   fontSize: 12,
@@ -1013,7 +1014,7 @@ class _AuthScreenState extends State<AuthScreen> {
       ignoring: true, // ✅ Blocks all taps
       child: Container(
         color: Colors.black.withOpacity(0.3),
-        child: const Center(
+        child: Center(
           child: Card(
             child: Padding(
               padding: EdgeInsets.all(24),
@@ -1022,7 +1023,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 16),
-                  Text('Please wait...'),
+                  Text(t('auth_pleaseWait')),
                 ],
               ),
             ),
@@ -1044,8 +1045,8 @@ class _AuthScreenState extends State<AuthScreen> {
           TextFormField(
               enabled: !_isLoggingIn,
               controller: _loginUsernameController,
-              decoration: const InputDecoration(
-                  labelText: 'Username', prefixIcon: Icon(Icons.person)),
+              decoration: InputDecoration(
+                  labelText: t('username'), prefixIcon: Icon(Icons.person)),
               validator: (v) =>
                   v?.isEmpty == true ? 'Please enter username' : null),
           const SizedBox(height: 16),
@@ -1054,7 +1055,7 @@ class _AuthScreenState extends State<AuthScreen> {
               controller: _loginPasswordController,
               obscureText: !_showLoginPassword,
               decoration: InputDecoration(
-                  labelText: 'Password',
+                  labelText: t('password'),
                   prefixIcon: const Icon(Icons.lock),
                   suffixIcon: IconButton(
                       icon: Icon(_showLoginPassword
@@ -1071,7 +1072,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   onPressed: _isLoggingIn
                       ? null
                       : () => _switchAuthMode(AuthMode.forgot),
-                  child: const Text('Forgot Password?'))),
+                  child: Text(t('forgotPassword')))),
           const SizedBox(height: 20),
           ElevatedButton(
               onPressed: _isLoggingIn ? null : _handleLogin,
@@ -1081,7 +1082,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       : Colors.grey,
                   padding: const EdgeInsets.symmetric(vertical: 16)),
               child: _isLoggingIn
-                  ? const Row(
+                  ? Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                           SizedBox(
@@ -1090,19 +1091,19 @@ class _AuthScreenState extends State<AuthScreen> {
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.white)),
                           SizedBox(width: 10),
-                          Text('Logging in...')
+                          Text(t('loggingIn'))
                         ])
                   : Text(_hasInternetConnection
-                      ? 'Login'
-                      : 'No Internet Connection')),
+                      ? t('login')
+                      : t('auth_noConnection'))),
           const SizedBox(height: 20),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Text("Don't have an account?"),
+            Text(t('auth_noAccountStr')),
             TextButton(
                 onPressed: _isLoggingIn
                     ? null
                     : () => _switchAuthMode(AuthMode.signup),
-                child: const Text('Sign up here'))
+                child: Text(t('auth_signUpHere')))
           ]),
         ]));
   }
@@ -1119,8 +1120,8 @@ class _AuthScreenState extends State<AuthScreen> {
           TextFormField(
               enabled: !_isSigningUp,
               controller: _signupUsernameController,
-              decoration: const InputDecoration(
-                  labelText: 'Username', prefixIcon: Icon(Icons.person)),
+              decoration: InputDecoration(
+                  labelText: t('username'), prefixIcon: Icon(Icons.person)),
               validator: (v) => v?.isEmpty == true
                   ? 'Username is required'
                   : v!.length < 3
@@ -1130,8 +1131,8 @@ class _AuthScreenState extends State<AuthScreen> {
           TextFormField(
               enabled: !_isSigningUp,
               controller: _signupEmailController,
-              decoration: const InputDecoration(
-                  labelText: 'Email', prefixIcon: Icon(Icons.email)),
+              decoration: InputDecoration(
+                  labelText: t('email'), prefixIcon: Icon(Icons.email)),
               keyboardType: TextInputType.emailAddress,
               validator: (v) => v?.isEmpty == true
                   ? 'Email is required'
@@ -1143,8 +1144,8 @@ class _AuthScreenState extends State<AuthScreen> {
           // Country Selection
           DropdownButtonFormField<String>(
             value: _selectedCountry,
-            decoration: const InputDecoration(
-              labelText: 'Country',
+            decoration: InputDecoration(
+              labelText: t('auth_country'),
               prefixIcon: Icon(Icons.public),
               border: OutlineInputBorder(),
             ),
@@ -1179,7 +1180,7 @@ class _AuthScreenState extends State<AuthScreen> {
             enabled: !_isSigningUp,
             controller: _phoneController,
             decoration: InputDecoration(
-              labelText: 'Phone Number',
+              labelText: t('phone'),
               hintText: _countries
                   .firstWhere((c) => c['code'] == _selectedCountry)['format'],
               prefixIcon: Padding(
@@ -1231,7 +1232,7 @@ class _AuthScreenState extends State<AuthScreen> {
               obscureText: !_showSignupPassword,
               onChanged: _checkPasswordStrength,
               decoration: InputDecoration(
-                  labelText: 'Password',
+                  labelText: t('password'),
                   prefixIcon: const Icon(Icons.lock),
                   suffixIcon: IconButton(
                       icon: Icon(_showSignupPassword
@@ -1261,7 +1262,7 @@ class _AuthScreenState extends State<AuthScreen> {
               controller: _confirmPasswordController,
               obscureText: !_showSignupConfirmPassword,
               decoration: InputDecoration(
-                  labelText: 'Confirm Password',
+                  labelText: t('confirmPassword'),
                   prefixIcon: const Icon(Icons.lock),
                   suffixIcon: IconButton(
                       icon: Icon(_showSignupConfirmPassword
@@ -1272,13 +1273,13 @@ class _AuthScreenState extends State<AuthScreen> {
                               !_showSignupConfirmPassword))),
               validator: (v) => v?.isEmpty == true ? 'Required' : null),
           const SizedBox(height: 20),
-          const Text('Security Questions',
+          Text(t('auth_securityQuestions'),
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 10),
           TextFormField(
               enabled: !_isSigningUp,
               controller: _securityAnswer1Controller,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                   labelText: "What was your first pet's name?"),
               validator: (v) =>
                   v?.isEmpty == true ? 'pet name required' : null),
@@ -1286,9 +1287,9 @@ class _AuthScreenState extends State<AuthScreen> {
           TextFormField(
               enabled: !_isSigningUp,
               controller: _securityAnswer2Controller,
-              decoration: const InputDecoration(
-                  labelText: 'What city were you born in?'),
-              validator: (v) => v?.isEmpty == true ? 'city is required' : null),
+              decoration: InputDecoration(
+                  labelText: t('auth_securityQ1')),
+              validator: (v) => v?.isEmpty == true ? t('auth_cityRequired') : null),
           const SizedBox(height: 20),
 
 // Register as Manager Toggle
@@ -1385,9 +1386,9 @@ class _AuthScreenState extends State<AuthScreen> {
                             child: TextFormField(
                               enabled: !_isSigningUp,
                               controller: _inviteCodeController,
-                              decoration: const InputDecoration(
-                                  labelText: 'Company Invite Code',
-                                  hintText: 'e.g., MYBIZ',
+                              decoration: InputDecoration(
+                                  labelText: t('inviteCode'),
+                                  hintText: t('auth_egCode'),
                                   border: OutlineInputBorder()),
                               textCapitalization: TextCapitalization.characters,
                             ),
@@ -1423,7 +1424,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                         });
                                       } else {
                                         _showErrorDialog(
-                                            'Invalid Code',
+                                            t('auth_invalidCode'),
                                             'Company not found',
                                             Icons.error,
                                             Colors.red);
@@ -1445,11 +1446,11 @@ class _AuthScreenState extends State<AuthScreen> {
                                     height: 20,
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2, color: Colors.white))
-                                : const Text('Verify'),
+                                : Text(t('verify')),
                           ),
                         ]),
                         const SizedBox(height: 8),
-                        Text('— OR —',
+                        Text(t('auth_or'),
                             style: TextStyle(
                                 color: Colors.grey[500], fontSize: 11)),
                         TextButton(
@@ -1473,7 +1474,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             const Icon(Icons.check_circle,
                                 color: Colors.green, size: 18),
                             const SizedBox(width: 8),
-                            Text('Joining: $_verifiedCompanyName',
+                            Text(t('auth_joining') + ' ' + (_verifiedCompanyName ?? ''),
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w500)),
                             const Spacer(),
@@ -1493,7 +1494,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     // ========== OPTION 2: CREATE NEW COMPANY (only show if create is clicked) ==========
                     if (_createNewCompany) ...[
                       const SizedBox(height: 8),
-                      Text('— OR —',
+                      Text(t('auth_or'),
                           style:
                               TextStyle(color: Colors.grey[500], fontSize: 11)),
                       TextButton(
@@ -1502,23 +1503,23 @@ class _AuthScreenState extends State<AuthScreen> {
                           _newCompanyNameController.clear();
                           _newCompanyCodeController.clear();
                         }),
-                        child: const Text('Use Invite Code Instead'),
+                        child: Text(t('auth_useInviteCode')),
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
                         enabled: !_isSigningUp,
                         controller: _newCompanyNameController,
-                        decoration: const InputDecoration(
-                            labelText: 'Company Name *',
+                        decoration: InputDecoration(
+                            labelText: t('auth_companyNameRequired'),
                             border: OutlineInputBorder()),
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
                         enabled: !_isSigningUp,
                         controller: _newCompanyCodeController,
-                        decoration: const InputDecoration(
-                            labelText: 'Company Code *',
-                            hintText: 'e.g., MYTEX',
+                        decoration: InputDecoration(
+                            labelText: t('auth_companyCodeRequired'),
+                            hintText: t('auth_egCode'),
                             border: OutlineInputBorder()),
                         textCapitalization: TextCapitalization.characters,
                       ),
@@ -1526,9 +1527,9 @@ class _AuthScreenState extends State<AuthScreen> {
                       TextFormField(
                         enabled: !_isSigningUp,
                         controller: _newCompanyAddressController,
-                        decoration: const InputDecoration(
-                            labelText: 'Company Address',
-                            hintText: 'Street, city, region',
+                        decoration: InputDecoration(
+                            labelText: t('companyAddress'),
+                            hintText: t('auth_streetCityRegion'),
                             prefixIcon: Icon(Icons.location_on_outlined),
                             border: OutlineInputBorder()),
                         textCapitalization: TextCapitalization.words,
@@ -1562,26 +1563,26 @@ class _AuthScreenState extends State<AuthScreen> {
               title: Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  const Text('I agree to the',
+                  Text(t('auth_iAgree'),
                       style: TextStyle(fontSize: 12)),
                   TextButton(
                     style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(horizontal: 3)),
                     onPressed: () => _openUrl(ApiConfig.termsOfService),
-                    child: const Text('Terms of Service',
+                    child: Text(t('termsOfService'),
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold)),
                   ),
-                  const Text('and',
+                  Text(t('auth_and'),
                       style: TextStyle(fontSize: 12)),
                   TextButton(
                     style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(horizontal: 3)),
                     onPressed: () => _openUrl(ApiConfig.privacyPolicy),
-                    child: const Text('Privacy Policy',
+                    child: Text(t('privacyPolicy'),
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold)),
@@ -1599,7 +1600,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       : Colors.grey,
                   padding: const EdgeInsets.symmetric(vertical: 16)),
               child: _isSigningUp
-                  ? const Row(
+                  ? Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                           SizedBox(
@@ -1608,18 +1609,18 @@ class _AuthScreenState extends State<AuthScreen> {
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.white)),
                           SizedBox(width: 10),
-                          Text('Creating...')
+                          Text(t('auth_creating'))
                         ])
                   : Text(_hasInternetConnection
-                      ? 'Create Account'
-                      : 'No Internet Connection')),
+                      ? t('auth_createAccount')
+                      : t('auth_noConnection'))),
           const SizedBox(height: 20),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Text('Already have an account?'),
+            Text(t('auth_alreadyHave')),
             TextButton(
                 onPressed:
                     _isSigningUp ? null : () => _switchAuthMode(AuthMode.login),
-                child: const Text('Login here'))
+                child: Text(t('auth_loginHere')))
           ]),
           const SizedBox(height: 8),
           // ✅ Consent line + legal links (privacy policy / terms)
@@ -1629,23 +1630,23 @@ class _AuthScreenState extends State<AuthScreen> {
               alignment: WrapAlignment.center,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text('By creating an account you agree to our',
+                Text(t('auth_byCreatingAgree'),
                     style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                 TextButton(
                   style: TextButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 4)),
                   onPressed: () => _openUrl(ApiConfig.termsOfService),
-                  child: const Text('Terms',
+                  child: Text(t('auth_termsShort'),
                       style: TextStyle(fontSize: 11)),
                 ),
-                Text('and', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                Text(t('auth_and'), style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                 TextButton(
                   style: TextButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 4)),
                   onPressed: () => _openUrl(ApiConfig.privacyPolicy),
-                  child: const Text('Privacy Policy',
+                  child: Text(t('privacyPolicy'),
                       style: TextStyle(fontSize: 11)),
                 ),
               ],
@@ -1687,7 +1688,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                 ? Colors.white
                                 : const Color(0xFF7F8C8D)),
                         const SizedBox(width: 6),
-                        Text('Email Code',
+                        Text(t('auth_emailCode'),
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
@@ -1713,7 +1714,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                 ? Colors.white
                                 : const Color(0xFF7F8C8D)),
                         const SizedBox(width: 6),
-                        Text('Security Q\'s',
+                        Text(t('auth_securityQsShort'),
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
@@ -1728,18 +1729,18 @@ class _AuthScreenState extends State<AuthScreen> {
         if (!_codeSent) ...[
           const Icon(Icons.email_outlined, size: 50, color: Color(0xFF667EEA)),
           const SizedBox(height: 12),
-          const Text('Reset via Email Code',
+          Text(t('auth_resetViaEmail'),
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
           const SizedBox(height: 8),
-          const Text('Enter your email to receive a 6-digit code',
+          Text(t('auth_enterEmailForCode'),
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey, fontSize: 14)),
           const SizedBox(height: 20),
           TextFormField(
               enabled: !_isSendingCode,
               controller: _forgotEmailController,
-              decoration: const InputDecoration(
-                  labelText: 'Email',
+              decoration: InputDecoration(
+                  labelText: t('email'),
                   prefixIcon: Icon(Icons.email),
                   border: OutlineInputBorder()),
               keyboardType: TextInputType.emailAddress),
@@ -1755,22 +1756,22 @@ class _AuthScreenState extends State<AuthScreen> {
                       height: 20,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
-                  : const Text('Send Reset Code',
+                  : Text(t('sendCode'),
                       style: TextStyle(color: Colors.white))),
         ] else if (!_codeVerified) ...[
           const Icon(Icons.pin, size: 50, color: Color(0xFF667EEA)),
           const SizedBox(height: 12),
-          const Text('Enter Reset Code',
+          Text(t('auth_enterResetCode'),
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
           const SizedBox(height: 8),
-          Text('Code sent to ${_forgotEmailController.text}',
+          Text(t('auth_codeSentTo') + ' ' + _forgotEmailController.text,
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.grey, fontSize: 14)),
           const SizedBox(height: 20),
           TextFormField(
               enabled: !_isVerifyingCode,
               controller: _resetCodeController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                   labelText: '6-digit code',
                   prefixIcon: Icon(Icons.lock),
                   border: OutlineInputBorder()),
@@ -1790,26 +1791,26 @@ class _AuthScreenState extends State<AuthScreen> {
                       height: 20,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
-                  : const Text('Verify Code',
+                  : Text(t('verifyCode'),
                       style: TextStyle(color: Colors.white))),
           TextButton(
               onPressed: () => setState(() {
                     _codeSent = false;
                     _resetCodeController.clear();
                   }),
-              child: const Text('Try different email')),
+              child: Text(t('auth_tryDifferentEmail'))),
         ] else ...[
           const Icon(Icons.lock_open, size: 50, color: Colors.green),
           const SizedBox(height: 12),
-          const Text('Set New Password',
+          Text(t('auth_setNewPassword'),
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
           const SizedBox(height: 20),
           TextFormField(
               enabled: !_isResettingPassword,
               controller: _newPasswordController,
               obscureText: true,
-              decoration: const InputDecoration(
-                  labelText: 'New Password',
+              decoration: InputDecoration(
+                  labelText: t('auth_newPassword'),
                   prefixIcon: Icon(Icons.lock),
                   border: OutlineInputBorder())),
           const SizedBox(height: 16),
@@ -1817,8 +1818,8 @@ class _AuthScreenState extends State<AuthScreen> {
               enabled: !_isResettingPassword,
               controller: _confirmNewPasswordController,
               obscureText: true,
-              decoration: const InputDecoration(
-                  labelText: 'Confirm Password',
+              decoration: InputDecoration(
+                  labelText: t('confirmPassword'),
                   prefixIcon: Icon(Icons.lock_outline),
                   border: OutlineInputBorder())),
           const SizedBox(height: 20),
@@ -1833,20 +1834,20 @@ class _AuthScreenState extends State<AuthScreen> {
                       height: 20,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
-                  : const Text('Reset Password',
+                  : Text(t('auth_resetPassword'),
                       style: TextStyle(color: Colors.white))),
         ],
       ] else ...[
         const Icon(Icons.security, size: 50, color: Color(0xFF667EEA)),
         const SizedBox(height: 12),
-        const Text('Reset via Security Questions',
+        Text(t('auth_resetViaSecurity'),
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
         const SizedBox(height: 20),
         TextFormField(
             enabled: !_isResettingWithSecurity,
             controller: _forgotUsernameController,
-            decoration: const InputDecoration(
-                labelText: 'Username',
+            decoration: InputDecoration(
+                labelText: t('username'),
                 prefixIcon: Icon(Icons.person),
                 border: OutlineInputBorder()),
             validator: (v) => v?.isEmpty == true ? 'Required' : null),
@@ -1854,8 +1855,8 @@ class _AuthScreenState extends State<AuthScreen> {
         TextFormField(
             enabled: !_isResettingWithSecurity,
             controller: _forgotEmailController,
-            decoration: const InputDecoration(
-                labelText: 'Email',
+            decoration: InputDecoration(
+                labelText: t('email'),
                 prefixIcon: Icon(Icons.email),
                 border: OutlineInputBorder()),
             validator: (v) => v?.isEmpty == true ? 'Required' : null),
@@ -1863,7 +1864,7 @@ class _AuthScreenState extends State<AuthScreen> {
         TextFormField(
             enabled: !_isResettingWithSecurity,
             controller: _forgotSecurity1Controller,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
                 labelText: "What was your first pet's name?",
                 border: OutlineInputBorder()),
             validator: (v) => v?.isEmpty == true ? 'Required' : null),
@@ -1871,8 +1872,8 @@ class _AuthScreenState extends State<AuthScreen> {
         TextFormField(
             enabled: !_isResettingWithSecurity,
             controller: _forgotSecurity2Controller,
-            decoration: const InputDecoration(
-                labelText: 'What city were you born in?',
+            decoration: InputDecoration(
+                labelText: t('auth_securityQ1'),
                 border: OutlineInputBorder()),
             validator: (v) => v?.isEmpty == true ? 'Required' : null),
         const SizedBox(height: 20),
@@ -1880,8 +1881,8 @@ class _AuthScreenState extends State<AuthScreen> {
             enabled: !_isResettingWithSecurity,
             controller: _newPasswordController,
             obscureText: true,
-            decoration: const InputDecoration(
-                labelText: 'New Password',
+            decoration: InputDecoration(
+                labelText: t('auth_newPassword'),
                 prefixIcon: Icon(Icons.lock),
                 border: OutlineInputBorder())),
         const SizedBox(height: 16),
@@ -1889,8 +1890,8 @@ class _AuthScreenState extends State<AuthScreen> {
             enabled: !_isResettingWithSecurity,
             controller: _confirmNewPasswordController,
             obscureText: true,
-            decoration: const InputDecoration(
-                labelText: 'Confirm Password',
+            decoration: InputDecoration(
+                labelText: t('confirmPassword'),
                 prefixIcon: Icon(Icons.lock_outline),
                 border: OutlineInputBorder())),
         const SizedBox(height: 20),
@@ -1906,15 +1907,15 @@ class _AuthScreenState extends State<AuthScreen> {
                     height: 20,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white))
-                : const Text('Reset Password',
+                : Text(t('auth_resetPassword'),
                     style: TextStyle(color: Colors.white))),
       ],
       const SizedBox(height: 20),
       Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Text('Remember password?'),
+        Text(t('auth_rememberPassword')),
         TextButton(
             onPressed: () => _switchAuthMode(AuthMode.login),
-            child: const Text('Login'))
+            child: Text(t('login')))
       ]),
     ]);
   }
@@ -1930,7 +1931,7 @@ class _AuthScreenState extends State<AuthScreen> {
           Icon(Icons.info_outline, color: Colors.orange, size: 20),
           const SizedBox(width: 10),
           Expanded(
-              child: Text('Requires internet connection',
+              child: Text(t('auth_requiresInternet'),
                   style: TextStyle(color: Colors.orange[800], fontSize: 12)))
         ]));
   }
