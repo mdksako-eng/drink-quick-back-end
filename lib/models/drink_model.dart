@@ -5,6 +5,7 @@ class Drink {
   final double price;
   final String category;
   final String imageUrl;
+  final String barcode;
   final DateTime? createdAt;
   final String? userId;
   final int currentStock;
@@ -17,6 +18,7 @@ class Drink {
     required this.price,
     this.category = 'Beer',
     required this.imageUrl,
+    this.barcode = '',
     this.createdAt,
     this.userId,
     this.currentStock = 0,
@@ -34,6 +36,7 @@ class Drink {
       'price': price,
       'category': category,
       'image_url': imageUrl,
+      'barcode': barcode,
       'created_at': createdAt?.toIso8601String(),
       'user_id': userId,
       'currentStock': currentStock,
@@ -54,6 +57,7 @@ class Drink {
       category: json['category']?.toString() ?? 'Beer',
       imageUrl: json['image_url']?.toString() ??
           '', // Note: 'image_url' not 'imageUrl'
+      barcode: json['barcode']?.toString() ?? '',
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : null,
@@ -72,6 +76,7 @@ class Drink {
     double? price,
     String? category,
     String? imageUrl,
+    String? barcode,
     DateTime? createdAt,
     String? userId,
     int? currentStock,
@@ -85,6 +90,7 @@ class Drink {
       price: price ?? this.price,
       category: category ?? this.category,
       imageUrl: imageUrl ?? this.imageUrl,
+      barcode: barcode ?? this.barcode,
       createdAt: createdAt ?? this.createdAt,
       userId: userId ?? this.userId,
       currentStock: currentStock ?? this.currentStock,

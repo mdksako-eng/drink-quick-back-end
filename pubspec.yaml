@@ -39,6 +39,7 @@ dependencies:
   speech_to_text: ^7.2.0
   flutter_local_notifications: ^17.2.0
   print_bluetooth_thermal: ^1.2.1
+  mobile_scanner: ^7.4.0
 
 dev_dependencies:
   flutter_test:

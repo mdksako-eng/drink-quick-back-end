@@ -117,11 +117,18 @@ Everything is computed client-side from data already in memory (`OrderProvider.o
 
 ---
 
-## Phase 5 — AR Scanning (barcode/QR MVP → full AR later) ⬜
+## Phase 5 — AR Scanning (barcode/QR MVP → full AR later) 🟡
 
 **Value:** Medium · **Risk:** Medium → High (full AR) · **Hardware:** camera + printed codes
 
-### MVP (recommended first step)
+### Delivered (MVP)
+- `mobile_scanner` dependency + `CAMERA` permission.
+- `drink_model.dart` — added `barcode` field.
+- `lib/services/barcode_service.dart` — scan → drink/inventory matching.
+- `lib/screens/scanner_screen.dart` — camera preview, scan overlay, torch/camera toggle, detail sheet with quick restock.
+- Drawer entry (`scanMenu`) for drink-managing roles; EN/FR keys.
+
+### How the MVP works
 1. **Barcode/QR scan → item detail:**
    - Add `mobile_scanner` package + camera permission (`permission_handler` already present).
    - Scan a label → match SKU/barcode to a `Drink`/`InventoryItem` → open live stock detail + restock/count actions.

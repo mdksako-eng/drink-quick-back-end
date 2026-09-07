@@ -10,6 +10,7 @@ import 'package:drinks_calculator_fixed/screens/admin_panel.dart';
 import 'package:drinks_calculator_fixed/screens/manager_panel.dart';
 import 'package:drinks_calculator_fixed/screens/manager_dashboard.dart';
 import 'package:drinks_calculator_fixed/screens/forecast_screen.dart';
+import 'package:drinks_calculator_fixed/screens/scanner_screen.dart';
 import 'package:drinks_calculator_fixed/screens/ai_assistant_screen.dart';
 import 'package:drinks_calculator_fixed/screens/auth_screen.dart';
 import 'package:drinks_calculator_fixed/screens/inventory_screen.dart';
@@ -317,6 +318,16 @@ class CustomDrawer extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                             builder: (context) => const InventoryScreen()));
+                  }, primaryColor: primaryColor),
+                // Scan barcode/QR (Admin, Manager, Customer)
+                if (canManageDrinks)
+                  _buildDrawerItem(context, Icons.qr_code_scanner, t('scanMenu'),
+                      () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const ScannerScreen()));
                   }, primaryColor: primaryColor),
                 // Settings (Everyone)
                 if (canManageSettings)

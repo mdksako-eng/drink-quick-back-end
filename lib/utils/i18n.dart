@@ -811,6 +811,16 @@ const Map<String, String> _en = {
   'receiptPrintFailed': 'Print failed',
   'receiptSaved': 'Receipt saved',
 
+  'scanTitle': 'Scan',
+  'scanMenu': 'Scan item',
+  'scanHint': 'Point the camera at a barcode or QR code',
+  'scanNotFound': 'Item not found',
+  'scanMinLevel': 'Min level',
+  'scanLowStock': 'Low stock',
+  'scanRestock': 'Restock +1',
+  'scanManage': 'Manage inventory',
+  'scanCameraError': 'Camera unavailable. Please enable camera access.',
+
 };
 
 const Map<String, String> _fr = {
@@ -1586,6 +1596,16 @@ const Map<String, String> _fr = {
   'receiptPrinted': 'Reçu envoyé à l\'imprimante',
   'receiptPrintFailed': 'Échec de l\'impression',
   'receiptSaved': 'Reçu enregistré',
+
+  'scanTitle': 'Scanner',
+  'scanMenu': 'Scanner un article',
+  'scanHint': 'Pointez la caméra vers un code-barres ou un QR code',
+  'scanNotFound': 'Article introuvable',
+  'scanMinLevel': 'Niveau minimum',
+  'scanLowStock': 'Stock faible',
+  'scanRestock': 'Réapprovisionner +1',
+  'scanManage': 'Gérer l\'inventaire',
+  'scanCameraError': 'Caméra indisponible. Veuillez autoriser l\'accès à la caméra.',
 
 };
 
