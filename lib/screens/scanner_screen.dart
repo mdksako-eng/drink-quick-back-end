@@ -10,6 +10,7 @@ import '../services/barcode_service.dart';
 import '../utils/currency_helper.dart';
 import '../utils/helpers.dart';
 import '../utils/i18n.dart';
+import '../utils/qr_label_helper.dart';
 import 'inventory_screen.dart';
 
 class ScannerScreen extends StatefulWidget {
@@ -43,7 +44,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
     );
 
     if (match != null) {
-      await _showMatchSheet(match.drink, match.item);
+      await _showMatchSheet(match.drink, match.item, raw);
     } else {
       if (mounted) Helpers.showToast(t('scanNotFound'));
       await Future.delayed(const Duration(seconds: 1));
@@ -161,7 +162,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
     );
   }
 
-  Future<void> _showMatchSheet(Drink drink, InventoryItem? item) async {
+  Future<void> _showMatchSheet(
+      Drink drink, InventoryItem? item, String raw) async {
     await _controller.stop();
     if (!mounted) return;
     await showModalBottomSheet(
@@ -170,13 +172,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => _buildDetailSheet(ctx, drink, item),
+      builder: (ctx) => _buildDetailSheet(ctx, drink, item, raw),
     );
     if (mounted) await _controller.start();
   }
 
   Widget _buildDetailSheet(
-      BuildContext ctx, Drink drink, InventoryItem? item) {
+      BuildContext ctx, Drink drink, InventoryItem? item, String raw) {
     final inventoryProvider = Provider.of<InventoryProvider>(ctx, listen: false);
     final qty = item?.quantity ?? drink.currentStock;
     final minLevel = item?.minStockLevel ?? drink.minimumLevel;
@@ -195,6 +197,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 child: Text(drink.name,
                     style: const TextStyle(
                         fontSize: 20, fontWeight: FontWeight.bold))),
+            IconButton(
+              icon: const Icon(Icons.qr_code_2),
+              tooltip: t('qrLabel'),
+              onPressed: () => showQrLabelDialog(ctx, drink),
+            ),
           ]),
           const SizedBox(height: 8),
           Text(drink.category, style: TextStyle(color: Colors.grey[600])),
@@ -229,6 +236,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   style: const TextStyle(
                       color: Colors.orange, fontWeight: FontWeight.bold)),
             ),
+          const SizedBox(height: 8),
+          Text('${t('unitsPerPack')}: ${drink.unitsPerPack}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600])),
           const SizedBox(height: 16),
           Row(children: [
             Expanded(
@@ -252,6 +262,17 @@ class _ScannerScreenState extends State<ScannerScreen> {
               ),
             ),
           ]),
+          if (drink.barcode != raw) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _linkBarcode(ctx, raw, drink),
+                icon: const Icon(Icons.qr_code),
+                label: Text(t('linkBarcode')),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
         ],
       ),
@@ -260,14 +281,24 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   Future<void> _restock(BuildContext ctx, InventoryProvider provider,
       Drink drink) async {
+    final qty = drink.unitsPerPack > 1 ? drink.unitsPerPack : 1;
     await provider.addStock(
       drinkId: drink.id,
       drinkName: drink.name,
-      quantity: 1,
+      quantity: qty,
     );
     if (!ctx.mounted) return;
     Navigator.pop(ctx);
-    if (mounted) Helpers.showToast('${drink.name} +1');
+    if (mounted) Helpers.showToast('${drink.name} +$qty');
+  }
+
+  Future<void> _linkBarcode(
+      BuildContext ctx, String raw, Drink drink) async {
+    final drinkProvider = Provider.of<DrinkProvider>(context, listen: false);
+    await drinkProvider.updateDrink(drink.id, drink.copyWith(barcode: raw));
+    if (!ctx.mounted) return;
+    Navigator.pop(ctx);
+    if (mounted) Helpers.showToast(t('barcodeLinked'));
   }
 }
 

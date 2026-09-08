@@ -11,6 +11,7 @@ class Drink {
   final int currentStock;
   final int minimumLevel;
   final String unit;          // e.g., 'Bottle', 'Can', 'Glass', 'Liter', 'Piece'
+  final int unitsPerPack;      // units per case/pack (wholesale bulk)
   final double purchasePrice;
   Drink({
     required this.id,
@@ -24,6 +25,7 @@ class Drink {
     this.currentStock = 0,
     this.minimumLevel = 5,
     this.unit = 'Bottle',
+    this.unitsPerPack = 1,
     this.purchasePrice = 0,
   });
   bool get isLowStock => currentStock <= minimumLevel;
@@ -42,6 +44,8 @@ class Drink {
       'currentStock': currentStock,
       'minimumLevel': minimumLevel,
       'unit': unit,
+      'unitsPerPack': unitsPerPack,
+      'units_per_pack': unitsPerPack,
       'purchasePrice': purchasePrice,
     };
   }
@@ -65,6 +69,7 @@ class Drink {
       currentStock: json['currentStock'] ?? 0,
       minimumLevel: json['minimumLevel'] ?? 5,
       unit: json['unit']?.toString() ?? 'Bottle',
+      unitsPerPack: json['unitsPerPack'] ?? json['units_per_pack'] ?? 1,
       purchasePrice: (json['purchasePrice'] ?? 0).toDouble(),
     );
   }
@@ -82,6 +87,7 @@ class Drink {
     int? currentStock,
     int? minimumLevel,
     String? unit,
+    int? unitsPerPack,
     double? purchasePrice,
   }) {
     return Drink(
@@ -96,6 +102,7 @@ class Drink {
       currentStock: currentStock ?? this.currentStock,
       minimumLevel: minimumLevel ?? this.minimumLevel,
       unit: unit ?? this.unit,
+      unitsPerPack: unitsPerPack ?? this.unitsPerPack,
       purchasePrice: purchasePrice ?? this.purchasePrice,
     );
   }

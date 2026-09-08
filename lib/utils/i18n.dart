@@ -835,6 +835,12 @@ const Map<String, String> _en = {
 
   'searchDrinks': 'Search or select a drink...',
 
+  'barcode': 'Barcode',
+  'unitsPerPack': 'Units per pack',
+  'qrLabel': 'QR label',
+  'linkBarcode': 'Link barcode',
+  'barcodeLinked': 'Barcode linked',
+
 };
 
 const Map<String, String> _fr = {
@@ -1634,6 +1640,12 @@ const Map<String, String> _fr = {
   'dashExport': 'Exporter',
 
   'searchDrinks': 'Rechercher ou sélectionner une boisson...',
+
+  'barcode': 'Code-barres',
+  'unitsPerPack': 'Unités par paquet',
+  'qrLabel': 'Étiquette QR',
+  'linkBarcode': 'Associer le code-barres',
+  'barcodeLinked': 'Code-barres associé',
 
 };
 

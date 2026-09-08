@@ -29,6 +29,8 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
   final _currentStockController = TextEditingController();
   final _minimumLevelController = TextEditingController();
   final _purchasePriceController = TextEditingController();
+  final _barcodeController = TextEditingController();
+  final _unitsPerPackController = TextEditingController();
   String _selectedUnit = 'Bottle';
   final List<String> _units = [
     'Bottle',
@@ -89,6 +91,8 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     _currentStockController.dispose();
     _minimumLevelController.dispose();
     _purchasePriceController.dispose();
+    _barcodeController.dispose();
+    _unitsPerPackController.dispose();
     _currentStockController.removeListener(() {});
     SupabaseService.removeInventoryListener(_onInventoryChanged);
     super.dispose();
@@ -209,6 +213,8 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     _currentStockController.clear();
     _minimumLevelController.text = '5';
     _purchasePriceController.clear();
+    _barcodeController.clear();
+    _unitsPerPackController.text = '1';
     _editingDrinkId = null;
     _selectedCategory = AppConstants.drinkCategories.first;
     _selectedUnit = 'Bottle';
@@ -227,6 +233,8 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
       _minimumLevelController.text = drink.minimumLevel.toString();
       _purchasePriceController.text = drink.purchasePrice.toStringAsFixed(0);
       _selectedUnit = drink.unit;
+      _barcodeController.text = drink.barcode;
+      _unitsPerPackController.text = drink.unitsPerPack.toString();
       _sellingPriceError = null;
       _showProfitPreview = false;
     });
@@ -300,6 +308,8 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
       minimumLevel: int.tryParse(_minimumLevelController.text) ?? 5,
       unit: _selectedUnit,
       purchasePrice: double.tryParse(_purchasePriceController.text) ?? 0,
+      barcode: _barcodeController.text.trim(),
+      unitsPerPack: int.tryParse(_unitsPerPackController.text) ?? 1,
     );
 
     if (_editingDrinkId != null) {
@@ -781,6 +791,14 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
 
               // Image URL
               _buildImageUrlField(isMobile, primaryColor, theme),
+              SizedBox(height: isMobile ? 16 : 20),
+
+              // Barcode (optional — for scanner / wholesale)
+              _buildBarcodeField(isMobile, primaryColor, theme),
+              SizedBox(height: isMobile ? 16 : 20),
+
+              // Units per pack (wholesale case size)
+              _buildUnitsPerPackField(isMobile, primaryColor, theme),
               SizedBox(height: isMobile ? 8 : 10),
               Row(
                 children: [
@@ -1192,6 +1210,58 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
       style: TextStyle(
           color: theme.textTheme.bodyLarge?.color,
           fontSize: isMobile ? 14 : 16),
+    );
+  }
+
+  Widget _buildBarcodeField(
+      bool isMobile, Color primaryColor, ThemeData theme) {
+    return TextFormField(
+      controller: _barcodeController,
+      decoration: InputDecoration(
+        labelText: t('barcode'),
+        labelStyle: TextStyle(color: theme.hintColor),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: theme.dividerColor)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: primaryColor, width: 2)),
+        prefixIcon: Icon(Icons.qr_code, color: primaryColor),
+        filled: true,
+        fillColor: theme.cardColor,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      ),
+      style: TextStyle(
+          color: theme.textTheme.bodyLarge?.color,
+          fontSize: isMobile ? 14 : 16),
+    );
+  }
+
+  Widget _buildUnitsPerPackField(
+      bool isMobile, Color primaryColor, ThemeData theme) {
+    return TextFormField(
+      controller: _unitsPerPackController,
+      decoration: InputDecoration(
+        labelText: t('unitsPerPack'),
+        prefixIcon: Icon(Icons.all_inbox, color: primaryColor),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: theme.dividerColor)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: primaryColor, width: 2)),
+        filled: true,
+        fillColor: theme.cardColor,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      ),
+      style: TextStyle(
+          color: theme.textTheme.bodyLarge?.color,
+          fontSize: isMobile ? 14 : 16),
+      keyboardType: TextInputType.number,
     );
   }
 
