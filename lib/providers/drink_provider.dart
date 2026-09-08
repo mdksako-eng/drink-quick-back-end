@@ -15,6 +15,10 @@ class DrinkProvider with ChangeNotifier {
   bool _isLoading = false;
   bool _isLoadingFromSupabase = false;
 
+  // Bumped on every clear so any in-flight (stale-company) async load is
+  // discarded instead of repopulating data after a logout / company switch.
+  int _generation = 0;
+
   // Store current user info for storage operations
   String? _currentUserId;
   int? _currentCompanyId;
@@ -106,6 +110,8 @@ class DrinkProvider with ChangeNotifier {
       return;
     }
 
+    final gen = _generation;
+
     try {
       _isLoading = true;
       _safeNotifyListeners();
@@ -116,6 +122,14 @@ class DrinkProvider with ChangeNotifier {
 
       final supabaseDrinks = await SupabaseService.getDrinks();
       debugPrint('📊 Got ${supabaseDrinks.length} drinks from Supabase');
+
+      // A clear / company switch happened while we were awaiting the network —
+      // discard the stale result so old-company data can't leak back in.
+      if (gen != _generation) {
+        debugPrint(
+            '⏭️ Discarding stale Supabase drinks load (generation changed)');
+        return;
+      }
 
       if (supabaseDrinks.isNotEmpty) {
         final drinks =
@@ -131,8 +145,12 @@ class DrinkProvider with ChangeNotifier {
     } catch (e) {
       debugPrint('❌ Error loading from Supabase: $e');
     } finally {
-      _isLoading = false;
-      _safeNotifyListeners();
+      // Only clear the loading flag if this load is still the latest one —
+      // otherwise a stale load would clobber a newer load's in-progress state.
+      if (gen == _generation) {
+        _isLoading = false;
+        _safeNotifyListeners();
+      }
     }
   }
 
@@ -160,13 +178,14 @@ class DrinkProvider with ChangeNotifier {
     debugPrint('🔍 clearAllDrinks called - Stack trace:');
     debugPrint(StackTrace.current.toString());
 
-    if (_isLoading) {
-      debugPrint('⏭️ Skipping clearAllDrinks - currently loading');
-      return;
-    }
+    // Invalidate any in-flight Supabase load so it can't repopulate stale data
+    // from the previous company after this clear completes.
+    _generation++;
+
     _customDrinks.clear();
     _allDrinks.clear();
     _isInitialized = false;
+    _isLoading = false;
 
     if (_currentUserId != null) {
       if (_currentUserRole == 'Customer') {
