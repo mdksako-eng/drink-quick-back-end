@@ -12,9 +12,11 @@ import 'package:drinks_calculator_fixed/screens/manager_dashboard.dart';
 import 'package:drinks_calculator_fixed/screens/forecast_screen.dart';
 import 'package:drinks_calculator_fixed/screens/scanner_screen.dart';
 import 'package:drinks_calculator_fixed/screens/ai_assistant_screen.dart';
+import 'package:drinks_calculator_fixed/screens/subscription_screen.dart';
 import 'package:drinks_calculator_fixed/screens/auth_screen.dart';
 import 'package:drinks_calculator_fixed/screens/inventory_screen.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
+import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/screens/manager_approval_screen.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'dart:convert';
@@ -269,30 +271,46 @@ class CustomDrawer extends StatelessWidget {
 
                 _buildDrawerItem(context, Icons.assistant, t('aiAssistantMenu'), () {
                   Navigator.pop(context);
-                  Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const AIAssistantScreen()));
+                  _requireFeature(context, 'ai', () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const AIAssistantScreen()));
+                  });
                 }, primaryColor: primaryColor),
 
                 if (isManager || isAdmin)
                   _buildDrawerItem(context, Icons.insert_chart_outlined,
                       t('analyticsMenu'), () {
                     Navigator.pop(context);
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const ManagerDashboard()));
+                    _requireFeature(context, 'analytics', () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const ManagerDashboard()));
+                    });
                   }, primaryColor: primaryColor),
 
                 if (isManager || isAdmin)
                   _buildDrawerItem(context, Icons.auto_graph, t('forecastMenu'),
                       () {
                     Navigator.pop(context);
+                    _requireFeature(context, 'forecast', () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const ForecastScreen()));
+                    });
+                  }, primaryColor: primaryColor),
+
+                if (isManager || isAdmin)
+                  _buildDrawerItem(context, Icons.workspace_premium,
+                      t('subscription'), () {
+                    Navigator.pop(context);
                     Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (context) => const ForecastScreen()));
+                            builder: (context) => const SubscriptionScreen()));
                   }, primaryColor: primaryColor),
 
                 // ========== MANAGEMENT SECTION ==========
@@ -325,10 +343,12 @@ class CustomDrawer extends StatelessWidget {
                   _buildDrawerItem(context, Icons.qr_code_scanner, t('scanMenu'),
                       () {
                     Navigator.pop(context);
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const ScannerScreen()));
+                    _requireFeature(context, 'scanner', () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const ScannerScreen()));
+                    });
                   }, primaryColor: primaryColor),
                 // Settings (Everyone)
                 if (canManageSettings)
@@ -478,6 +498,38 @@ class CustomDrawer extends StatelessWidget {
               letterSpacing: 0.8,
               color: color ?? theme.hintColor)),
     );
+  }
+
+  /// Gate a premium feature behind the company's plan. Grants access when
+  /// allowed, otherwise shows an upgrade prompt.
+  void _requireFeature(
+      BuildContext context, String feature, VoidCallback onGranted) {
+    final plan = context.read<PlanProvider>();
+    if (plan.canAccess(feature)) {
+      onGranted();
+    } else {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(t('upgradeRequired')),
+          content: Text('${t('upgradeTo')} ${t('pro')}?'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: Text(t('cancel'))),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                    ctx,
+                    MaterialPageRoute(
+                        builder: (_) => const SubscriptionScreen()));
+              },
+              child: Text(t('upgrade')),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Widget _buildDrawerItem(

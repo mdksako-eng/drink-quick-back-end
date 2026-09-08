@@ -70,6 +70,11 @@ class ApiConfig {
   static String dataCompanyPaymentSettings(dynamic id) =>
       '$apiBase/data/company/$id/payment-settings';
 
+  // ========== SUBSCRIPTIONS ==========
+  static const String subscriptionStatus = '$apiBase/subscriptions/status';
+  static const String subscriptionInitiate = '$apiBase/subscriptions/initiate';
+  static const String subscriptionVerify = '$apiBase/subscriptions/verify';
+
   // Supabase headers (anon key) — legacy direct access only.
   static Map<String, String> get supabaseHeaders => {
     'apikey': supabaseAnonKey,

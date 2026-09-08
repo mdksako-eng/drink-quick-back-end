@@ -12,6 +12,7 @@ const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinReq
 
 // ========== SESSION AUTH (DB-backed) ==========
 const { generateSessionToken, getSessionUser, requireSession } = require('./middleware/sessionAuth');
+const { requirePlan } = require('./middleware/planAuth');
 
 // ========== PASSWORD HELPERS ===========
 // Passwords are stored as bcrypt hashes ($2a$ / $2b$ / $2y$).
@@ -132,6 +133,39 @@ app.use(async (req, res, next) => {
         console.log('✅ Company ownership column ensured (owner_id backfilled)');
       } catch (ownErr) {
         console.log('⚠️ Ownership migration warning:', ownErr.message);
+      }
+
+      // 💳 SUBSCRIPTIONS — add plan columns to companies + create ledger table.
+      try {
+        await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free'`);
+        await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMP`);
+        await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'none'`);
+        console.log('✅ Company subscription columns ensured (plan, plan_expires_at, subscription_status)');
+      } catch (subColErr) {
+        console.log('⚠️ Subscription columns warning:', subColErr.message);
+      }
+
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS subscriptions (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            plan TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            provider TEXT NOT NULL,
+            reference TEXT UNIQUE,
+            transaction_id TEXT,
+            amount NUMERIC(12,2),
+            currency TEXT DEFAULT 'XAF',
+            starts_at TIMESTAMP,
+            ends_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_subscriptions_company ON subscriptions(company_id)`);
+        console.log('✅ subscriptions table ensured');
+      } catch (subErr) {
+        console.log('⚠️ subscriptions table warning:', subErr.message);
       }
 
       // Check companies table
@@ -1989,6 +2023,10 @@ app.post('/api/auth/approve-login', async (req, res) => {
 const paymentRoutes = require('./routes/payment.routes');
 app.use('/api', paymentRoutes);
 
+// ========== SUBSCRIPTION ROUTES ==========
+const subscriptionRoutes = require('./routes/subscriptions');
+app.use('/api', subscriptionRoutes);
+
 // ========== PUBLIC COMPANY PROFILE (no auth — customer mode) ==========
 // Returns only non-secret fields so the anon key / unauthenticated users
 // can render the order screen. API keys never leave the server.
@@ -2017,15 +2055,9 @@ const dataRoutes = require('./routes/data.routes');
 app.use('/api/data', dataRoutes);
 
 // ========== AI CHAT (Groq proxy — API key stays on server) ==========
-app.post('/api/ai/chat', async (req, res) => {
+app.post('/api/ai/chat', requireSession(pool), requirePlan(['pro']), async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
-    const sessionUser = await getSessionUser(req.db, token);
-    if (!sessionUser) {
-      return res.status(401).json({ success: false, error: 'Invalid or expired session' });
-    }
-    const userId = sessionUser.id;
+    const userId = req.user.id;
 
     const { prompt, history } = req.body || {};
     if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {

@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/utils/payment_helper.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
+import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/screens/lock_screen.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/voice_service.dart';
@@ -229,6 +230,7 @@ class MyAppState extends State<MyApp> {
         ChangeNotifierProvider.value(value: _inventoryProvider),
         ChangeNotifierProvider(create: (_) => SyncProvider()),
         ChangeNotifierProvider(create: (_) => PaymentHelper()),
+        ChangeNotifierProvider(create: (_) => PlanProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
@@ -685,6 +687,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       await _loadUserSettings(user.id);
       await CurrencyHelper.refresh();
       await PaymentHelper.refresh();
+      await Provider.of<PlanProvider>(context, listen: false).refresh();
 
       if (!authProvider.isOnline) {
         debugPrint('❌ No internet - cannot load company data');
