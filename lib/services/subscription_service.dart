@@ -64,6 +64,75 @@ class SubscriptionService {
     }
   }
 
+  /// Initiate a mobile-money (MTN/Orange) subscription payment.
+  static Future<Map<String, dynamic>?> momoInitiate({
+    required String plan,
+    required String provider,
+    required String customerPhone,
+  }) async {
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      if (token == null) return null;
+
+      final response = await http.post(
+        Uri.parse(ApiConfig.subscriptionMomoInitiate),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'plan': plan,
+          'provider': provider,
+          'customerPhone': customerPhone,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return Map<String, dynamic>.from(data['data'] ?? {});
+        }
+        // Surface backend validation errors (e.g. invalid phone).
+        if (data['error'] != null) {
+          throw Exception(data['error']);
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('SubscriptionService.momoInitiate error: $e');
+      rethrow;
+    }
+  }
+
+  /// Confirm a mobile-money payment and activate the plan.
+  static Future<bool> momoConfirm({
+    required String reference,
+    required String plan,
+  }) async {
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      if (token == null) return false;
+
+      final response = await http.post(
+        Uri.parse(ApiConfig.subscriptionMomoConfirm),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'reference': reference, 'plan': plan}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['success'] == true && data['data']?['active'] == true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('SubscriptionService.momoConfirm error: $e');
+      return false;
+    }
+  }
+
   /// Verify a payment and activate the plan.
   static Future<bool> verify({
     required String transactionId,

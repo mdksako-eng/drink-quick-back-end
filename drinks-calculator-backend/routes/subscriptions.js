@@ -274,4 +274,124 @@ router.post('/subscriptions/webhook', async (req, res) => {
   }
 });
 
+// ============================================================
+// 📲 POST initiate mobile-money payment (MTN / Orange)
+// ============================================================
+function validatePhone(phone, provider) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (provider === 'mtn') {
+    return /^(237)?(6[5789]|68[0-9])\d{7}$/.test(digits);
+  }
+  if (provider === 'orange') {
+    return /^(237)?(6[9]|69[0-9])\d{7}$/.test(digits);
+  }
+  return false;
+}
+
+router.post('/subscriptions/momo-initiate', async (req, res) => {
+  try {
+    const user = await requireSessionUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+    }
+    if (!user.company_id) {
+      return res.status(400).json({ success: false, error: 'No company' });
+    }
+
+    const { plan, provider, customerPhone } = req.body || {};
+    if (!VALID_PLANS.includes(plan)) {
+      return res.status(400).json({ success: false, error: 'Invalid plan' });
+    }
+    if (!['mtn', 'orange'].includes(provider)) {
+      return res.status(400).json({ success: false, error: 'Invalid provider (use mtn or orange)' });
+    }
+    if (!customerPhone || !validatePhone(customerPhone, provider)) {
+      return res.status(400).json({ success: false, error: `Invalid ${provider} phone number` });
+    }
+
+    const companyResult = await req.db.query(
+      `SELECT mtn_merchant_phone, orange_merchant_phone FROM companies WHERE id = $1`,
+      [user.company_id]
+    );
+    const company = companyResult.rows[0];
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+
+    const price = PLAN_PRICES[plan];
+    const reference = generateReference(user.company_id);
+    const merchantPhone =
+      provider === 'mtn' ? company.mtn_merchant_phone : company.orange_merchant_phone;
+
+    await req.db.query(
+      `INSERT INTO subscriptions
+         (company_id, plan, status, provider, reference, amount, currency)
+       VALUES ($1, $2, 'pending', $3, $4, $5, $6)`,
+      [user.company_id, plan, provider, reference, price.amount, price.currency]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        reference,
+        amount: price.amount,
+        currency: price.currency,
+        provider,
+        merchantPhone: merchantPhone || '',
+        customerPhone,
+      },
+    });
+  } catch (error) {
+    console.error('POST /subscriptions/momo-initiate error:', error.message);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// ✅ POST confirm mobile-money payment (manager verified)
+// ============================================================
+router.post('/subscriptions/momo-confirm', async (req, res) => {
+  try {
+    const user = await requireSessionUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+    }
+    if (!['Manager', 'Administrator', 'Admin'].includes(user.role)) {
+      return res.status(403).json({ success: false, error: 'Only managers can confirm payment' });
+    }
+
+    const { reference, plan } = req.body || {};
+    if (!reference || !VALID_PLANS.includes(plan)) {
+      return res.status(400).json({ success: false, error: 'reference and plan are required' });
+    }
+
+    const pending = await req.db.query(
+      `SELECT id, company_id, plan, amount, currency, provider FROM subscriptions
+       WHERE reference = $1 AND company_id = $2 AND status = 'pending'`,
+      [reference, user.company_id]
+    );
+    if (pending.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Pending subscription not found' });
+    }
+
+    const sub = pending.rows[0];
+    const now = new Date();
+    const endsAt = new Date(now.getTime() + SUBSCRIPTION_MONTHS * 30 * 24 * 60 * 60 * 1000);
+
+    await req.db.query(
+      `UPDATE subscriptions SET status = 'active', starts_at = $1, ends_at = $2 WHERE id = $3`,
+      [now, endsAt, sub.id]
+    );
+    await req.db.query(
+      `UPDATE companies SET plan = $1, plan_expires_at = $2, subscription_status = 'active' WHERE id = $3`,
+      [sub.plan, endsAt, user.company_id]
+    );
+
+    res.json({ success: true, data: { active: true, plan: sub.plan, expiresAt: endsAt } });
+  } catch (error) {
+    console.error('POST /subscriptions/momo-confirm error:', error.message);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 module.exports = router;

@@ -60,6 +60,32 @@ class PlanProvider extends ChangeNotifier {
     return result;
   }
 
+  /// Begin a mobile-money (MTN/Orange) payment; returns the initiate data.
+  Future<Map<String, dynamic>?> momoInitiate({
+    required String plan,
+    required String provider,
+    required String customerPhone,
+  }) {
+    return SubscriptionService.momoInitiate(
+      plan: plan,
+      provider: provider,
+      customerPhone: customerPhone,
+    );
+  }
+
+  /// Confirm a mobile-money payment and refresh local state.
+  Future<bool> momoConfirm({
+    required String reference,
+    required String plan,
+  }) async {
+    final ok = await SubscriptionService.momoConfirm(
+      reference: reference,
+      plan: plan,
+    );
+    if (ok) await refresh();
+    return ok;
+  }
+
   /// Verify a payment and refresh local state.
   Future<bool> verify({required String transactionId, required String plan}) async {
     final ok = await SubscriptionService.verify(

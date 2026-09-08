@@ -53,6 +53,86 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _momoPay(String plan, String provider) async {
+    final phone = await _promptPhone(provider);
+    if (phone == null || phone.isEmpty) return;
+
+    final planProvider = context.read<PlanProvider>();
+    setState(() => _busy = true);
+    try {
+      final data = await planProvider.momoInitiate(
+        plan: plan,
+        provider: provider,
+        customerPhone: phone,
+      );
+      if (!mounted) return;
+      if (data == null) {
+        _showSnack(t('payNotConfigured'));
+        return;
+      }
+
+      final reference = data['reference']?.toString() ?? '';
+      final amount = data['amount']?.toString() ?? '';
+      final currency = data['currency']?.toString() ?? 'XAF';
+      final merchantPhone = data['merchantPhone']?.toString() ?? '';
+
+      final confirmed =
+          await _promptConfirm(provider, amount, currency, merchantPhone);
+      if (!confirmed || !mounted) return;
+
+      final ok = await planProvider.momoConfirm(reference: reference, plan: plan);
+      if (!mounted) return;
+      _showSnack(ok ? t('subscriptionActive') : t('error'));
+    } catch (e) {
+      if (mounted) _showSnack('$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<String?> _promptPhone(String provider) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(provider == 'mtn' ? t('payWithMomo') : t('payWithOrange')),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.phone,
+          decoration: InputDecoration(hintText: t('enterPhone')),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: Text(t('cancel'))),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: Text(t('sendPayment')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _promptConfirm(
+      String provider, String amount, String currency, String merchantPhone) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(provider == 'mtn' ? t('payWithMomo') : t('payWithOrange')),
+        content: Text('${t('payToMerchant')} $merchantPhone\n$amount $currency'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(t('cancel'))),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(t('confirmPayment')),
+          ),
+        ],
+      ),
+    ).then((v) => v ?? false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<PlanProvider>();
@@ -177,6 +257,24 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   onPressed: _busy ? null : () => _upgrade(plan),
                   icon: const Icon(Icons.credit_card),
                   label: Text('${t('upgradeTo')} $title · ${t('payByCard')}'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _momoPay(plan, 'mtn'),
+                  icon: const Icon(Icons.phone_android),
+                  label: Text(t('payWithMomo')),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _momoPay(plan, 'orange'),
+                  icon: const Icon(Icons.phone_android),
+                  label: Text(t('payWithOrange')),
                 ),
               ),
             ],

@@ -866,6 +866,13 @@ const Map<String, String> _en = {
   'proFeature2': 'Demand forecasting',
   'proFeature3': 'Scanner & QR labels',
   'proFeature4': 'Thermal receipt printing',
+  'payWithMomo': 'Pay with MTN MoMo',
+  'payWithOrange': 'Pay with Orange Money',
+  'enterPhone': 'Enter your phone number',
+  'phoneNumber': 'Phone number',
+  'payToMerchant': 'Send payment to',
+  'confirmPayment': 'I have paid',
+  'sendPayment': 'Send',
 
 };
 
@@ -1698,6 +1705,13 @@ const Map<String, String> _fr = {
   'proFeature2': 'Prévision de la demande',
   'proFeature3': 'Scanner et étiquettes QR',
   'proFeature4': 'Impression de reçus thermiques',
+  'payWithMomo': 'Payer avec MTN MoMo',
+  'payWithOrange': 'Payer avec Orange Money',
+  'enterPhone': 'Entrez votre numéro de téléphone',
+  'phoneNumber': 'Numéro de téléphone',
+  'payToMerchant': 'Envoyez le paiement à',
+  'confirmPayment': 'J\'ai payé',
+  'sendPayment': 'Envoyer',
 
 };
 
