@@ -5,6 +5,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const { getSessionUser } = require('../middleware/sessionAuth');
 const flutterwave = require('../utils/flutterwave');
+const momo = require('../utils/momo');
 
 // Plan prices (XAF — Central African CFA franc). Overridable via env.
 const PLAN_PRICES = {
@@ -310,7 +311,9 @@ router.post('/subscriptions/momo-initiate', async (req, res) => {
     }
 
     const companyResult = await req.db.query(
-      `SELECT mtn_merchant_phone, orange_merchant_phone FROM companies WHERE id = $1`,
+      `SELECT mtn_merchant_phone, orange_merchant_phone,
+              mtn_merchant_id, mtn_api_key, mtn_secret_key, mtn_sandbox_mode
+       FROM companies WHERE id = $1`,
       [user.company_id]
     );
     const company = companyResult.rows[0];
@@ -323,17 +326,37 @@ router.post('/subscriptions/momo-initiate', async (req, res) => {
     const merchantPhone =
       provider === 'mtn' ? company.mtn_merchant_phone : company.orange_merchant_phone;
 
+    // Auto mode: if the company has MTN MoMo API credentials, send a real
+    // collection request to the customer's phone and verify automatically.
+    let transactionId = null;
+    let auto = false;
+    if (provider === 'mtn' && momo.isConfigured(company)) {
+      transactionId = await momo.requestToPay({
+        apiUser: company.mtn_merchant_id,
+        apiKey: company.mtn_api_key,
+        subscriptionKey: company.mtn_secret_key,
+        sandbox: !!company.mtn_sandbox_mode,
+        amount: price.amount,
+        currency: price.currency,
+        phone: customerPhone,
+        externalId: reference,
+      });
+      auto = true;
+    }
+
     await req.db.query(
       `INSERT INTO subscriptions
-         (company_id, plan, status, provider, reference, amount, currency)
-       VALUES ($1, $2, 'pending', $3, $4, $5, $6)`,
-      [user.company_id, plan, provider, reference, price.amount, price.currency]
+         (company_id, plan, status, provider, reference, transaction_id, amount, currency)
+       VALUES ($1, $2, 'pending', $3, $4, $5, $6, $7)`,
+      [user.company_id, plan, provider, reference, transactionId, price.amount, price.currency]
     );
 
     res.json({
       success: true,
       data: {
         reference,
+        transactionId,
+        auto,
         amount: price.amount,
         currency: price.currency,
         provider,
@@ -390,6 +413,80 @@ router.post('/subscriptions/momo-confirm', async (req, res) => {
     res.json({ success: true, data: { active: true, plan: sub.plan, expiresAt: endsAt } });
   } catch (error) {
     console.error('POST /subscriptions/momo-confirm error:', error.message);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ============================================================
+// 🔄 GET mobile-money payment status (auto-verify via MTN MoMo API)
+// ============================================================
+router.get('/subscriptions/momo-status', async (req, res) => {
+  try {
+    const user = await requireSessionUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+    }
+
+    const { reference } = req.query;
+    if (!reference) {
+      return res.status(400).json({ success: false, error: 'reference is required' });
+    }
+
+    const pending = await req.db.query(
+      `SELECT id, plan, provider, reference, transaction_id, status FROM subscriptions
+       WHERE reference = $1 AND company_id = $2 AND status = 'pending'`,
+      [reference, user.company_id]
+    );
+    if (pending.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Pending subscription not found' });
+    }
+    const sub = pending.rows[0];
+
+    // Only auto-verify MTN (Orange collection API can be added later).
+    if (sub.provider !== 'mtn' || !sub.transaction_id) {
+      return res.json({ success: true, data: { status: 'pending', auto: false } });
+    }
+
+    const company = await req.db.query(
+      `SELECT mtn_merchant_id, mtn_api_key, mtn_secret_key, mtn_sandbox_mode FROM companies WHERE id = $1`,
+      [user.company_id]
+    );
+    const creds = company.rows[0];
+    if (!creds || !momo.isConfigured(creds)) {
+      return res.json({ success: true, data: { status: 'pending', auto: false } });
+    }
+
+    const tx = await momo.getTransactionStatus({
+      apiUser: creds.mtn_merchant_id,
+      apiKey: creds.mtn_api_key,
+      subscriptionKey: creds.mtn_secret_key,
+      sandbox: !!creds.mtn_sandbox_mode,
+      referenceId: sub.transaction_id,
+    });
+
+    const mtnStatus = String(tx.status || 'PENDING').toUpperCase();
+    if (mtnStatus === 'SUCCESSFUL') {
+      const now = new Date();
+      const endsAt = new Date(now.getTime() + SUBSCRIPTION_MONTHS * 30 * 24 * 60 * 60 * 1000);
+      await req.db.query(
+        `UPDATE subscriptions SET status = 'active', starts_at = $1, ends_at = $2 WHERE id = $3`,
+        [now, endsAt, sub.id]
+      );
+      await req.db.query(
+        `UPDATE companies SET plan = $1, plan_expires_at = $2, subscription_status = 'active' WHERE id = $3`,
+        [sub.plan, endsAt, user.company_id]
+      );
+      return res.json({ success: true, data: { active: true, plan: sub.plan, expiresAt: endsAt } });
+    }
+
+    if (mtnStatus === 'FAILED') {
+      await req.db.query(`UPDATE subscriptions SET status = 'failed' WHERE id = $1`, [sub.id]);
+      return res.json({ success: true, data: { active: false, status: 'failed' } });
+    }
+
+    return res.json({ success: true, data: { active: false, status: 'pending' } });
+  } catch (error) {
+    console.error('GET /subscriptions/momo-status error:', error.message);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });

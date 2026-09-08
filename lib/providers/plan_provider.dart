@@ -73,6 +73,15 @@ class PlanProvider extends ChangeNotifier {
     );
   }
 
+  /// Poll mobile-money payment status; refreshes state when it becomes active.
+  Future<Map<String, dynamic>?> momoStatus({required String reference}) async {
+    final result = await SubscriptionService.momoStatus(reference: reference);
+    if (result?['active'] == true) {
+      await refresh();
+    }
+    return result;
+  }
+
   /// Confirm a mobile-money payment and refresh local state.
   Future<bool> momoConfirm({
     required String reference,

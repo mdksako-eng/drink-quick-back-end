@@ -78,6 +78,8 @@ class ApiConfig {
       '$apiBase/subscriptions/momo-initiate';
   static const String subscriptionMomoConfirm =
       '$apiBase/subscriptions/momo-confirm';
+  static const String subscriptionMomoStatus =
+      '$apiBase/subscriptions/momo-status';
 
   // Supabase headers (anon key) — legacy direct access only.
   static Map<String, String> get supabaseHeaders => {

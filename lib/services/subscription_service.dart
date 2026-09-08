@@ -104,6 +104,39 @@ class SubscriptionService {
     }
   }
 
+  /// Poll the mobile-money payment status. Returns:
+  ///   { active: bool, status: 'pending'|'failed'|..., auto: bool }
+  static Future<Map<String, dynamic>?> momoStatus({
+    required String reference,
+  }) async {
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      if (token == null) return null;
+
+      final uri = Uri.parse(ApiConfig.subscriptionMomoStatus)
+          .replace(queryParameters: {'reference': reference});
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return Map<String, dynamic>.from(data['data'] ?? {});
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('SubscriptionService.momoStatus error: $e');
+      return null;
+    }
+  }
+
   /// Confirm a mobile-money payment and activate the plan.
   static Future<bool> momoConfirm({
     required String reference,

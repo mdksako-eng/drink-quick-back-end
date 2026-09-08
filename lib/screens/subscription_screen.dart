@@ -75,19 +75,63 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       final amount = data['amount']?.toString() ?? '';
       final currency = data['currency']?.toString() ?? 'XAF';
       final merchantPhone = data['merchantPhone']?.toString() ?? '';
+      final auto = data['auto'] == true;
 
-      final confirmed =
-          await _promptConfirm(provider, amount, currency, merchantPhone);
-      if (!confirmed || !mounted) return;
+      if (auto) {
+        // Automatic verification via the MTN MoMo collection API.
+        await _autoVerify(planProvider, reference);
+      } else {
+        // Manual confirmation fallback.
+        final confirmed =
+            await _promptConfirm(provider, amount, currency, merchantPhone);
+        if (!confirmed || !mounted) return;
 
-      final ok = await planProvider.momoConfirm(reference: reference, plan: plan);
-      if (!mounted) return;
-      _showSnack(ok ? t('subscriptionActive') : t('error'));
+        final ok =
+            await planProvider.momoConfirm(reference: reference, plan: plan);
+        if (!mounted) return;
+        _showSnack(ok ? t('subscriptionActive') : t('error'));
+      }
     } catch (e) {
       if (mounted) _showSnack('$e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _autoVerify(PlanProvider planProvider, String reference) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        content: Row(children: [
+          const CircularProgressIndicator(),
+          const SizedBox(width: 16),
+          Expanded(child: Text(t('waitingForPayment'))),
+        ]),
+      ),
+    );
+
+    for (var i = 0; i < 12; i++) {
+      await Future.delayed(const Duration(seconds: 5));
+      if (!mounted) return;
+
+      final status = await planProvider.momoStatus(reference: reference);
+      if (status == null) continue;
+
+      if (status['active'] == true) {
+        if (mounted) Navigator.of(context).pop();
+        if (mounted) _showSnack(t('subscriptionActive'));
+        return;
+      }
+      if (status['status'] == 'failed') {
+        if (mounted) Navigator.of(context).pop();
+        if (mounted) _showSnack(t('error'));
+        return;
+      }
+    }
+
+    if (mounted) Navigator.of(context).pop();
+    if (mounted) _showSnack(t('payThenRefresh'));
   }
 
   Future<String?> _promptPhone(String provider) {
