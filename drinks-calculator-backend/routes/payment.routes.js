@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { getSessionUser } = require('../middleware/sessionAuth');
+const momo = require('../utils/momo');
 
 // Resolves the authenticated user from the Bearer session token (DB-backed).
 async function requireSessionUser(req) {
@@ -330,8 +331,30 @@ router.post('/payment/initiate', async (req, res) => {
       }
     }
 
-    // ✅ Generate transaction ID
+    // ✅ Generate transaction ID (doubles as the MTN X-Reference-Id)
     const transactionId = generateTransactionId();
+
+    // Auto mode: if MTN API credentials are configured, send a real
+    // collection request to the customer's phone. On failure, fall back to
+    // the manual flow so the order can still be recorded.
+    let auto = false;
+    if (paymentMethod === 'mtn' && momo.isConfigured(company)) {
+      try {
+        await momo.requestToPay({
+          apiUser: company.mtn_merchant_id,
+          apiKey: company.mtn_api_key,
+          subscriptionKey: company.mtn_secret_key,
+          sandbox: !!company.mtn_sandbox_mode,
+          amount,
+          currency: 'XAF',
+          phone: customerPhone,
+          externalId: transactionId,
+        });
+        auto = true;
+      } catch (e) {
+        console.error('⚠️ MTN auto payment failed, falling back to manual:', e.message);
+      }
+    }
 
     // ✅ Save transaction to database
     await req.db.query(
@@ -354,8 +377,11 @@ router.post('/payment/initiate', async (req, res) => {
     res.json({
       success: true,
       transactionId: transactionId,
+      auto,
       status: 'pending',
-      message: `Payment request sent to ${customerPhone}. Please check your phone.`,
+      message: auto
+        ? `Payment request sent to ${customerPhone}. Please approve on your phone.`
+        : `Payment request sent to ${customerPhone}. Please check your phone.`,
       expiresIn: 300, // 5 minutes
     });
 
@@ -384,7 +410,7 @@ router.get('/payment/status/:transactionId', async (req, res) => {
 
     // ✅ Get from database
     const result = await req.db.query(
-      `SELECT status, error_message, confirmed_at, created_at
+      `SELECT status, error_message, confirmed_at, created_at, payment_method
        FROM payment_transactions 
        WHERE transaction_id = $1 AND company_id = $2`,
       [transactionId, companyId]
@@ -398,6 +424,48 @@ router.get('/payment/status/:transactionId', async (req, res) => {
     }
 
     const transaction = result.rows[0];
+
+    // ✅ Real MTN MoMo auto-verification
+    if (transaction.status === 'pending' && transaction.payment_method === 'mtn') {
+      const credsResult = await req.db.query(
+        `SELECT mtn_merchant_id, mtn_api_key, mtn_secret_key, mtn_sandbox_mode
+         FROM companies WHERE id = $1`,
+        [companyId]
+      );
+      const creds = credsResult.rows[0];
+      if (creds && momo.isConfigured(creds)) {
+        try {
+          const tx = await momo.getTransactionStatus({
+            apiUser: creds.mtn_merchant_id,
+            apiKey: creds.mtn_api_key,
+            subscriptionKey: creds.mtn_secret_key,
+            sandbox: !!creds.mtn_sandbox_mode,
+            referenceId: transactionId,
+          });
+          const mtnStatus = String(tx.status || 'PENDING').toUpperCase();
+          if (mtnStatus === 'SUCCESSFUL') {
+            await req.db.query(
+              `UPDATE payment_transactions SET status = 'completed', confirmed_at = NOW() WHERE transaction_id = $1`,
+              [transactionId]
+            );
+            return res.json({ success: true, status: 'completed', confirmedAt: new Date().toISOString() });
+          }
+          if (mtnStatus === 'FAILED') {
+            await req.db.query(
+              `UPDATE payment_transactions SET status = 'failed', error_message = 'Payment failed' WHERE transaction_id = $1`,
+              [transactionId]
+            );
+            return res.json({ success: true, status: 'failed', errorMessage: 'Payment failed' });
+          }
+          // Still pending — the customer hasn't approved yet.
+          return res.json({ success: true, status: 'pending' });
+        } catch (e) {
+          console.error('⚠️ MTN status poll error:', e.message);
+          // Fall through to the manual/test flow below.
+        }
+      }
+    }
+
 
     // ✅ Auto-complete for testing (remove in production)
     if (transaction.status === 'pending') {
