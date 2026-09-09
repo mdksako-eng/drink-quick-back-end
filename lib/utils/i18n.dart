@@ -873,6 +873,7 @@ const Map<String, String> _en = {
   'payToMerchant': 'Send payment to',
   'confirmPayment': 'I have paid',
   'sendPayment': 'Send',
+  'perMonth': 'per month',
 
 };
 
@@ -1712,6 +1713,7 @@ const Map<String, String> _fr = {
   'payToMerchant': 'Envoyez le paiement à',
   'confirmPayment': 'J\'ai payé',
   'sendPayment': 'Envoyer',
+  'perMonth': 'par mois',
 
 };
 

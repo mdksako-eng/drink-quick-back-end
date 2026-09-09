@@ -11,6 +11,7 @@ import '../utils/forecast_helper.dart';
 import '../utils/helpers.dart';
 import '../utils/holidays.dart';
 import '../utils/i18n.dart';
+import '../widgets/skeleton.dart';
 
 class ForecastScreen extends StatefulWidget {
   const ForecastScreen({Key? key}) : super(key: key);
@@ -108,7 +109,7 @@ class _ForecastScreenState extends State<ForecastScreen> {
         ],
       ),
       body: result == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const SkeletonList()
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [

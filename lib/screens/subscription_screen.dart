@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../models/subscription_model.dart';
 import '../providers/plan_provider.dart';
 import '../utils/i18n.dart';
 
@@ -201,56 +202,89 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           padding: const EdgeInsets.all(20),
           children: [
             _currentPlanCard(info),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             Text(t('choosePlan'),
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             _planCard('free', t('free'), 0, [
               t('calcFree1'),
               t('calcFree2'),
               t('calcFree3'),
-            ]),
+            ], Icons.calculate_outlined),
             _planCard('starter', t('starter'), 1, [
               t('starterFeature1'),
               t('starterFeature2'),
-            ]),
+            ], Icons.people_outline),
             _planCard('pro', t('pro'), 2, [
               t('proFeature1'),
               t('proFeature2'),
               t('proFeature3'),
               t('proFeature4'),
-            ]),
+            ], Icons.workspace_premium),
           ],
         ),
       ),
     );
   }
 
-  Widget _currentPlanCard(dynamic info) {
+  Widget _currentPlanCard(SubscriptionInfo info) {
+    final primary = Theme.of(context).colorScheme.primary;
     final isActive = info.isActive;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          colors: [primary, primary.withValues(alpha: 0.72)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(isActive ? Icons.check_circle : Icons.info_outline,
-              color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${t('currentPlan')}: ${_planLabel(info.plan)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                if (info.expiresAt != null)
-                  Text('${t('expiresOn')}: ${info.expiresAt.toString().split(' ').first}'),
-                Text(isActive ? t('subscriptionActive') : t('subscriptionExpired')),
-              ],
-            ),
+          Row(
+            children: [
+              const Icon(Icons.workspace_premium, color: Colors.white, size: 28),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${t('currentPlan')}: ${_planLabel(info.plan)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  isActive ? t('subscriptionActive') : t('subscriptionExpired'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
+          if (info.expiresAt != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${t('expiresOn')}: ${info.expiresAt.toString().split(' ').first}',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.92),
+                fontSize: 13,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -267,71 +301,129 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
   }
 
-  Widget _planCard(String plan, String title, int rank, List<String> features) {
-    final current = context.watch<PlanProvider>().plan;
-    final isCurrent = current == plan;
+  Widget _planCard(
+      String plan, String title, int rank, List<String> features, IconData icon) {
+    final provider = context.watch<PlanProvider>();
+    final isCurrent = provider.plan == plan;
+    final isPro = plan == 'pro';
     final canUpgrade = plan != 'free' && !isCurrent;
+    final price = provider.priceLabel(plan);
+    final primary = Theme.of(context).colorScheme.primary;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isPro ? primary : Colors.grey.withValues(alpha: 0.2),
+          width: isPro ? 2 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: primary, size: 22),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(title,
                       style: const TextStyle(
                           fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
                 if (isCurrent)
-                  Chip(
-                    label: Text(t('currentPlan')),
-                    backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(t('currentPlan'),
+                        style:
+                            const TextStyle(color: Colors.green, fontSize: 11)),
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            if (price.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(price,
+                      style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: primary)),
+                  const SizedBox(width: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: Text(t('perMonth'),
+                        style:
+                            TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 14),
             ...features.map((f) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
+                  padding: const EdgeInsets.only(bottom: 6),
                   child: Row(
                     children: [
-                      const Icon(Icons.check, size: 16),
+                      Icon(Icons.check_circle, size: 18, color: primary),
                       const SizedBox(width: 8),
-                      Expanded(child: Text(f)),
+                      Expanded(
+                          child: Text(f, style: const TextStyle(fontSize: 14))),
                     ],
                   ),
                 )),
             if (canUpgrade) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
                   onPressed: _busy ? null : () => _upgrade(plan),
                   icon: const Icon(Icons.credit_card),
-                  label: Text('${t('upgradeTo')} $title · ${t('payByCard')}'),
+                  label: Text(t('payByCard')),
                 ),
               ),
               const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _momoPay(plan, 'mtn'),
-                  icon: const Icon(Icons.phone_android),
-                  label: Text(t('payWithMomo')),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _busy ? null : () => _momoPay(plan, 'mtn'),
+                    icon: const Icon(Icons.phone_android, size: 18),
+                    label: Text(t('payWithMomo'),
+                        style: const TextStyle(fontSize: 12)),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _momoPay(plan, 'orange'),
-                  icon: const Icon(Icons.phone_android),
-                  label: Text(t('payWithOrange')),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _busy ? null : () => _momoPay(plan, 'orange'),
+                    icon: const Icon(Icons.phone_android, size: 18),
+                    label: Text(t('payWithOrange'),
+                        style: const TextStyle(fontSize: 12)),
+                  ),
                 ),
-              ),
+              ]),
             ],
           ],
         ),

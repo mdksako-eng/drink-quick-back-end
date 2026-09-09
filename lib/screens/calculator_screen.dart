@@ -1773,11 +1773,14 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             Container(
               decoration: BoxDecoration(
                   color: primaryColor,
-                  borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(10)),
               child: IconButton(
                 tooltip: 'Notifications',
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(
+                    minWidth: 38, minHeight: 38),
                 icon: const Icon(Icons.notifications,
-                    color: Colors.white, size: 26),
+                    color: Colors.white, size: 20),
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -1792,17 +1795,17 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 right: -2,
                 top: -2,
                 child: Container(
-                  padding: EdgeInsets.all(4),
+                  padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                       color: Colors.red, shape: BoxShape.circle),
-                  constraints:
-                      BoxConstraints(minWidth: 18, minHeight: 18),
+                  constraints: const BoxConstraints(
+                      minWidth: 16, minHeight: 16),
                   child: Text(
                     unread > 9 ? '9+' : '$unread',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 10,
+                        fontSize: 9,
                         fontWeight: FontWeight.bold),
                   ),
                 ),

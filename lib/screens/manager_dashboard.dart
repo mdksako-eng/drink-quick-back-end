@@ -12,6 +12,7 @@ import '../utils/currency_helper.dart';
 import '../utils/helpers.dart';
 import '../utils/i18n.dart';
 import '../widgets/charts.dart';
+import '../widgets/skeleton.dart';
 
 class ManagerDashboard extends StatefulWidget {
   const ManagerDashboard({Key? key}) : super(key: key);
@@ -22,13 +23,14 @@ class ManagerDashboard extends StatefulWidget {
 
 class _ManagerDashboardState extends State<ManagerDashboard> {
   int _rangeDays = 30;
+  bool _loading = true;
   late AnalyticsSnapshot _snapshot;
 
   @override
   void initState() {
     super.initState();
     _snapshot = _compute();
-    _refresh();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
 
   AnalyticsSnapshot _compute() {
@@ -48,9 +50,15 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
   }
 
   Future<void> _refresh() async {
+    setState(() => _loading = true);
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     await orderProvider.reloadOrders();
-    if (mounted) setState(() => _snapshot = _compute());
+    if (mounted) {
+      setState(() {
+        _snapshot = _compute();
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -70,7 +78,9 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
           IconButton(icon: const Icon(Icons.refresh), onPressed: _refresh),
         ],
       ),
-      body: ListView(
+      body: _loading
+          ? const SkeletonList()
+          : ListView(
         padding: const EdgeInsets.all(16),
         children: [
           _buildRangeSelector(),

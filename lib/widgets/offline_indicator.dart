@@ -187,7 +187,12 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'You are offline. ${isCompanyUser ? "Company data may not be up to date." : "Some features may not work."}',
+                  t('offlineBanner').replaceAll(
+                    '@detail',
+                    isCompanyUser
+                        ? t('offlineCompanyDetail')
+                        : t('offlineGeneralDetail'),
+                  ),
                 ),
               ),
             ],
@@ -219,7 +224,7 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Slow internet connection. Data may load slowly.',
+                  t('slowConnection'),
                 ),
               ),
             ],
@@ -251,7 +256,10 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Back online! ${isCompanyUser ? "Data will sync automatically." : ""}',
+                  t('backOnline').replaceAll(
+                    '@detail',
+                    isCompanyUser ? t('backOnlineCompanyDetail') : '',
+                  ),
                 ),
               ),
             ],
@@ -475,8 +483,9 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
                         Expanded(
                           child: Text(
                             _isOffline
-                                ? 'You are offline. Company data may not be up to date.'
-                                : 'Slow internet connection. Data may load slowly.',
+                                ? t('offlineBanner')
+                                    .replaceAll('@detail', t('offlineCompanyDetail'))
+                                : t('slowConnection'),
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: isMobile ? 12 : 14,
@@ -514,7 +523,7 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
                                 if (!isMobile) ...[
                                   const SizedBox(width: 4),
                                   Text(
-                                    'Retry',
+                                    t('retry'),
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 12,
@@ -541,7 +550,7 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
                               _slideController.reverse();
                               _hideTimer?.cancel();
                             },
-                            tooltip: 'Dismiss',
+                            tooltip: t('dismiss'),
                           ),
                       ],
                     ),

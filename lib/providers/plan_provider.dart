@@ -40,6 +40,19 @@ class PlanProvider extends ChangeNotifier {
     return _rank(_info.plan) >= _rank(required);
   }
 
+  /// Returns a human price for a plan (e.g. "5,000 XAF") or ''.
+  String priceLabel(String plan) {
+    final p = _info.prices[plan];
+    if (p is! Map) return '';
+    final amount = num.tryParse('${p['amount']}') ?? 0;
+    if (amount == 0) return '';
+    final formatted = amount.toInt().toString().replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (m) => '${m[1]},',
+        );
+    return '$formatted ${p['currency'] ?? 'XAF'}';
+  }
+
   Future<void> refresh() async {
     _loading = true;
     notifyListeners();
