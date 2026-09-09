@@ -467,28 +467,10 @@ router.get('/payment/status/:transactionId', async (req, res) => {
     }
 
 
-    // ✅ Auto-complete for testing (remove in production)
+    // ✅ Expiry check for pending (non-auto) payments
     if (transaction.status === 'pending') {
       const created = new Date(transaction.created_at);
       const elapsed = Date.now() - created.getTime();
-      
-      // Auto-complete after 15 seconds
-      if (elapsed > 15000) {
-        await req.db.query(
-          `UPDATE payment_transactions 
-           SET status = 'completed', confirmed_at = NOW() 
-           WHERE transaction_id = $1`,
-          [transactionId]
-        );
-        
-        console.log(`✅ Payment ${transactionId} auto-completed after ${elapsed}ms`);
-        
-        return res.json({
-          success: true,
-          status: 'completed',
-          confirmedAt: new Date().toISOString(),
-        });
-      }
       
       // Check if expired (5 minutes)
       if (elapsed > 300000) {
