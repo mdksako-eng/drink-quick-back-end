@@ -4,6 +4,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const { getSessionUser } = require('../middleware/sessionAuth');
 const momo = require('../utils/momo');
+const orangeMoney = require('../utils/orange_money');
 // Shared secret for verifying /api/payment/webhook calls (set in env).
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
 
@@ -366,6 +367,7 @@ router.post('/payment/initiate', async (req, res) => {
     // collection request to the customer's phone. On failure, fall back to
     // the manual flow so the order can still be recorded.
     let auto = false;
+    let paymentUrl = null;
     if (paymentMethod === 'mtn' && momo.isConfigured(company)) {
       try {
         await momo.requestToPay({
@@ -381,6 +383,33 @@ router.post('/payment/initiate', async (req, res) => {
         auto = true;
       } catch (e) {
         console.error('⚠️ MTN auto payment failed, falling back to manual:', e.message);
+      }
+    }
+
+    // Auto mode: Orange Money web payment (redirect to Orange-hosted page).
+    if (paymentMethod === 'orange' && orangeMoney.isConfigured(company)) {
+      try {
+        const token = await orangeMoney.getAccessToken({
+          clientId: company.orange_api_key,
+          clientSecret: company.orange_secret_key,
+        });
+        const baseUrl =
+          process.env.APP_BASE_URL || 'https://drink-quick-cal-kja1.onrender.com';
+        const data = await orangeMoney.initiatePayment({
+          accessToken: token,
+          merchantKey: company.orange_merchant_id,
+          amount,
+          currency: 'XAF',
+          orderId: transactionId,
+          reference: transactionId,
+          returnUrl: `${baseUrl}/api/payment/orange-return`,
+          cancelUrl: `${baseUrl}/api/payment/orange-return`,
+          notifUrl: `${baseUrl}/api/payment/orange-webhook`,
+        });
+        paymentUrl = data.payment_url || null;
+        auto = true;
+      } catch (e) {
+        console.error('⚠️ Orange auto payment failed, falling back to manual:', e.message);
       }
     }
 
@@ -406,6 +435,7 @@ router.post('/payment/initiate', async (req, res) => {
       success: true,
       transactionId: transactionId,
       auto,
+      paymentUrl,
       status: 'pending',
       message: auto
         ? `Payment request sent to ${customerPhone}. Please approve on your phone.`
@@ -773,6 +803,59 @@ router.get('/payment/health', (req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
   });
+});
+
+// ============================================================
+// 🍊 Orange Money web payment: return + notif endpoints
+// ============================================================
+router.get('/payment/orange-return', (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Payment Complete</title></head>
+<body style="font-family:system-ui,sans-serif;background:#f7f8fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+  <div style="text-align:center;background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,0.08);max-width:420px;">
+    <div style="font-size:48px;">✅</div>
+    <h2 style="margin:16px 0 8px;">Payment received</h2>
+    <p style="color:#555;margin:0 0 24px;">Return to the app to complete your order.</p>
+  </div>
+</body>
+</html>`);
+});
+
+router.post('/payment/orange-webhook', async (req, res) => {
+  try {
+    const { order_id, orderId, reference, status } = req.body || {};
+    const txId = order_id || orderId || reference;
+    if (!txId) {
+      return res.json({ success: false, error: 'Missing order_id' });
+    }
+
+    const st = String(status || '').toUpperCase();
+    const result = await req.db.query(
+      `SELECT id FROM payment_transactions WHERE transaction_id = $1`,
+      [txId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Transaction not found' });
+    }
+
+    if (st === 'SUCCESS' || st === 'SUCCESSFUL' || st === 'COMPLETED') {
+      await req.db.query(
+        `UPDATE payment_transactions SET status = 'completed', confirmed_at = NOW() WHERE transaction_id = $1`,
+        [txId]
+      );
+    } else if (st === 'FAILED' || st === 'CANCELLED' || st === 'EXPIRED') {
+      await req.db.query(
+        `UPDATE payment_transactions SET status = 'failed', error_message = 'Payment failed' WHERE transaction_id = $1`,
+        [txId]
+      );
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Orange webhook error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 module.exports = router;

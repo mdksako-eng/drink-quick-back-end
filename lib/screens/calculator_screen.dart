@@ -27,6 +27,7 @@ import 'package:drinks_calculator_fixed/widgets/floating_ai_button.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/payment_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:drinks_calculator_fixed/screens/notifications_screen.dart';
 import '../main.dart' show ThemeProvider;
 
@@ -847,6 +848,14 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     }
 
     final transactionId = result['transactionId'];
+
+    // Orange Money web payment: open the hosted checkout page first.
+    final paymentUrl = result['paymentUrl'] as String?;
+    if (paymentUrl != null && paymentUrl.isNotEmpty) {
+      final uri = Uri.parse(paymentUrl);
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) await launchUrl(uri);
+    }
 
     // ✅ Show payment confirmation dialog
     final confirmed = await _showPaymentConfirmationDialog(
