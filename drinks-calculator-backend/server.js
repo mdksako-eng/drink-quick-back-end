@@ -175,6 +175,25 @@ app.use(async (req, res, next) => {
       } catch (drinkColErr) {
         console.log('⚠️ drinks columns warning:', drinkColErr.message);
       }
+      // 🎁 One-time: grandfather all existing companies into Pro (except id 1).
+      // Guarded by an app_flags marker so it runs exactly once.
+      try {
+        await pool.query(`CREATE TABLE IF NOT EXISTS app_flags (name TEXT PRIMARY KEY, value TEXT NOT NULL)`);
+        const flag = await pool.query(`SELECT 1 FROM app_flags WHERE name = 'grandfathered_pro_v1'`);
+        if (flag.rows.length === 0) {
+          const updated = await pool.query(
+            `UPDATE companies SET plan = 'pro', subscription_status = 'active', plan_expires_at = NULL WHERE id != 1`
+          );
+          await pool.query(`INSERT INTO app_flags (name, value) VALUES ('grandfathered_pro_v1', 'done')`);
+          console.log(`🎁 Grandfathered ${updated.rowCount} existing companies into Pro (except id 1)`);
+        } else {
+          console.log('✅ Grandfathering already applied - skipping');
+        }
+      } catch (grandErr) {
+        console.log('⚠️ Grandfathering warning:', grandErr.message);
+      }
+
+
 
 
 
