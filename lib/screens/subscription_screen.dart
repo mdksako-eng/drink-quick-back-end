@@ -35,6 +35,17 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         final uri = Uri.parse(checkoutUrl);
         final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
         if (!ok) await launchUrl(uri);
+
+        // Poll for activation (the webhook activates it server-side).
+        for (var i = 0; i < 6; i++) {
+          await Future.delayed(const Duration(seconds: 3));
+          if (!mounted) return;
+          await provider.refresh();
+          if (provider.info.isActive) {
+            _showSnack(t('subscriptionActive'));
+            return;
+          }
+        }
         _showSnack(t('payThenRefresh'));
       } else {
         _showSnack(t('payNotConfigured'));

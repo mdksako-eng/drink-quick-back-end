@@ -491,4 +491,25 @@ router.get('/subscriptions/momo-status', async (req, res) => {
   }
 });
 
+// ============================================================
+// 🏁 GET return page (Flutterwave redirects here after card payment)
+// ============================================================
+router.get('/subscriptions/return', (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Payment Complete</title>
+</head>
+<body style="font-family:system-ui,sans-serif;background:#f7f8fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+  <div style="text-align:center;background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,0.08);max-width:420px;">
+    <div style="font-size:48px;">✅</div>
+    <h2 style="margin:16px 0 8px;">Payment received</h2>
+    <p style="color:#555;margin:0 0 24px;">Your subscription is being activated. Return to the app and tap Refresh.</p>
+  </div>
+</body>
+</html>`);
+});
+
 module.exports = router;

@@ -32,3 +32,15 @@ services:
         sync: false # strong, unique admin password
       - key: GROQ_API_KEY
         sync: false # optional — leave blank to disable AI chat
+      - key: FLUTTERWAVE_SECRET_KEY
+        sync: false # Flutterwave secret key (card payments)
+      - key: FLUTTERWAVE_PUBLIC_KEY
+        sync: false # Flutterwave public key
+      - key: FLUTTERWAVE_WEBHOOK_SECRET
+        sync: false # random secret for webhook signature verification
+      - key: PAYMENT_WEBHOOK_SECRET
+        sync: false # random secret for MoMo payment webhook verification
+      - key: STARTER_PRICE_XAF
+        sync: false # optional — default 5000
+      - key: PRO_PRICE_XAF
+        sync: false # optional — default 15000
