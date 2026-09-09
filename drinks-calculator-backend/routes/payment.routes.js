@@ -4,6 +4,32 @@ const router = express.Router();
 const crypto = require('crypto');
 const { getSessionUser } = require('../middleware/sessionAuth');
 const momo = require('../utils/momo');
+// Shared secret for verifying /api/payment/webhook calls (set in env).
+const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
+
+// Masked value returned for secret keys — real secrets never leave the server.
+const MASKED = '••••••••••';
+
+function isMaskedOrEmpty(value) {
+  return !value || value === MASKED || /^•+$/.test(String(value));
+}
+
+function verifyWebhookSignature(rawBody, signature) {
+  if (!PAYMENT_WEBHOOK_SECRET || !signature) return false;
+  const expected = crypto
+    .createHmac('sha256', PAYMENT_WEBHOOK_SECRET)
+    .update(rawBody)
+    .digest('hex');
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(expected, 'utf8'),
+      Buffer.from(String(signature), 'utf8')
+    );
+  } catch (e) {
+    return false;
+  }
+}
+
 
 // Resolves the authenticated user from the Bearer session token (DB-backed).
 async function requireSessionUser(req) {
@@ -93,14 +119,16 @@ router.get('/company-settings', async (req, res) => {
     if (isManager) {
       response.mtnMerchantPhone = company.mtn_merchant_phone || '';
       response.orangeMerchantPhone = company.orange_merchant_phone || '';
-      response.mtnApiKey = company.mtn_api_key || '';
-      response.mtnSecretKey = company.mtn_secret_key || '';
+      response.mtnApiKey = company.mtn_api_key ? MASKED : '';
+      response.mtnSecretKey = company.mtn_secret_key ? MASKED : '';
       response.mtnMerchantId = company.mtn_merchant_id || '';
       response.mtnSandboxMode = company.mtn_sandbox_mode || true;
-      response.orangeApiKey = company.orange_api_key || '';
-      response.orangeSecretKey = company.orange_secret_key || '';
+      response.mtnConfigured = Boolean(company.mtn_api_key && company.mtn_secret_key && company.mtn_merchant_id);
+      response.orangeApiKey = company.orange_api_key ? MASKED : '';
+      response.orangeSecretKey = company.orange_secret_key ? MASKED : '';
       response.orangeMerchantId = company.orange_merchant_id || '';
       response.orangeSandboxMode = company.orange_sandbox_mode || true;
+      response.orangeConfigured = Boolean(company.orange_api_key && company.orange_secret_key && company.orange_merchant_id);
       response.isManager = true;
     } else {
       response.isManager = false;
@@ -183,10 +211,10 @@ router.patch('/company-settings', async (req, res) => {
     if (orangeMerchantPhone !== undefined) {
       updates.orange_merchant_phone = orangeMerchantPhone;
     }
-    if (mtnApiKey !== undefined) {
+    if (mtnApiKey !== undefined && !isMaskedOrEmpty(mtnApiKey)) {
       updates.mtn_api_key = mtnApiKey;
     }
-    if (mtnSecretKey !== undefined) {
+    if (mtnSecretKey !== undefined && !isMaskedOrEmpty(mtnSecretKey)) {
       updates.mtn_secret_key = mtnSecretKey;
     }
     if (mtnMerchantId !== undefined) {
@@ -195,10 +223,10 @@ router.patch('/company-settings', async (req, res) => {
     if (mtnSandboxMode !== undefined) {
       updates.mtn_sandbox_mode = mtnSandboxMode;
     }
-    if (orangeApiKey !== undefined) {
+    if (orangeApiKey !== undefined && !isMaskedOrEmpty(orangeApiKey)) {
       updates.orange_api_key = orangeApiKey;
     }
-    if (orangeSecretKey !== undefined) {
+    if (orangeSecretKey !== undefined && !isMaskedOrEmpty(orangeSecretKey)) {
       updates.orange_secret_key = orangeSecretKey;
     }
     if (orangeMerchantId !== undefined) {
@@ -686,6 +714,12 @@ router.get('/payment/stats', async (req, res) => {
 // ============================================================
 router.post('/payment/webhook', async (req, res) => {
   try {
+    const signature = req.headers['x-webhook-signature'] || req.headers['verif-hash'];
+    if (!verifyWebhookSignature(JSON.stringify(req.body), signature)) {
+      console.warn('⚠️ /api/payment/webhook: invalid signature');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
     const { transactionId, status, reference, errorMessage } = req.body;
 
     console.log(`📨 Webhook received for ${transactionId}: ${status}`);
