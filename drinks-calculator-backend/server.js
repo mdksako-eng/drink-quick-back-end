@@ -192,6 +192,20 @@ app.use(async (req, res, next) => {
       } catch (grandErr) {
         console.log('⚠️ Grandfathering warning:', grandErr.message);
       }
+      // 🔐 Lock down subscriptions + app_flags: RLS on + revoke client roles.
+      // The backend connects as the table owner (postgres) and bypasses RLS,
+      // while the anon key shipped in the app can no longer read/write them.
+      try {
+        await pool.query(`ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY`);
+        await pool.query(`REVOKE ALL ON subscriptions FROM anon, authenticated`);
+        await pool.query(`ALTER TABLE app_flags ENABLE ROW LEVEL SECURITY`);
+        await pool.query(`REVOKE ALL ON app_flags FROM anon, authenticated`);
+        console.log('✅ RLS enabled on subscriptions + app_flags (anon access revoked)');
+      } catch (rlsErr) {
+        console.log('⚠️ RLS lockdown warning for subscriptions/app_flags:', rlsErr.message);
+      }
+
+
 
 
 
