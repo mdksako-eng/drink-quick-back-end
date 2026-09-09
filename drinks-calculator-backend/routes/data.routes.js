@@ -32,7 +32,7 @@ const WRITABLE = {
   // inventory.quantity is the single source of truth for stock.
   // GET /drinks derives current_stock from the inventory table via JOIN.
   drinks: ['id', 'name', 'price', 'category', 'image_url', 'company_id', 'created_by',
-    'is_active', 'minimum_level', 'purchase_price', 'unit', 'created_at', 'updated_at'],
+    'is_active', 'minimum_level', 'purchase_price', 'unit', 'barcode', 'units_per_pack', 'created_at', 'updated_at'],
   orders: ['id', 'company_id', 'items', 'total_amount', 'amount_paid', 'balance',
     'receipt_number', 'date', 'is_active', 'customer_name', 'created_by', 'created_at'],
   inventory: ['id', 'company_id', 'drink_id', 'drink_name', 'quantity', 'min_stock_level',

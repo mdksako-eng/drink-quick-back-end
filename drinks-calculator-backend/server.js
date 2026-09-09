@@ -167,6 +167,16 @@ app.use(async (req, res, next) => {
       } catch (subErr) {
         console.log('⚠️ subscriptions table warning:', subErr.message);
       }
+      // 🏷️ DRINKS — ensure barcode + units_per_pack columns exist (wholesale scanning).
+      try {
+        await pool.query(`ALTER TABLE drinks ADD COLUMN IF NOT EXISTS barcode TEXT DEFAULT ''`);
+        await pool.query(`ALTER TABLE drinks ADD COLUMN IF NOT EXISTS units_per_pack INTEGER DEFAULT 1`);
+        console.log('✅ drinks barcode/units_per_pack columns ensured');
+      } catch (drinkColErr) {
+        console.log('⚠️ drinks columns warning:', drinkColErr.message);
+      }
+
+
 
       // Check companies table
       const companiesCheck = await pool.query(`
