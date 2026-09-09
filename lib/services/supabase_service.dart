@@ -237,6 +237,8 @@ class SupabaseService {
                   'minimumLevel': drink['minimum_level'] ?? 5,
                   'purchasePrice': drink['purchase_price'] ?? 0,
                   'unit': drink['unit'] ?? 'Bottle',
+                  'barcode': drink['barcode'] ?? '',
+                  'unitsPerPack': drink['units_per_pack'] ?? drink['unitsPerPack'] ?? 1,
                 })
             .toList();
 
@@ -273,6 +275,8 @@ class SupabaseService {
         'minimum_level': drink['minimumLevel'] ?? 5,
         'purchase_price': drink['purchasePrice'] ?? 0,
         'unit': drink['unit'] ?? 'Bottle',
+        'barcode': drink['barcode'] ?? '',
+        'units_per_pack': drink['units_per_pack'] ?? drink['unitsPerPack'] ?? 1,
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       };
@@ -316,6 +320,8 @@ class SupabaseService {
         'minimum_level': drink['minimumLevel'],
         'purchase_price': drink['purchasePrice'],
         'unit': drink['unit'],
+        'barcode': drink['barcode'] ?? '',
+        'units_per_pack': drink['units_per_pack'] ?? drink['unitsPerPack'] ?? 1,
         'updated_at': DateTime.now().toIso8601String(),
       };
 
