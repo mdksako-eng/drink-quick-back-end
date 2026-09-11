@@ -874,6 +874,8 @@ const Map<String, String> _en = {
   'confirmPayment': 'I have paid',
   'sendPayment': 'Send',
   'perMonth': 'per month',
+  'mostPopular': 'Most Popular',
+  'plansSubtitle': 'Simple pricing for your business.',
 
 };
 
@@ -1714,6 +1716,8 @@ const Map<String, String> _fr = {
   'confirmPayment': 'J\'ai payé',
   'sendPayment': 'Envoyer',
   'perMonth': 'par mois',
+  'mostPopular': 'Le plus populaire',
+  'plansSubtitle': 'Une tarification simple pour votre entreprise.',
 
 };
 

@@ -238,25 +238,51 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           padding: const EdgeInsets.all(20),
           children: [
             _currentPlanCard(info),
-            const SizedBox(height: 28),
+            const SizedBox(height: 32),
             Text(t('choosePlan'),
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            _planCard('free', t('free'), 0, [
-              t('calcFree1'),
-              t('calcFree2'),
-              t('calcFree3'),
-            ], Icons.calculate_outlined),
-            _planCard('starter', t('starter'), 1, [
-              t('starterFeature1'),
-              t('starterFeature2'),
-            ], Icons.people_outline),
-            _planCard('pro', t('pro'), 2, [
-              t('proFeature1'),
-              t('proFeature2'),
-              t('proFeature3'),
-              t('proFeature4'),
-            ], Icons.workspace_premium),
+                textAlign: TextAlign.center,
+                style:
+                    const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Text(t('plansSubtitle'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+            const SizedBox(height: 24),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 680;
+                final cards = [
+                  _pricingCard('free', t('free'), '', [
+                    t('calcFree1'),
+                    t('calcFree2'),
+                    t('calcFree3'),
+                  ], Icons.calculate_outlined, false),
+                  _pricingCard('starter', t('starter'),
+                      provider.priceLabel('starter'), [
+                    t('starterFeature1'),
+                    t('starterFeature2'),
+                  ], Icons.people_outline, false),
+                  _pricingCard('pro', t('pro'), provider.priceLabel('pro'), [
+                    t('proFeature1'),
+                    t('proFeature2'),
+                    t('proFeature3'),
+                    t('proFeature4'),
+                  ], Icons.workspace_premium, true),
+                ];
+                if (wide) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var i = 0; i < cards.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 12),
+                        Expanded(child: cards[i]),
+                      ],
+                    ],
+                  );
+                }
+                return Column(children: cards);
+              },
+            ),
           ],
         ),
       ),
@@ -337,131 +363,169 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
   }
 
-  Widget _planCard(
-      String plan, String title, int rank, List<String> features, IconData icon) {
+  Widget _pricingCard(String plan, String title, String price,
+      List<String> features, IconData icon, bool highlighted) {
     final provider = context.watch<PlanProvider>();
     final isCurrent = provider.plan == plan;
-    final isPro = plan == 'pro';
-    final canUpgrade = plan != 'free' && !isCurrent;
-    final price = provider.priceLabel(plan);
     final primary = Theme.of(context).colorScheme.primary;
+    final accent = highlighted ? primary : null;
+    final canUpgrade = plan != 'free' && !isCurrent;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isPro ? primary : Colors.grey.withValues(alpha: 0.2),
-          width: isPro ? 2 : 1,
+          color: highlighted ? primary : Colors.grey.withValues(alpha: 0.2),
+          width: highlighted ? 2 : 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
+        boxShadow: highlighted
+            ? [
+                BoxShadow(
+                    color: primary.withValues(alpha: 0.16),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8))
+              ]
+            : [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4))
+              ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(icon,
+                color: highlighted ? primary : Colors.grey[600], size: 26),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Text(title,
+                    style: TextStyle(
+                        fontSize: 19, fontWeight: FontWeight.bold, color: accent))),
+            if (highlighted)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                    color: primary, borderRadius: BorderRadius.circular(20)),
+                child: Text(t('mostPopular'),
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+              ),
+          ]),
+          const SizedBox(height: 16),
+          if (price.isEmpty)
+            Text(t('free'),
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: accent))
+          else
+            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(price,
+                  style: TextStyle(
+                      fontSize: 28, fontWeight: FontWeight.bold, color: accent)),
+              const SizedBox(width: 6),
+              Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(t('perMonth'),
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]))),
+            ]),
+          const SizedBox(height: 16),
+          ...features.map((f) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(Icons.check_circle,
+                      size: 18, color: highlighted ? primary : Colors.green),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: Text(f, style: const TextStyle(fontSize: 14))),
+                ]),
+              )),
+          const SizedBox(height: 16),
+          if (isCurrent)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12)),
+              child: Text(t('currentPlan'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: Colors.green, fontWeight: FontWeight.bold)),
+            )
+          else if (plan == 'free')
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                  borderRadius: BorderRadius.circular(12)),
+              child: Text(t('free'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: Colors.grey[600], fontWeight: FontWeight.w600)),
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _busy ? null : () => _showUpgradeSheet(plan, title),
+                style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12))),
+                child: Text('${t('upgradeTo')} $title'),
+              ),
+            ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: primary, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(title,
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-                if (isCurrent)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(t('currentPlan'),
-                        style:
-                            const TextStyle(color: Colors.green, fontSize: 11)),
-                  ),
-              ],
-            ),
-            if (price.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(price,
-                      style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: primary)),
-                  const SizedBox(width: 6),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 3),
-                    child: Text(t('perMonth'),
-                        style:
-                            TextStyle(fontSize: 12, color: Colors.grey[600])),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 14),
-            ...features.map((f) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle, size: 18, color: primary),
-                      const SizedBox(width: 8),
-                      Expanded(
-                          child: Text(f, style: const TextStyle(fontSize: 14))),
-                    ],
-                  ),
-                )),
-            if (canUpgrade) ...[
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _busy ? null : () => _upgrade(plan),
-                  icon: const Icon(Icons.credit_card),
-                  label: Text(t('payByCard')),
-                ),
-              ),
+    );
+  }
+
+  void _showUpgradeSheet(String plan, String title) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${t('upgradeTo')} $title',
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Row(children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _busy ? null : () => _momoPay(plan, 'mtn'),
-                    icon: const Icon(Icons.phone_android, size: 18),
-                    label: Text(t('payWithMomo'),
-                        style: const TextStyle(fontSize: 12)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _busy ? null : () => _momoPay(plan, 'orange'),
-                    icon: const Icon(Icons.phone_android, size: 18),
-                    label: Text(t('payWithOrange'),
-                        style: const TextStyle(fontSize: 12)),
-                  ),
-                ),
-              ]),
+              ListTile(
+                leading: const Icon(Icons.credit_card),
+                title: Text(t('payByCard')),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _upgrade(plan);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.phone_android),
+                title: Text(t('payWithMomo')),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _momoPay(plan, 'mtn');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.phone_android),
+                title: Text(t('payWithOrange')),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _momoPay(plan, 'orange');
+                },
+              ),
             ],
-          ],
+          ),
         ),
       ),
     );
