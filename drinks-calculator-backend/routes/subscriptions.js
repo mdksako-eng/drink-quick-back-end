@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { getSessionUser } = require('../middleware/sessionAuth');
 const flutterwave = require('../utils/flutterwave');
 const momo = require('../utils/momo');
+const orangeMoney = require('../utils/orange_money');
 
 // Plan prices (XAF — Central African CFA franc). Overridable via env.
 const PLAN_PRICES = {
@@ -35,6 +36,9 @@ const platformMomo = {
   mtn_api_key: process.env.PLATFORM_MTN_API_KEY || '',
   mtn_secret_key: process.env.PLATFORM_MTN_SECRET_KEY || '',
   mtn_sandbox_mode: (process.env.PLATFORM_MTN_SANDBOX || 'true') === 'true',
+  orange_merchant_id: process.env.PLATFORM_ORANGE_MERCHANT_ID || '',
+  orange_api_key: process.env.PLATFORM_ORANGE_API_KEY || '',
+  orange_secret_key: process.env.PLATFORM_ORANGE_SECRET_KEY || '',
 };
 
 // Resolves the authenticated user from the Bearer session token (DB-backed).
@@ -333,6 +337,7 @@ router.post('/subscriptions/momo-initiate', async (req, res) => {
     // send a real collection request to the customer's phone and verify
     // automatically (subscription money is paid to you, not the company).
     let transactionId = null;
+    let paymentUrl = null;
     let auto = false;
     if (provider === 'mtn' && momo.isConfigured(platformMomo)) {
       transactionId = await momo.requestToPay({
@@ -348,6 +353,33 @@ router.post('/subscriptions/momo-initiate', async (req, res) => {
       auto = true;
     }
 
+    // Auto mode: Orange Money web payment (YOUR platform credentials).
+    if (provider === 'orange' && orangeMoney.isConfigured(platformMomo)) {
+      try {
+        const token = await orangeMoney.getAccessToken({
+          clientId: platformMomo.orange_api_key,
+          clientSecret: platformMomo.orange_secret_key,
+        });
+        const baseUrl =
+            process.env.APP_BASE_URL || 'https://drink-quick-cal-kja1.onrender.com';
+        const data = await orangeMoney.initiatePayment({
+          accessToken: token,
+          merchantKey: platformMomo.orange_merchant_id,
+          amount: price.amount,
+          currency: price.currency,
+          orderId: reference,
+          reference,
+          returnUrl: `${baseUrl}/api/subscriptions/orange-return`,
+          cancelUrl: `${baseUrl}/api/subscriptions/orange-return`,
+          notifUrl: `${baseUrl}/api/subscriptions/orange-webhook`,
+        });
+        paymentUrl = data.payment_url || null;
+        auto = true;
+      } catch (e) {
+        console.error('⚠️ Orange auto subscription failed, falling back to manual:', e.message);
+      }
+    }
+
     await req.db.query(
       `INSERT INTO subscriptions
          (company_id, plan, status, provider, reference, transaction_id, amount, currency)
@@ -360,6 +392,7 @@ router.post('/subscriptions/momo-initiate', async (req, res) => {
       data: {
         reference,
         transactionId,
+        paymentUrl,
         auto,
         amount: price.amount,
         currency: price.currency,
@@ -509,6 +542,64 @@ router.get('/subscriptions/return', (req, res) => {
   </div>
 </body>
 </html>`);
+});
+
+// ============================================================
+// 🍊 Orange Money web payment (subscriptions): return + notif
+// ============================================================
+router.get('/subscriptions/orange-return', (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Payment Complete</title></head>
+<body style="font-family:system-ui,sans-serif;background:#f7f8fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+  <div style="text-align:center;background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,0.08);max-width:420px;">
+    <div style="font-size:48px;">✅</div>
+    <h2 style="margin:16px 0 8px;">Payment received</h2>
+    <p style="color:#555;margin:0 0 24px;">Return to the app — your subscription is being activated.</p>
+  </div>
+</body>
+</html>`);
+});
+
+router.post('/subscriptions/orange-webhook', async (req, res) => {
+  try {
+    const { order_id, orderId, reference, status } = req.body || {};
+    const ref = order_id || orderId || reference;
+    if (!ref) {
+      return res.json({ success: false, error: 'Missing order_id' });
+    }
+
+    const st = String(status || '').toUpperCase();
+    const pending = await req.db.query(
+      `SELECT id, plan, company_id FROM subscriptions WHERE reference = $1 AND status = 'pending'`,
+      [ref]
+    );
+    if (pending.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Pending subscription not found' });
+    }
+    const sub = pending.rows[0];
+
+    if (st === 'SUCCESS' || st === 'SUCCESSFUL' || st === 'COMPLETED') {
+      const now = new Date();
+      const endsAt = new Date(now.getTime() + SUBSCRIPTION_MONTHS * 30 * 24 * 60 * 60 * 1000);
+      await req.db.query(
+        `UPDATE subscriptions SET status = 'active', starts_at = $1, ends_at = $2 WHERE id = $3`,
+        [now, endsAt, sub.id]
+      );
+      await req.db.query(
+        `UPDATE companies SET plan = $1, plan_expires_at = $2, subscription_status = 'active' WHERE id = $3`,
+        [sub.plan, endsAt, sub.company_id]
+      );
+      console.log(`✅ Orange subscription activated for company ${sub.company_id} (${sub.plan})`);
+    } else if (st === 'FAILED' || st === 'CANCELLED' || st === 'EXPIRED') {
+      await req.db.query(`UPDATE subscriptions SET status = 'failed' WHERE id = $1`, [sub.id]);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Orange subscription webhook error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 module.exports = router;

@@ -88,8 +88,16 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       final currency = data['currency']?.toString() ?? 'XAF';
       final merchantPhone = data['merchantPhone']?.toString() ?? '';
       final auto = data['auto'] == true;
+      final paymentUrl = data['paymentUrl']?.toString() ?? '';
 
-      if (auto) {
+      if (paymentUrl.isNotEmpty) {
+        // Orange Money web payment: open the hosted checkout page, then poll
+        // for activation (the webhook activates it server-side).
+        final uri = Uri.parse(paymentUrl);
+        final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!ok) await launchUrl(uri);
+        await _autoVerifyPlan(planProvider);
+      } else if (auto) {
         // Automatic verification via the MTN MoMo collection API.
         await _autoVerify(planProvider, reference);
       } else {
@@ -138,6 +146,34 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       if (status['status'] == 'failed') {
         if (mounted) Navigator.of(context).pop();
         if (mounted) _showSnack(t('error'));
+        return;
+      }
+    }
+
+    if (mounted) Navigator.of(context).pop();
+    if (mounted) _showSnack(t('payThenRefresh'));
+  }
+
+  Future<void> _autoVerifyPlan(PlanProvider planProvider) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        content: Row(children: [
+          const CircularProgressIndicator(),
+          const SizedBox(width: 16),
+          Expanded(child: Text(t('waitingForPayment'))),
+        ]),
+      ),
+    );
+
+    for (var i = 0; i < 12; i++) {
+      await Future.delayed(const Duration(seconds: 5));
+      if (!mounted) return;
+      await planProvider.refresh();
+      if (planProvider.info.isActive) {
+        if (mounted) Navigator.of(context).pop();
+        if (mounted) _showSnack(t('subscriptionActive'));
         return;
       }
     }
