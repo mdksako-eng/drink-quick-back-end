@@ -10,6 +10,8 @@ import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/providers/order_provider.dart';
 import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import '../utils/i18n.dart';
+import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 
 class OfflineIndicator extends StatefulWidget {
   final Widget child;
@@ -31,7 +33,6 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
   bool _isOffline = false;
   bool _isChecking = true;
   bool _isSlowConnection = false;
-  double _connectionQuality = 1.0; // 1.0 = good, 0.0 = bad
 
   // ========== ANIMATION ==========
   late AnimationController _slideController;
@@ -63,9 +64,8 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
     // ✅ Listen to connectivity changes
     Connectivity().onConnectivityChanged.listen((result) {
       final isOffline = result == ConnectivityResult.none;
-      final isSlow = _isSlowConnection;
 
-      if (_isOffline != isOffline || _isSlowConnection != isSlow) {
+      if (_isOffline != isOffline) {
         setState(() {
           _isOffline = isOffline;
           _isChecking = false;
@@ -73,9 +73,6 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
 
         if (isOffline) {
           _showOfflineToast();
-          _slideController.forward();
-        } else if (_isSlowConnection) {
-          _showSlowConnectionToast();
           _slideController.forward();
         } else {
           _showOnlineToast();
@@ -120,33 +117,34 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
 
   Future<void> _checkConnectionQuality() async {
     try {
-      // ✅ Check connection quality by measuring response time
+      // Measure real internet latency by pinging the backend.
       final stopwatch = Stopwatch()..start();
-      final result = await Connectivity().checkConnectivity();
+      final resp = await http
+          .get(Uri.parse('${ApiConfig.baseUrl}/health'))
+          .timeout(const Duration(seconds: 6));
       stopwatch.stop();
 
-      final isOffline = result == ConnectivityResult.none;
+      if (resp.statusCode != 200) {
+        _hideBannerAfterDelay();
+        return;
+      }
 
-      if (!isOffline) {
-        // ✅ Calculate quality based on response time
-        final responseTime = stopwatch.elapsedMilliseconds;
-        final quality = _calculateQuality(responseTime);
+      final quality = _calculateQuality(stopwatch.elapsedMilliseconds);
 
-        setState(() {
-          _connectionQuality = quality;
-          _isSlowConnection = quality < 0.5;
-          _isOffline = false;
-          _isChecking = false;
-        });
+      setState(() {
+        _isSlowConnection = quality < 0.5;
+        _isOffline = false;
+        _isChecking = false;
+      });
 
-        if (_isSlowConnection) {
-          _slideController.forward();
-        } else {
-          _hideBannerAfterDelay();
-        }
+      if (_isSlowConnection) {
+        _showSlowConnectionToast();
+        _slideController.forward();
+      } else {
+        _hideBannerAfterDelay();
       }
     } catch (e) {
-      // Ignore
+      // Ignore — offline is handled by the connectivity listener.
     }
   }
 
@@ -410,7 +408,6 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.currentUser;
     final shouldShow = _shouldShowBanner(user);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
