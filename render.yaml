@@ -44,3 +44,22 @@ services:
         sync: false # optional — default 5000
       - key: PRO_PRICE_XAF
         sync: false # optional — default 15000
+      # Platform (YOUR) Mobile Money — subscription payments go to these.
+      - key: PLATFORM_MTN_PHONE
+        sync: false # your MTN MoMo number (manual mode — works without API keys)
+      - key: PLATFORM_ORANGE_PHONE
+        sync: false # your Orange Money number (manual mode)
+      - key: PLATFORM_MTN_MERCHANT_ID
+        sync: false # optional — MTN API user (X-Reference-Id) for auto mode
+      - key: PLATFORM_MTN_API_KEY
+        sync: false # optional — MTN API key for auto mode
+      - key: PLATFORM_MTN_SECRET_KEY
+        sync: false # optional — MTN subscription key for auto mode
+      - key: PLATFORM_MTN_SANDBOX
+        sync: false # optional — true while testing (default), false for live
+      - key: PLATFORM_ORANGE_MERCHANT_ID
+        sync: false # optional — Orange merchant key for auto mode
+      - key: PLATFORM_ORANGE_API_KEY
+        sync: false # optional — Orange client_id for auto mode
+      - key: PLATFORM_ORANGE_SECRET_KEY
+        sync: false # optional — Orange client_secret for auto mode
