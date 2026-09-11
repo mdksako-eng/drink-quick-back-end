@@ -408,16 +408,17 @@ router.post('/subscriptions/momo-initiate', async (req, res) => {
 });
 
 // ============================================================
-// ✅ POST confirm mobile-money payment (manager verified)
+// ✅ POST confirm mobile-money payment (PLATFORM verified — admin only)
 // ============================================================
 router.post('/subscriptions/momo-confirm', async (req, res) => {
   try {
-    const user = await requireSessionUser(req);
-    if (!user) {
-      return res.status(401).json({ success: false, error: 'Invalid or expired session' });
-    }
-    if (!['Manager', 'Administrator', 'Admin'].includes(user.role)) {
-      return res.status(403).json({ success: false, error: 'Only managers can confirm payment' });
+    // Platform-only action: the paying manager must NOT be able to
+    // self-confirm (otherwise they could subscribe without paying).
+    // Requires the platform admin secret (ADMIN_PASSWORD env var).
+    const adminSecret = req.headers['x-admin-secret'];
+    const expectedSecret = process.env.ADMIN_PASSWORD || '';
+    if (!expectedSecret || !adminSecret || adminSecret !== expectedSecret) {
+      return res.status(403).json({ success: false, error: 'Manual payment requires platform verification' });
     }
 
     const { reference, plan } = req.body || {};
@@ -426,9 +427,9 @@ router.post('/subscriptions/momo-confirm', async (req, res) => {
     }
 
     const pending = await req.db.query(
-      `SELECT id, company_id, plan, amount, currency, provider FROM subscriptions
-       WHERE reference = $1 AND company_id = $2 AND status = 'pending'`,
-      [reference, user.company_id]
+      `SELECT id, company_id, plan FROM subscriptions
+       WHERE reference = $1 AND status = 'pending'`,
+      [reference]
     );
     if (pending.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Pending subscription not found' });
@@ -444,7 +445,7 @@ router.post('/subscriptions/momo-confirm', async (req, res) => {
     );
     await req.db.query(
       `UPDATE companies SET plan = $1, plan_expires_at = $2, subscription_status = 'active' WHERE id = $3`,
-      [sub.plan, endsAt, user.company_id]
+      [sub.plan, endsAt, sub.company_id]
     );
 
     res.json({ success: true, data: { active: true, plan: sub.plan, expiresAt: endsAt } });

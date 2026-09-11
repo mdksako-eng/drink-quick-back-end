@@ -876,6 +876,7 @@ const Map<String, String> _en = {
   'perMonth': 'per month',
   'mostPopular': 'Most Popular',
   'plansSubtitle': 'Simple pricing for your business.',
+  'paymentPendingVerification': 'Payment recorded. Your subscription will be activated once the payment is verified.',
 
 };
 
@@ -1718,6 +1719,7 @@ const Map<String, String> _fr = {
   'perMonth': 'par mois',
   'mostPopular': 'Le plus populaire',
   'plansSubtitle': 'Une tarification simple pour votre entreprise.',
+  'paymentPendingVerification': 'Paiement enregistré. Votre abonnement sera activé une fois le paiement vérifié.',
 
 };
 

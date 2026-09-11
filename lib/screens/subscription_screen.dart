@@ -101,15 +101,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         // Automatic verification via the MTN MoMo collection API.
         await _autoVerify(planProvider, reference);
       } else {
-        // Manual confirmation fallback.
-        final confirmed =
+        // Manual: the manager sends money to the platform's number. The
+        // payment is verified and activated by the PLATFORM (no self-confirm).
+        final acknowledged =
             await _promptConfirm(provider, amount, currency, merchantPhone);
-        if (!confirmed || !mounted) return;
-
-        final ok =
-            await planProvider.momoConfirm(reference: reference, plan: plan);
-        if (!mounted) return;
-        _showSnack(ok ? t('subscriptionActive') : t('error'));
+        if (!acknowledged || !mounted) return;
+        _showSnack(t('paymentPendingVerification'));
       }
     } catch (e) {
       if (mounted) _showSnack('$e');
