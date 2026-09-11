@@ -276,16 +276,18 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         final userSettings = await SupabaseService.getSettings(userId);
         if (userSettings != null) {
           debugPrint('✅ Loaded user-specific settings');
-          final themeModeIndex = userSettings['theme_mode'] ?? 0;
+          // Theme is read from local prefs (not cloud) so unsaved local
+          // theme changes are preserved when returning to this screen.
+          final themeModeIndex = prefs.getInt('theme_mode') ?? 0;
           _themeProvider
               .setTheme(themeModeIndex == 1 ? ThemeMode.dark : ThemeMode.light);
 
-          _primaryColor = userSettings['primary_color'] ?? '#667EEA';
+          _primaryColor = prefs.getString('primary_color') ?? '#667EEA';
           final newColor =
               Color(int.parse(_primaryColor.replaceFirst('#', '0xFF')));
           _themeProvider.setPrimaryColor(newColor);
 
-          _compactMode = userSettings['compact_mode'] ?? false;
+          _compactMode = prefs.getBool('compact_mode') ?? false;
           _themeProvider.setCompactMode(_compactMode);
 
           _showNotifications = userSettings['show_notifications'] ?? true;

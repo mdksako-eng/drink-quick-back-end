@@ -511,7 +511,11 @@ class CustomDrawer extends StatelessWidget {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text(t('upgradeRequired')),
+          title: Row(children: [
+            const Icon(Icons.workspace_premium, color: Colors.orange),
+            const SizedBox(width: 8),
+            Expanded(child: Text(t('upgradeRequired'))),
+          ]),
           content: Text('${t('upgradeTo')} ${t('pro')}?'),
           actions: [
             TextButton(
