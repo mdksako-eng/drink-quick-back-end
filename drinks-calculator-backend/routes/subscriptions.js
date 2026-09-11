@@ -24,6 +24,19 @@ const PLAN_PRICES = {
 const SUBSCRIPTION_MONTHS = 1;
 const VALID_PLANS = ['starter', 'pro'];
 
+// Platform-level (YOUR) Mobile Money config for subscriptions.
+// These env vars point to YOUR OWN MoMo account — NOT the company's — so
+// subscription money is paid to you. Customer order payments (in
+// payment.routes.js) still use the company's own account.
+const platformMomo = {
+  mtn_merchant_phone: process.env.PLATFORM_MTN_PHONE || '',
+  orange_merchant_phone: process.env.PLATFORM_ORANGE_PHONE || '',
+  mtn_merchant_id: process.env.PLATFORM_MTN_MERCHANT_ID || '',
+  mtn_api_key: process.env.PLATFORM_MTN_API_KEY || '',
+  mtn_secret_key: process.env.PLATFORM_MTN_SECRET_KEY || '',
+  mtn_sandbox_mode: (process.env.PLATFORM_MTN_SANDBOX || 'true') === 'true',
+};
+
 // Resolves the authenticated user from the Bearer session token (DB-backed).
 async function requireSessionUser(req) {
   const authHeader = req.headers.authorization;
@@ -310,32 +323,23 @@ router.post('/subscriptions/momo-initiate', async (req, res) => {
       return res.status(400).json({ success: false, error: `Invalid ${provider} phone number` });
     }
 
-    const companyResult = await req.db.query(
-      `SELECT mtn_merchant_phone, orange_merchant_phone,
-              mtn_merchant_id, mtn_api_key, mtn_secret_key, mtn_sandbox_mode
-       FROM companies WHERE id = $1`,
-      [user.company_id]
-    );
-    const company = companyResult.rows[0];
-    if (!company) {
-      return res.status(404).json({ success: false, error: 'Company not found' });
-    }
-
     const price = PLAN_PRICES[plan];
     const reference = generateReference(user.company_id);
-    const merchantPhone =
-      provider === 'mtn' ? company.mtn_merchant_phone : company.orange_merchant_phone;
+    const merchantPhone = provider === 'mtn'
+        ? platformMomo.mtn_merchant_phone
+        : platformMomo.orange_merchant_phone;
 
-    // Auto mode: if the company has MTN MoMo API credentials, send a real
-    // collection request to the customer's phone and verify automatically.
+    // Auto mode: if YOUR platform MTN MoMo API credentials are configured,
+    // send a real collection request to the customer's phone and verify
+    // automatically (subscription money is paid to you, not the company).
     let transactionId = null;
     let auto = false;
-    if (provider === 'mtn' && momo.isConfigured(company)) {
+    if (provider === 'mtn' && momo.isConfigured(platformMomo)) {
       transactionId = await momo.requestToPay({
-        apiUser: company.mtn_merchant_id,
-        apiKey: company.mtn_api_key,
-        subscriptionKey: company.mtn_secret_key,
-        sandbox: !!company.mtn_sandbox_mode,
+        apiUser: platformMomo.mtn_merchant_id,
+        apiKey: platformMomo.mtn_api_key,
+        subscriptionKey: platformMomo.mtn_secret_key,
+        sandbox: platformMomo.mtn_sandbox_mode,
         amount: price.amount,
         currency: price.currency,
         phone: customerPhone,
@@ -447,20 +451,15 @@ router.get('/subscriptions/momo-status', async (req, res) => {
       return res.json({ success: true, data: { status: 'pending', auto: false } });
     }
 
-    const company = await req.db.query(
-      `SELECT mtn_merchant_id, mtn_api_key, mtn_secret_key, mtn_sandbox_mode FROM companies WHERE id = $1`,
-      [user.company_id]
-    );
-    const creds = company.rows[0];
-    if (!creds || !momo.isConfigured(creds)) {
+    if (!momo.isConfigured(platformMomo)) {
       return res.json({ success: true, data: { status: 'pending', auto: false } });
     }
 
     const tx = await momo.getTransactionStatus({
-      apiUser: creds.mtn_merchant_id,
-      apiKey: creds.mtn_api_key,
-      subscriptionKey: creds.mtn_secret_key,
-      sandbox: !!creds.mtn_sandbox_mode,
+      apiUser: platformMomo.mtn_merchant_id,
+      apiKey: platformMomo.mtn_api_key,
+      subscriptionKey: platformMomo.mtn_secret_key,
+      sandbox: platformMomo.mtn_sandbox_mode,
       referenceId: sub.transaction_id,
     });
 
