@@ -108,6 +108,23 @@ class PlanProvider extends ChangeNotifier {
     return ok;
   }
 
+  /// Begin a Notch Pay payment (unified MoMo/OM/card); returns initiate data.
+  Future<Map<String, dynamic>?> notchpayInitiate({
+    required String plan,
+    String? channel,
+  }) {
+    return SubscriptionService.notchpayInitiate(plan: plan, channel: channel);
+  }
+
+  /// Poll Notch Pay payment status; refreshes state when it becomes active.
+  Future<Map<String, dynamic>?> notchpayStatus({required String reference}) async {
+    final result = await SubscriptionService.notchpayStatus(reference: reference);
+    if (result?['active'] == true) {
+      await refresh();
+    }
+    return result;
+  }
+
   /// Verify a payment and refresh local state.
   Future<bool> verify({required String transactionId, required String plan}) async {
     final ok = await SubscriptionService.verify(

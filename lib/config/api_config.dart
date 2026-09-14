@@ -80,6 +80,10 @@ class ApiConfig {
       '$apiBase/subscriptions/momo-confirm';
   static const String subscriptionMomoStatus =
       '$apiBase/subscriptions/momo-status';
+  static const String subscriptionNotchpayInitiate =
+      '$apiBase/subscriptions/notchpay-initiate';
+  static const String subscriptionNotchpayStatus =
+      '$apiBase/subscriptions/notchpay-status';
 
   // Supabase headers (anon key) — legacy direct access only.
   static Map<String, String> get supabaseHeaders => {

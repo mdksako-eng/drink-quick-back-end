@@ -179,6 +179,73 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     if (mounted) _showSnack(t('payThenRefresh'));
   }
 
+  Future<void> _notchpayPay(String plan) async {
+    final planProvider = context.read<PlanProvider>();
+    setState(() => _busy = true);
+    try {
+      final data = await planProvider.notchpayInitiate(plan: plan);
+      if (!mounted) return;
+      final checkoutUrl = data?['checkoutUrl']?.toString() ?? '';
+      final reference = data?['reference']?.toString() ?? '';
+
+      if (checkoutUrl.isEmpty) {
+        _showSnack(t('payNotConfigured'));
+        return;
+      }
+
+      final uri = Uri.parse(checkoutUrl);
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) await launchUrl(uri);
+
+      if (reference.isNotEmpty) {
+        await _autoVerifyNotchpay(planProvider, reference);
+      } else {
+        await _autoVerifyPlan(planProvider);
+      }
+    } catch (e) {
+      if (mounted) _showSnack('$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _autoVerifyNotchpay(
+      PlanProvider planProvider, String reference) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        content: Row(children: [
+          const CircularProgressIndicator(),
+          const SizedBox(width: 16),
+          Expanded(child: Text(t('waitingForPayment'))),
+        ]),
+      ),
+    );
+
+    for (var i = 0; i < 18; i++) {
+      await Future.delayed(const Duration(seconds: 5));
+      if (!mounted) return;
+
+      final status = await planProvider.notchpayStatus(reference: reference);
+      if (status == null) continue;
+
+      if (status['active'] == true) {
+        if (mounted) Navigator.of(context).pop();
+        if (mounted) _showSnack(t('subscriptionActive'));
+        return;
+      }
+      if (status['status'] == 'failed') {
+        if (mounted) Navigator.of(context).pop();
+        if (mounted) _showSnack(t('error'));
+        return;
+      }
+    }
+
+    if (mounted) Navigator.of(context).pop();
+    if (mounted) _showSnack(t('payThenRefresh'));
+  }
+
   Future<String?> _promptPhone(String provider) {
     final controller = TextEditingController();
     return showDialog<String>(
@@ -519,6 +586,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 onTap: () {
                   Navigator.pop(ctx);
                   _momoPay(plan, 'orange');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.account_balance_wallet),
+                title: Text(t('payWithNotchpay')),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _notchpayPay(plan);
                 },
               ),
             ],

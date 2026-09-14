@@ -166,6 +166,71 @@ class SubscriptionService {
     }
   }
 
+  /// Initiate a Notch Pay payment (unified MoMo/OM/card) and return the
+  /// checkout URL + reference.
+  static Future<Map<String, dynamic>?> notchpayInitiate({
+    required String plan,
+    String? channel,
+  }) async {
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      if (token == null) return null;
+
+      final response = await http.post(
+        Uri.parse(ApiConfig.subscriptionNotchpayInitiate),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'plan': plan, 'channel': channel}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return Map<String, dynamic>.from(data['data'] ?? {});
+        }
+        if (data['error'] != null) throw Exception(data['error']);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('SubscriptionService.notchpayInitiate error: $e');
+      rethrow;
+    }
+  }
+
+  /// Poll Notch Pay payment status. Returns { active, status, ... }.
+  static Future<Map<String, dynamic>?> notchpayStatus({
+    required String reference,
+  }) async {
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      if (token == null) return null;
+
+      final uri = Uri.parse(ApiConfig.subscriptionNotchpayStatus)
+          .replace(queryParameters: {'reference': reference});
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return Map<String, dynamic>.from(data['data'] ?? {});
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('SubscriptionService.notchpayStatus error: $e');
+      return null;
+    }
+  }
+
   /// Verify a payment and activate the plan.
   static Future<bool> verify({
     required String transactionId,
