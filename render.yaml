@@ -63,3 +63,10 @@ services:
         sync: false # optional — Orange client_id for auto mode
       - key: PLATFORM_ORANGE_SECRET_KEY
         sync: false # optional — Orange client_secret for auto mode
+      # Notch Pay (platform) — subscription money is paid to YOU via this account.
+      - key: NOTCHPAY_PUBLIC_KEY
+        sync: false # your Notch Pay public key (pk_...)
+      - key: NOTCHPAY_PRIVATE_KEY
+        sync: false # your Notch Pay private key (sk_...)
+      - key: NOTCHPAY_WEBHOOK_SECRET
+        sync: false # Notch Pay dashboard "Hash Key" (webhook HMAC-SHA256 secret)
