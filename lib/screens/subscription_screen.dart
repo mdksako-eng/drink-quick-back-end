@@ -66,12 +66,40 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 
   Future<void> _momoPay(String plan, String provider) async {
-    final phone = await _promptPhone(provider);
-    if (phone == null || phone.isEmpty) return;
-
     final planProvider = context.read<PlanProvider>();
     setState(() => _busy = true);
     try {
+      // ✅ Primary: Notch Pay (single API). The chosen option is the phone
+      // type — Notch Pay's checkout is locked to that channel and collects
+      // the customer's number.
+      final channel = provider == 'mtn' ? 'cm.mtn' : 'cm.orange';
+      Map<String, dynamic>? notch;
+      try {
+        notch = await planProvider.notchpayInitiate(plan: plan, channel: channel);
+      } catch (_) {
+        notch = null;
+      }
+
+      if (!mounted) return;
+      final checkoutUrl = notch?['checkoutUrl']?.toString() ?? '';
+      if (checkoutUrl.isNotEmpty) {
+        final reference = notch!['reference']?.toString() ?? '';
+        final uri = Uri.parse(checkoutUrl);
+        final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!ok) await launchUrl(uri);
+        if (reference.isNotEmpty) {
+          await _autoVerifyNotchpay(planProvider, reference);
+        } else {
+          await _autoVerifyPlan(planProvider);
+        }
+        return;
+      }
+
+      // ⬇️ Fallback: direct operator integration (used only when Notch Pay is
+      // not configured on the server).
+      final phone = await _promptPhone(provider);
+      if (phone == null || phone.isEmpty) return;
+
       final data = await planProvider.momoInitiate(
         plan: plan,
         provider: provider,
@@ -177,36 +205,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
     if (mounted) Navigator.of(context).pop();
     if (mounted) _showSnack(t('payThenRefresh'));
-  }
-
-  Future<void> _notchpayPay(String plan) async {
-    final planProvider = context.read<PlanProvider>();
-    setState(() => _busy = true);
-    try {
-      final data = await planProvider.notchpayInitiate(plan: plan);
-      if (!mounted) return;
-      final checkoutUrl = data?['checkoutUrl']?.toString() ?? '';
-      final reference = data?['reference']?.toString() ?? '';
-
-      if (checkoutUrl.isEmpty) {
-        _showSnack(t('payNotConfigured'));
-        return;
-      }
-
-      final uri = Uri.parse(checkoutUrl);
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!ok) await launchUrl(uri);
-
-      if (reference.isNotEmpty) {
-        await _autoVerifyNotchpay(planProvider, reference);
-      } else {
-        await _autoVerifyPlan(planProvider);
-      }
-    } catch (e) {
-      if (mounted) _showSnack('$e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
   Future<void> _autoVerifyNotchpay(
@@ -586,14 +584,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 onTap: () {
                   Navigator.pop(ctx);
                   _momoPay(plan, 'orange');
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.account_balance_wallet),
-                title: Text(t('payWithNotchpay')),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _notchpayPay(plan);
                 },
               ),
             ],
