@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { getSessionUser } = require('../middleware/sessionAuth');
 const momo = require('../utils/momo');
 const orangeMoney = require('../utils/orange_money');
+const notchpay = require('../utils/notchpay');
 // Shared secret for verifying /api/payment/webhook calls (set in env).
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
 
@@ -279,7 +280,7 @@ router.post('/payment/initiate', async (req, res) => {
     const companyId = user.company_id;
     const role = user.role;
 
-    const { amount, customerPhone, paymentMethod, orderId } = req.body;
+    const { amount, customerPhone, paymentMethod, orderId, channel } = req.body;
 
     // ✅ Validate input
     if (!amount || amount <= 0) {
@@ -288,12 +289,15 @@ router.post('/payment/initiate', async (req, res) => {
     if (!customerPhone) {
       return res.status(400).json({ error: 'Customer phone is required' });
     }
-    if (!paymentMethod || !['mtn', 'orange'].includes(paymentMethod)) {
+    if (!paymentMethod || !['mtn', 'orange', 'notchpay'].includes(paymentMethod)) {
       return res.status(400).json({ error: 'Invalid payment method' });
     }
 
-    // ✅ Validate phone number format
-    if (!validatePhoneNumber(customerPhone, paymentMethod)) {
+    // ✅ Validate phone number format (operator-specific methods only)
+    if (
+      (paymentMethod === 'mtn' || paymentMethod === 'orange') &&
+      !validatePhoneNumber(customerPhone, paymentMethod)
+    ) {
       return res.status(400).json({ 
         error: `Invalid ${paymentMethod} phone number. Format: 237XXXXXXXXX` 
       });
@@ -342,6 +346,12 @@ router.post('/payment/initiate', async (req, res) => {
     if (paymentMethod === 'orange' && !company.orange_enabled) {
       return res.status(400).json({ 
         error: 'Orange Money is not enabled' 
+      });
+    }
+
+    if (paymentMethod === 'notchpay' && !notchpay.isConfigured()) {
+      return res.status(503).json({
+        error: 'Notch Pay is not configured on the server'
       });
     }
 
@@ -410,6 +420,32 @@ router.post('/payment/initiate', async (req, res) => {
         auto = true;
       } catch (e) {
         console.error('⚠️ Orange auto payment failed, falling back to manual:', e.message);
+      }
+    }
+
+    // Auto mode: Notch Pay hosted checkout (unified MoMo/OM/card). Uses the
+    // platform-level Notch Pay account; per-company "Sync" routing is a
+    // follow-up. `channel` maps to 'cm.mtn' / 'cm.orange' when provided.
+    if (paymentMethod === 'notchpay') {
+      try {
+        const baseUrl =
+          process.env.APP_BASE_URL || 'https://drink-quick-cal-kja1.onrender.com';
+        const data = await notchpay.initiatePayment({
+          amount,
+          currency: 'XAF',
+          phone: customerPhone,
+          reference: transactionId,
+          channel: channel || undefined,
+          country: channel ? 'CM' : undefined,
+          description: `Order ${orderId || transactionId}`,
+          callback: `${baseUrl}/api/payment/notchpay-return`,
+        });
+        if (data.authorizationUrl) {
+          paymentUrl = data.authorizationUrl;
+          auto = true;
+        }
+      } catch (e) {
+        console.error('⚠️ Notch Pay auto payment failed:', e.message);
       }
     }
 
@@ -524,6 +560,26 @@ router.get('/payment/status/:transactionId', async (req, res) => {
       }
     }
 
+
+    // ✅ Notch Pay auto-verification (hosted checkout → webhook also confirms)
+    if (transaction.status === 'pending' && transaction.payment_method === 'notchpay') {
+      const npStatus = await notchpay.getPaymentStatus(transactionId);
+      if (npStatus === 'completed') {
+        await req.db.query(
+          `UPDATE payment_transactions SET status = 'completed', confirmed_at = NOW() WHERE transaction_id = $1`,
+          [transactionId]
+        );
+        return res.json({ success: true, status: 'completed', confirmedAt: new Date().toISOString() });
+      }
+      if (npStatus === 'failed' || npStatus === 'expired' || npStatus === 'cancelled') {
+        await req.db.query(
+          `UPDATE payment_transactions SET status = 'failed', error_message = 'Payment failed' WHERE transaction_id = $1`,
+          [transactionId]
+        );
+        return res.json({ success: true, status: 'failed', errorMessage: 'Payment failed' });
+      }
+      return res.json({ success: true, status: 'pending' });
+    }
 
     // ✅ Expiry check for pending (non-auto) payments
     if (transaction.status === 'pending') {
@@ -856,6 +912,63 @@ router.post('/payment/orange-webhook', async (req, res) => {
     console.error('Orange webhook error:', error.message);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// ============================================================
+// 🟢 NOTCH PAY webhook + return (company payment confirmation)
+// ============================================================
+router.post('/payment/notchpay-webhook', async (req, res) => {
+  try {
+    const signature = req.headers['x-notch-signature'];
+    if (!notchpay.verifyWebhookSignature(JSON.stringify(req.body), signature)) {
+      console.warn('⚠️ /api/payment/notchpay-webhook: invalid signature');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    const body = req.body || {};
+    const data = body.data || body.transaction || {};
+    const txId =
+      body.reference ||
+      (data && typeof data === 'object' ? data.reference : null) ||
+      (typeof body.transaction === 'string' ? body.transaction : null);
+    if (!txId) {
+      return res.json({ success: false, error: 'Missing reference' });
+    }
+
+    const status = notchpay.normalizeStatus(
+      body.status || (data && data.status) || (data && data.state) || body.event
+    );
+
+    const found = await req.db.query(
+      `SELECT id FROM payment_transactions WHERE transaction_id = $1`,
+      [txId]
+    );
+    if (found.rows.length === 0) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    if (status === 'completed') {
+      await req.db.query(
+        `UPDATE payment_transactions SET status = 'completed', confirmed_at = NOW() WHERE transaction_id = $1`,
+        [txId]
+      );
+      console.log(`✅ Payment ${txId} confirmed via Notch Pay webhook`);
+    } else if (status === 'failed' || status === 'expired' || status === 'cancelled') {
+      await req.db.query(
+        `UPDATE payment_transactions SET status = 'failed', error_message = 'Payment failed' WHERE transaction_id = $1`,
+        [txId]
+      );
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Notch Pay webhook error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/payment/notchpay-return', (req, res) => {
+  res.send('<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Payment Complete</title></head><body style="font-family:system-ui,sans-serif;background:#f7f8fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center;background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,0.08);max-width:420px"><div style="font-size:48px">✅</div><h2 style="margin:16px 0 8px">Payment received</h2><p style="color:#555;margin:0 0 24px">Return to the app to complete your order.</p></div></body></html>');
 });
 
 module.exports = router;

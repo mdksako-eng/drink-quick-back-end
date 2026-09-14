@@ -7,6 +7,7 @@ const { getSessionUser } = require('../middleware/sessionAuth');
 const flutterwave = require('../utils/flutterwave');
 const momo = require('../utils/momo');
 const orangeMoney = require('../utils/orange_money');
+const notchpay = require('../utils/notchpay');
 
 // Plan prices (XAF — Central African CFA franc). Overridable via env.
 const PLAN_PRICES = {
@@ -601,6 +602,162 @@ router.post('/subscriptions/orange-webhook', async (req, res) => {
     console.error('Orange subscription webhook error:', error.message);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// ============================================================
+// 🟢 NOTCH PAY (subscription — unified MoMo/OM/card via one API)
+// Money is paid to YOU (platform). Configured via NOTCHPAY_* env vars.
+// ============================================================
+
+async function activatePendingSubscription(db, reference, companyId) {
+  const pending = await db.query(
+    `SELECT id, plan, company_id FROM subscriptions WHERE reference = $1 AND status = 'pending'`,
+    [reference]
+  );
+  if (pending.rows.length === 0) return null;
+  const sub = pending.rows[0];
+  if (companyId && sub.company_id !== companyId) return null;
+  const now = new Date();
+  const endsAt = new Date(now.getTime() + SUBSCRIPTION_MONTHS * 30 * 24 * 60 * 60 * 1000);
+  await db.query(
+    `UPDATE subscriptions SET status = 'active', starts_at = $1, ends_at = $2 WHERE id = $3`,
+    [now, endsAt, sub.id]
+  );
+  await db.query(
+    `UPDATE companies SET plan = $1, plan_expires_at = $2, subscription_status = 'active' WHERE id = $3`,
+    [sub.plan, endsAt, sub.company_id]
+  );
+  return { plan: sub.plan, expiresAt: endsAt };
+}
+
+router.post('/subscriptions/notchpay-initiate', async (req, res) => {
+  try {
+    const user = await requireSessionUser(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+    if (!user.company_id) return res.status(400).json({ success: false, error: 'No company' });
+
+    const { plan, channel } = req.body || {}; // channel: 'cm.mtn' | 'cm.orange'
+    if (!VALID_PLANS.includes(plan)) return res.status(400).json({ success: false, error: 'Invalid plan' });
+    if (!notchpay.isConfigured()) return res.status(503).json({ success: false, error: 'Notch Pay not configured' });
+
+    const price = PLAN_PRICES[plan];
+    const reference = generateReference(user.company_id);
+    const baseUrl = process.env.APP_BASE_URL || 'http://localhost:3000';
+
+    const data = await notchpay.initiatePayment({
+      amount: price.amount,
+      currency: price.currency,
+      email: user.email || undefined,
+      reference,
+      channel: channel || undefined,
+      country: channel ? 'CM' : undefined,
+      description: `Drink Quick Cal ${plan} subscription`,
+      callback: `${baseUrl}/api/subscriptions/notchpay-return`,
+    });
+
+    await req.db.query(
+      `INSERT INTO subscriptions (company_id, plan, status, provider, reference, transaction_id, amount, currency)
+       VALUES ($1, $2, 'pending', 'notchpay', $3, $4, $5, $6)`,
+      [user.company_id, plan, reference, data.transaction || null, price.amount, price.currency]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        reference,
+        transactionId: data.transaction || null,
+        checkoutUrl: data.authorizationUrl || null,
+        auto: Boolean(data.authorizationUrl),
+        amount: price.amount,
+        currency: price.currency,
+        provider: 'notchpay',
+      },
+    });
+  } catch (error) {
+    console.error('POST /subscriptions/notchpay-initiate error:', error.message);
+    res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+  }
+});
+
+router.get('/subscriptions/notchpay-status', async (req, res) => {
+  try {
+    const user = await requireSessionUser(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+    const { reference } = req.query;
+    if (!reference) return res.status(400).json({ success: false, error: 'reference is required' });
+
+    const pending = await req.db.query(
+      `SELECT status FROM subscriptions WHERE reference = $1 AND company_id = $2 AND status = 'pending'`,
+      [reference, user.company_id]
+    );
+    if (pending.rows.length === 0) return res.status(404).json({ success: false, error: 'Pending subscription not found' });
+
+    const status = await notchpay.getPaymentStatus(reference);
+    if (status === 'completed') {
+      const result = await activatePendingSubscription(req.db, reference, user.company_id);
+      if (result) return res.json({ success: true, data: { active: true, ...result } });
+    }
+    if (status === 'failed' || status === 'expired' || status === 'cancelled') {
+      await req.db.query(
+        `UPDATE subscriptions SET status = 'failed' WHERE reference = $1 AND status = 'pending'`,
+        [reference]
+      );
+      return res.json({ success: true, data: { active: false, status: 'failed' } });
+    }
+    return res.json({ success: true, data: { active: false, status: 'pending' } });
+  } catch (error) {
+    console.error('GET /subscriptions/notchpay-status error:', error.message);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+router.post('/subscriptions/notchpay-webhook', async (req, res) => {
+  try {
+    const signature = req.headers['x-notch-signature'];
+    if (!notchpay.verifyWebhookSignature(JSON.stringify(req.body), signature)) {
+      console.warn('⚠️ Subscription Notch Pay webhook: invalid signature');
+      return res.status(401).json({ success: false, error: 'Invalid signature' });
+    }
+
+    // Notch Pay payloads wrap the transaction; be defensive about shape.
+    // NOTE: field names should be cross-checked against a live webhook sample.
+    const body = req.body || {};
+    const data = body.data || body.transaction || {};
+    const reference =
+      body.reference ||
+      (data && typeof data === 'object' ? data.reference : null) ||
+      (typeof body.transaction === 'string' ? body.transaction : null);
+    if (!reference) {
+      return res.json({ success: true, ignored: true, reason: 'missing reference' });
+    }
+
+    const status = notchpay.normalizeStatus(
+      body.status || (data && data.status) || (data && data.state) || body.event
+    );
+
+    if (status === 'completed') {
+      const result = await activatePendingSubscription(req.db, reference);
+      if (result) {
+        console.log(`✅ Notch Pay subscription activated (${result.plan})`);
+        return res.json({ success: true });
+      }
+      return res.json({ success: true, ignored: true, reason: 'no pending subscription' });
+    }
+    if (status === 'failed' || status === 'expired' || status === 'cancelled') {
+      await req.db.query(
+        `UPDATE subscriptions SET status = 'failed' WHERE reference = $1 AND status = 'pending'`,
+        [reference]
+      );
+    }
+    return res.json({ success: true, ignored: true });
+  } catch (error) {
+    console.error('POST /subscriptions/notchpay-webhook error:', error.message);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+router.get('/subscriptions/notchpay-return', (req, res) => {
+  res.send('<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Payment Complete</title></head><body style="font-family:system-ui,sans-serif;background:#f7f8fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center;background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,0.08);max-width:420px"><div style="font-size:48px">✅</div><h2 style="margin:16px 0 8px">Payment received</h2><p style="color:#555;margin:0 0 24px">Your subscription is being activated. Return to the app and tap Refresh.</p></div></body></html>');
 });
 
 module.exports = router;
