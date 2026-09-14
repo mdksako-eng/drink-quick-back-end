@@ -96,7 +96,11 @@ router.get('/company-settings', async (req, res) => {
         orange_api_key,
         orange_secret_key,
         orange_merchant_id,
-        orange_sandbox_mode
+        orange_sandbox_mode,
+        notchpay_public_key,
+        notchpay_private_key,
+        notchpay_sync_id,
+        notchpay_webhook_hash
       FROM companies WHERE id = $1`,
       [companyId]
     );
@@ -131,6 +135,11 @@ router.get('/company-settings', async (req, res) => {
       response.orangeMerchantId = company.orange_merchant_id || '';
       response.orangeSandboxMode = company.orange_sandbox_mode || true;
       response.orangeConfigured = Boolean(company.orange_api_key && company.orange_secret_key && company.orange_merchant_id);
+      response.notchpayPublicKey = company.notchpay_public_key ? MASKED : '';
+      response.notchpayPrivateKey = company.notchpay_private_key ? MASKED : '';
+      response.notchpaySyncId = company.notchpay_sync_id || '';
+      response.notchpayWebhookHash = company.notchpay_webhook_hash ? MASKED : '';
+      response.notchpayConfigured = Boolean(company.notchpay_sync_id || (company.notchpay_public_key && company.notchpay_private_key));
       response.isManager = true;
     } else {
       response.isManager = false;
@@ -142,6 +151,10 @@ router.get('/company-settings', async (req, res) => {
       response.orangeApiKey = '••••••••••';
       response.orangeSecretKey = '••••••••••';
       response.orangeMerchantId = '••••••••••';
+      response.notchpayPublicKey = '••••••••••';
+      response.notchpayPrivateKey = '••••••••••';
+      response.notchpaySyncId = '••••••••••';
+      response.notchpayWebhookHash = '••••••••••';
     }
 
     res.json({
@@ -191,6 +204,10 @@ router.patch('/company-settings', async (req, res) => {
       orangeSecretKey,
       orangeMerchantId,
       orangeSandboxMode,
+      notchpayPublicKey,
+      notchpayPrivateKey,
+      notchpaySyncId,
+      notchpayWebhookHash,
     } = req.body;
 
     // ✅ Build update query
@@ -236,6 +253,18 @@ router.patch('/company-settings', async (req, res) => {
     }
     if (orangeSandboxMode !== undefined) {
       updates.orange_sandbox_mode = orangeSandboxMode;
+    }
+    if (notchpayPublicKey !== undefined && !isMaskedOrEmpty(notchpayPublicKey)) {
+      updates.notchpay_public_key = notchpayPublicKey;
+    }
+    if (notchpayPrivateKey !== undefined && !isMaskedOrEmpty(notchpayPrivateKey)) {
+      updates.notchpay_private_key = notchpayPrivateKey;
+    }
+    if (notchpaySyncId !== undefined) {
+      updates.notchpay_sync_id = notchpaySyncId;
+    }
+    if (notchpayWebhookHash !== undefined && !isMaskedOrEmpty(notchpayWebhookHash)) {
+      updates.notchpay_webhook_hash = notchpayWebhookHash;
     }
     
     updates.updated_at = new Date();
@@ -319,7 +348,10 @@ router.post('/payment/initiate', async (req, res) => {
         orange_api_key,
         orange_secret_key,
         orange_merchant_id,
-        orange_sandbox_mode
+        orange_sandbox_mode,
+        notchpay_public_key,
+        notchpay_private_key,
+        notchpay_sync_id
       FROM companies WHERE id = $1`,
       [companyId]
     );
@@ -329,6 +361,10 @@ router.post('/payment/initiate', async (req, res) => {
     }
 
     const company = result.rows[0];
+    const companyHasNotchpay = Boolean(
+      company.notchpay_sync_id ||
+        (company.notchpay_public_key && company.notchpay_private_key)
+    );
 
     // ✅ Check if business payments are enabled
     if (!company.business_payments_enabled) {
@@ -356,13 +392,13 @@ router.post('/payment/initiate', async (req, res) => {
     }
 
     // ✅ Check if merchant has credentials
-    if (paymentMethod === 'mtn') {
+    if (paymentMethod === 'mtn' && !companyHasNotchpay) {
       if (!company.mtn_api_key || !company.mtn_secret_key || !company.mtn_merchant_id) {
         return res.status(400).json({ 
           error: 'MTN merchant is not fully configured. Please contact your manager.' 
         });
       }
-    } else if (paymentMethod === 'orange') {
+    } else if (paymentMethod === 'orange' && !companyHasNotchpay) {
       if (!company.orange_api_key || !company.orange_secret_key || !company.orange_merchant_id) {
         return res.status(400).json({ 
           error: 'Orange merchant is not fully configured. Please contact your manager.' 
@@ -378,7 +414,36 @@ router.post('/payment/initiate', async (req, res) => {
     // the manual flow so the order can still be recorded.
     let auto = false;
     let paymentUrl = null;
-    if (paymentMethod === 'mtn' && momo.isConfigured(company)) {
+
+    // ✅ Prefer Notch Pay (single API) for mobile money when this company has
+    // its own Notch Pay keys or Sync account — money routes to the company.
+    if ((paymentMethod === 'mtn' || paymentMethod === 'orange') && companyHasNotchpay) {
+      try {
+        const baseUrl =
+          process.env.APP_BASE_URL || 'https://drink-quick-cal-kja1.onrender.com';
+        const data = await notchpay.initiatePayment({
+          amount,
+          currency: 'XAF',
+          phone: customerPhone,
+          reference: transactionId,
+          channel: paymentMethod === 'mtn' ? 'cm.mtn' : 'cm.orange',
+          country: 'CM',
+          description: `Order ${orderId || transactionId}`,
+          callback: `${baseUrl}/api/payment/notchpay-return`,
+          publicKey: company.notchpay_public_key || undefined,
+          privateKey: company.notchpay_private_key || undefined,
+          syncId: company.notchpay_sync_id || undefined,
+        });
+        if (data.authorizationUrl) {
+          paymentUrl = data.authorizationUrl;
+          auto = true;
+        }
+      } catch (e) {
+        console.error('⚠️ Notch Pay auto payment failed, falling back:', e.message);
+      }
+    }
+
+    if (paymentMethod === 'mtn' && momo.isConfigured(company) && !auto) {
       try {
         await momo.requestToPay({
           apiUser: company.mtn_merchant_id,
@@ -397,7 +462,7 @@ router.post('/payment/initiate', async (req, res) => {
     }
 
     // Auto mode: Orange Money web payment (redirect to Orange-hosted page).
-    if (paymentMethod === 'orange' && orangeMoney.isConfigured(company)) {
+    if (paymentMethod === 'orange' && orangeMoney.isConfigured(company) && !auto) {
       try {
         const token = await orangeMoney.getAccessToken({
           clientId: company.orange_api_key,
@@ -561,9 +626,27 @@ router.get('/payment/status/:transactionId', async (req, res) => {
     }
 
 
-    // ✅ Notch Pay auto-verification (hosted checkout → webhook also confirms)
-    if (transaction.status === 'pending' && transaction.payment_method === 'notchpay') {
-      const npStatus = await notchpay.getPaymentStatus(transactionId);
+    // ✅ Notch Pay auto-verification (covers mtn/orange routed via Notch Pay,
+    // plus the explicit 'notchpay' method).
+    let useNotchpayVerify = transaction.payment_method === 'notchpay';
+    let notchpayPublicKey;
+    if (transaction.payment_method === 'mtn' || transaction.payment_method === 'orange') {
+      const nc = await req.db.query(
+        `SELECT notchpay_public_key, notchpay_private_key, notchpay_sync_id
+         FROM companies WHERE id = $1`,
+        [companyId]
+      );
+      const row = nc.rows[0];
+      useNotchpayVerify = Boolean(
+        row && (row.notchpay_sync_id || (row.notchpay_public_key && row.notchpay_private_key))
+      );
+      notchpayPublicKey = row ? row.notchpay_public_key || undefined : undefined;
+    }
+
+    if (transaction.status === 'pending' && useNotchpayVerify) {
+      const npStatus = await notchpay.getPaymentStatus(transactionId, {
+        publicKey: notchpayPublicKey,
+      });
       if (npStatus === 'completed') {
         await req.db.query(
           `UPDATE payment_transactions SET status = 'completed', confirmed_at = NOW() WHERE transaction_id = $1`,
@@ -920,10 +1003,7 @@ router.post('/payment/orange-webhook', async (req, res) => {
 router.post('/payment/notchpay-webhook', async (req, res) => {
   try {
     const signature = req.headers['x-notch-signature'];
-    if (!notchpay.verifyWebhookSignature(JSON.stringify(req.body), signature)) {
-      console.warn('⚠️ /api/payment/notchpay-webhook: invalid signature');
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
+    const rawBody = JSON.stringify(req.body);
 
     const body = req.body || {};
     const data = body.data || body.transaction || {};
@@ -935,17 +1015,33 @@ router.post('/payment/notchpay-webhook', async (req, res) => {
       return res.json({ success: false, error: 'Missing reference' });
     }
 
-    const status = notchpay.normalizeStatus(
-      body.status || (data && data.status) || (data && data.state) || body.event
-    );
-
+    // Resolve the company so we can verify with its own webhook hash.
     const found = await req.db.query(
-      `SELECT id FROM payment_transactions WHERE transaction_id = $1`,
+      `SELECT company_id FROM payment_transactions WHERE transaction_id = $1`,
       [txId]
     );
     if (found.rows.length === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
+    const companyResult = await req.db.query(
+      `SELECT notchpay_webhook_hash FROM companies WHERE id = $1`,
+      [found.rows[0].company_id]
+    );
+    const companyHash =
+      companyResult.rows[0] && companyResult.rows[0].notchpay_webhook_hash;
+
+    // Verify against the platform secret and/or the company's own hash.
+    const verified =
+      notchpay.verifyWebhookSignature(rawBody, signature) ||
+      (companyHash && notchpay.verifyWebhookSignature(rawBody, signature, companyHash));
+    if (!verified) {
+      console.warn('⚠️ /api/payment/notchpay-webhook: invalid signature');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    const status = notchpay.normalizeStatus(
+      body.status || (data && data.status) || (data && data.state) || body.event
+    );
 
     if (status === 'completed') {
       await req.db.query(

@@ -36,6 +36,9 @@ async function initiatePayment({
   country,
   description,
   callback,
+  publicKey,
+  privateKey,
+  syncId,
 }) {
   const body = {
     amount: Number(amount),
@@ -51,9 +54,10 @@ async function initiatePayment({
 
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: PUBLIC_KEY,
+    Authorization: publicKey || PUBLIC_KEY,
   };
-  if (PRIVATE_KEY) headers['X-Grant'] = PRIVATE_KEY;
+  if (privateKey || PRIVATE_KEY) headers['X-Grant'] = privateKey || PRIVATE_KEY;
+  if (syncId) headers['X-Sync'] = syncId;
 
   const response = await fetch(`${NOTCHPAY_BASE_URL}/payments`, {
     method: 'POST',
@@ -80,12 +84,12 @@ async function initiatePayment({
  * if it cannot be determined (e.g. unexpected payload shape).
  * @returns {'completed'|'pending'|'failed'|'expired'|'cancelled'|null}
  */
-async function getPaymentStatus(reference) {
+async function getPaymentStatus(reference, { publicKey } = {}) {
   const response = await fetch(
     `${NOTCHPAY_BASE_URL}/payments/${encodeURIComponent(reference)}`,
     {
       method: 'GET',
-      headers: { Authorization: PUBLIC_KEY },
+      headers: { Authorization: publicKey || PUBLIC_KEY },
     }
   );
   if (!response.ok) return null;
@@ -129,10 +133,11 @@ function normalizeStatus(status) {
  * Verify a Notch Pay webhook signature (HMAC-SHA256 of the raw JSON body,
  * signed with the dashboard's webhook hash key; sent in `x-notch-signature`).
  */
-function verifyWebhookSignature(rawBody, signatureHeader) {
-  if (!WEBHOOK_SECRET || !signatureHeader) return false;
+function verifyWebhookSignature(rawBody, signatureHeader, hash) {
+  const secret = hash || WEBHOOK_SECRET;
+  if (!secret || !signatureHeader) return false;
   const expected = crypto
-    .createHmac('sha256', WEBHOOK_SECRET)
+    .createHmac('sha256', secret)
     .update(rawBody)
     .digest('hex');
   try {

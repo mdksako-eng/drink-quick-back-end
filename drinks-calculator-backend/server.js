@@ -145,6 +145,18 @@ app.use(async (req, res, next) => {
         console.log('⚠️ Subscription columns warning:', subColErr.message);
       }
 
+      // 🟢 NOTCH PAY — per-company credentials so B2C money goes to the
+      // company's own Notch Pay account (direct keys or Sync account id).
+      try {
+        await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS notchpay_public_key TEXT`);
+        await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS notchpay_private_key TEXT`);
+        await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS notchpay_sync_id TEXT`);
+        await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS notchpay_webhook_hash TEXT`);
+        console.log('✅ Company Notch Pay columns ensured');
+      } catch (notchColErr) {
+        console.log('⚠️ Notch Pay columns warning:', notchColErr.message);
+      }
+
       try {
         await pool.query(`
           CREATE TABLE IF NOT EXISTS subscriptions (
