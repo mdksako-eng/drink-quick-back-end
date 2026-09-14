@@ -3320,7 +3320,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   if (_orangeEnabled)
                     _buildPaymentMethodOption(
                       icon: Icons.phone_android,
-                      label: 'Orange',
+                      label: 'Orange Money',
                       isSelected:
                           _selectedPaymentMethod == PaymentMethod.orangeMoney,
                       color: const Color(0xFFFF6600),

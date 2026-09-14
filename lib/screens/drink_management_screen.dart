@@ -12,6 +12,7 @@ import 'package:drinks_calculator_fixed/models/inventory_model.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import '../utils/i18n.dart';
+import 'barcode_scan_page.dart';
 
 class DrinkManagementScreen extends StatefulWidget {
   const DrinkManagementScreen({Key? key}) : super(key: key);
@@ -1213,6 +1214,16 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     );
   }
 
+  Future<void> _scanBarcode() async {
+    final value = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const BarcodeScanPage()),
+    );
+    if (value != null && value.isNotEmpty && mounted) {
+      _barcodeController.text = value;
+      setState(() {});
+    }
+  }
+
   Widget _buildBarcodeField(
       bool isMobile, Color primaryColor, ThemeData theme) {
     return TextFormField(
@@ -1227,7 +1238,11 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: primaryColor, width: 2)),
-        prefixIcon: Icon(Icons.qr_code, color: primaryColor),
+        prefixIcon: IconButton(
+          tooltip: t('scanTitle'),
+          icon: Icon(Icons.qr_code_scanner, color: primaryColor),
+          onPressed: _scanBarcode,
+        ),
         filled: true,
         fillColor: theme.cardColor,
         contentPadding:
