@@ -56,6 +56,9 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
   String? _sellingPriceError;
   bool _showProfitPreview = false;
 
+  // Prevent duplicate submits while a save is in flight
+  bool _isSaving = false;
+
   @override
   void initState() {
     super.initState();
@@ -313,39 +316,60 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
       unitsPerPack: int.tryParse(_unitsPerPackController.text) ?? 1,
     );
 
-    if (_editingDrinkId != null) {
-      // ✅ Update drink
-      await drinkProvider.updateDrink(_editingDrinkId!, drink);
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
 
-      // ✅ Find existing inventory item
-      final existingItem = inventoryProvider.inventoryItems
-          .where((item) => item.drinkId == _editingDrinkId)
-          .firstOrNull;
+    try {
+      if (_editingDrinkId != null) {
+        // ✅ Update drink
+        await drinkProvider.updateDrink(_editingDrinkId!, drink);
 
-      if (existingItem != null) {
-        // ✅ Update existing inventory item
-        existingItem.quantity = newStock;
-        existingItem.minStockLevel = drink.minimumLevel;
-        existingItem.category = drink.category;
-        existingItem.unit = drink.unit;
-        existingItem.purchasePrice = drink.purchasePrice;
-        existingItem.drinkName = drink.name;
-        existingItem.lastRestocked = DateTime.now();
+        // ✅ Find existing inventory item
+        final existingItem = inventoryProvider.inventoryItems
+            .where((item) => item.drinkId == _editingDrinkId)
+            .firstOrNull;
 
-        // ✅ Force refresh and save
-        inventoryProvider.refreshInventory();
-        await inventoryProvider.saveInventoryToStorage();
+        if (existingItem != null) {
+          // ✅ Update existing inventory item
+          existingItem.quantity = newStock;
+          existingItem.minStockLevel = drink.minimumLevel;
+          existingItem.category = drink.category;
+          existingItem.unit = drink.unit;
+          existingItem.purchasePrice = drink.purchasePrice;
+          existingItem.drinkName = drink.name;
+          existingItem.lastRestocked = DateTime.now();
 
-        // ✅ Sync to Supabase (THIS IS THE KEY FIX)
-        final success =
-            await SupabaseService.upsertInventory(existingItem.toJson());
-        debugPrint(
-            '✅ Inventory updated in Supabase: ${drink.name} stock = $newStock, success: $success');
+          // ✅ Force refresh and save
+          inventoryProvider.refreshInventory();
+          await inventoryProvider.saveInventoryToStorage();
 
-        // ✅ Also sync the drink to Supabase
-        await SupabaseService.updateDrink(_editingDrinkId!, drink.toJson());
+          // ✅ Sync inventory to Supabase
+          final success =
+              await SupabaseService.upsertInventory(existingItem.toJson());
+          debugPrint(
+              '✅ Inventory updated in Supabase: ${drink.name} stock = $newStock, success: $success');
+        } else {
+          // ✅ Create new inventory item
+          await inventoryProvider.addInventoryItem(InventoryItem(
+            id: 'inv_${DateTime.now().millisecondsSinceEpoch}',
+            drinkId: drink.id,
+            drinkName: drink.name,
+            quantity: newStock,
+            minStockLevel: drink.minimumLevel,
+            lastRestocked: DateTime.now(),
+            category: drink.category,
+            unit: drink.unit,
+            purchasePrice: drink.purchasePrice,
+          ));
+          debugPrint('✅ New inventory item created: ${drink.name}');
+        }
+
+        Helpers.showToast('${drink.name} ${t('dm_updated')}');
       } else {
-        // ✅ Create new inventory item
+        // ✅ Add new drink
+        await drinkProvider.addDrink(drink);
+
+        // ✅ Add inventory item
         await inventoryProvider.addInventoryItem(InventoryItem(
           id: 'inv_${DateTime.now().millisecondsSinceEpoch}',
           drinkId: drink.id,
@@ -357,32 +381,15 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
           unit: drink.unit,
           purchasePrice: drink.purchasePrice,
         ));
-        debugPrint('✅ New inventory item created: ${drink.name}');
+
+        Helpers.showToast('${drink.name} ${t('dm_added')}');
       }
 
-      Helpers.showToast('${drink.name} ${t('dm_updated')}');
-    } else {
-      // ✅ Add new drink
-      await drinkProvider.addDrink(drink);
-
-      // ✅ Add inventory item
-      await inventoryProvider.addInventoryItem(InventoryItem(
-        id: 'inv_${DateTime.now().millisecondsSinceEpoch}',
-        drinkId: drink.id,
-        drinkName: drink.name,
-        quantity: newStock,
-        minStockLevel: drink.minimumLevel,
-        lastRestocked: DateTime.now(),
-        category: drink.category,
-        unit: drink.unit,
-        purchasePrice: drink.purchasePrice,
-      ));
-
-      Helpers.showToast('${drink.name} ${t('dm_added')}');
+      _clearForm();
+      setState(() {});
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
-
-    _clearForm();
-    setState(() {});
   }
 
   void _toggleSort(String field) {
@@ -1291,19 +1298,29 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
               elevation: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(_editingDrinkId != null ? Icons.save : Icons.add,
-                  size: 22, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(_editingDrinkId != null ? t('dm_updateDrink') : t('dm_addDrink'),
-                  style: TextStyle(
-                      fontSize: isMobile ? 15 : 17,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white)),
-            ],
-          ),
+          child: _isSaving
+              ? const SizedBox(
+                  height: 22,
+                  width: 22,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2.5, color: Colors.white),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(_editingDrinkId != null ? Icons.save : Icons.add,
+                        size: 22, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                        _editingDrinkId != null
+                            ? t('dm_updateDrink')
+                            : t('dm_addDrink'),
+                        style: TextStyle(
+                            fontSize: isMobile ? 15 : 17,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                  ],
+                ),
         ),
         const SizedBox(height: 12),
         OutlinedButton(
@@ -1342,19 +1359,29 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
                 elevation: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(_editingDrinkId != null ? Icons.save : Icons.add,
-                    size: 24, color: Colors.white),
-                const SizedBox(width: 12),
-                Text(_editingDrinkId != null ? t('dm_updateDrink') : t('dm_addDrink'),
-                    style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white)),
-              ],
-            ),
+            child: _isSaving
+                ? const SizedBox(
+                    height: 24,
+                    width: 24,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.5, color: Colors.white),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(_editingDrinkId != null ? Icons.save : Icons.add,
+                          size: 24, color: Colors.white),
+                      const SizedBox(width: 12),
+                      Text(
+                          _editingDrinkId != null
+                              ? t('dm_updateDrink')
+                              : t('dm_addDrink'),
+                          style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                    ],
+                  ),
           ),
         ),
         const SizedBox(width: 16),
