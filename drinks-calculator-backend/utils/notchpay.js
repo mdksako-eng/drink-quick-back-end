@@ -84,12 +84,14 @@ async function initiatePayment({
  * if it cannot be determined (e.g. unexpected payload shape).
  * @returns {'completed'|'pending'|'failed'|'expired'|'cancelled'|null}
  */
-async function getPaymentStatus(reference, { publicKey } = {}) {
+async function getPaymentStatus(reference, { publicKey, syncId } = {}) {
+  const headers = { Authorization: publicKey || PUBLIC_KEY };
+  if (syncId) headers['X-Sync'] = syncId;
   const response = await fetch(
     `${NOTCHPAY_BASE_URL}/payments/${encodeURIComponent(reference)}`,
     {
       method: 'GET',
-      headers: { Authorization: publicKey || PUBLIC_KEY },
+      headers,
     }
   );
   if (!response.ok) return null;

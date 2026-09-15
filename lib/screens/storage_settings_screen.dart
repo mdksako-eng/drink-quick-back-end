@@ -65,6 +65,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
   String _orangeMerchantPhone = '';
   bool _orangeSandboxMode = true;
   bool _cardEnabled = false;
+  String _notchpaySyncId = '';
 
   // User-specific settings
   bool _autoSync = false;
@@ -101,6 +102,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
   final TextEditingController _orangeMerchantIdController =
       TextEditingController();
   final TextEditingController _orangeMerchantPhoneController =
+      TextEditingController();
+  final TextEditingController _notchpaySyncIdController =
       TextEditingController();
 
   // Country selection variables
@@ -167,6 +170,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     _orangeSecretKeyController.dispose();
     _orangeMerchantIdController.dispose();
     _orangeMerchantPhoneController.dispose();
+    _notchpaySyncIdController.dispose();
     super.dispose();
   }
 
@@ -228,6 +232,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               _orangeApiKey = paymentSettings['orangeApiKey'] ?? '';
               _orangeSecretKey = paymentSettings['orangeSecretKey'] ?? '';
               _cardEnabled = paymentSettings['cardEnabled'] ?? false;
+              _notchpaySyncId = paymentSettings['notchpaySyncId'] ?? '';
             }
           } catch (e) {
             debugPrint('❌ Error loading payment settings from backend: $e');
@@ -341,6 +346,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     _orangeSecretKeyController.text = _orangeSecretKey;
     _orangeMerchantIdController.text = _orangeMerchantId;
     _orangeMerchantPhoneController.text = _orangeMerchantPhone;
+    _notchpaySyncIdController.text = _notchpaySyncId;
 
     setState(() {
       _hasUnsavedChanges = false;
@@ -475,6 +481,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             'orangeMerchantId': _orangeMerchantId,
             'orangeSandboxMode': _orangeSandboxMode,
             'cardEnabled': _cardEnabled,
+            'notchpaySyncId': _notchpaySyncId,
           };
           final secretsSaved =
               await PaymentService.updateCompanyPaymentSettings(paymentSecrets);
@@ -2487,6 +2494,28 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                               : null,
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _notchpaySyncIdController,
+                      decoration: InputDecoration(
+                        labelText: 'Notch Pay Sync Account ID',
+                        hintText:
+                            "Connects this company's Notch Pay account (money goes to them)",
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        prefixIcon:
+                            Icon(Icons.link, color: primaryColorValue),
+                      ),
+                      onChanged: isManager
+                          ? (value) {
+                              setState(() {
+                                _notchpaySyncId = value;
+                                _markUnsaved();
+                              });
+                            }
+                          : null,
                     ),
                     if (_orangeEnabled) ...[
                       const SizedBox(height: 12),

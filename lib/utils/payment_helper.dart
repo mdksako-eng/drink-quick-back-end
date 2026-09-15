@@ -21,6 +21,7 @@ class PaymentHelper extends ChangeNotifier {
   String _orangeMerchantPhone = '';
   bool _mtnSandboxMode = true;
   bool _orangeSandboxMode = true;
+  String _notchpaySyncId = '';
   
   // ✅ Track if settings are from company
   bool _isCompanySettings = false;
@@ -40,6 +41,8 @@ class PaymentHelper extends ChangeNotifier {
   String get orangeMerchantPhone => _orangeMerchantPhone;
   bool get mtnSandboxMode => _mtnSandboxMode;
   bool get orangeSandboxMode => _orangeSandboxMode;
+  String get notchpaySyncId => _notchpaySyncId;
+  bool get notchpayConfigured => _notchpaySyncId.isNotEmpty;
   bool get isCompanySettings => _isCompanySettings;
   String? get companyName => _companyName;
   bool get isLoading => _isLoading;
@@ -80,6 +83,7 @@ class PaymentHelper extends ChangeNotifier {
         _orangeMerchantPhone = company['orangeMerchantPhone'] ?? '';
         _mtnSandboxMode = company['mtnSandboxMode'] ?? true;
         _orangeSandboxMode = company['orangeSandboxMode'] ?? true;
+        _notchpaySyncId = company['notchpaySyncId'] ?? '';
         // 🔐 API keys / secret keys are never returned by the backend and never held in the app.
 
         // ✅ Save non-secret values to local cache

@@ -97,7 +97,8 @@ router.get('/company-settings', async (req, res) => {
         orange_api_key,
         orange_secret_key,
         orange_merchant_id,
-        orange_sandbox_mode
+        orange_sandbox_mode,
+        notchpay_sync_id
       FROM companies WHERE id = $1`,
       [companyId]
     );
@@ -133,6 +134,8 @@ router.get('/company-settings', async (req, res) => {
       response.orangeMerchantId = company.orange_merchant_id || '';
       response.orangeSandboxMode = company.orange_sandbox_mode || true;
       response.orangeConfigured = Boolean(company.orange_api_key && company.orange_secret_key && company.orange_merchant_id);
+      response.notchpaySyncId = company.notchpay_sync_id || '';
+      response.notchpayConfigured = Boolean(company.notchpay_sync_id);
       response.isManager = true;
     } else {
       response.isManager = false;
@@ -194,6 +197,7 @@ router.patch('/company-settings', async (req, res) => {
       orangeMerchantId,
       orangeSandboxMode,
       cardEnabled,
+      notchpaySyncId,
     } = req.body;
 
     // ✅ Build update query
@@ -242,6 +246,9 @@ router.patch('/company-settings', async (req, res) => {
     }
     if (cardEnabled !== undefined) {
       updates.card_enabled = cardEnabled;
+    }
+    if (notchpaySyncId !== undefined) {
+      updates.notchpay_sync_id = notchpaySyncId;
     }
     
     updates.updated_at = new Date();
@@ -326,7 +333,8 @@ router.post('/payment/initiate', async (req, res) => {
         orange_api_key,
         orange_secret_key,
         orange_merchant_id,
-        orange_sandbox_mode
+        orange_sandbox_mode,
+        notchpay_sync_id
       FROM companies WHERE id = $1`,
       [companyId]
     );
@@ -362,6 +370,12 @@ router.post('/payment/initiate', async (req, res) => {
       });
     }
 
+    if (paymentMethod === 'card' && !company.notchpay_sync_id) {
+      return res.status(400).json({
+        error: 'Card payments require a connected Notch Pay account'
+      });
+    }
+
     // ✅ Check if merchant has credentials
     if (paymentMethod === 'mtn' && !notchpay.isConfigured()) {
       if (!company.mtn_api_key || !company.mtn_secret_key || !company.mtn_merchant_id) {
@@ -386,9 +400,8 @@ router.post('/payment/initiate', async (req, res) => {
     let auto = false;
     let paymentUrl = null;
 
-    // ✅ Notch Pay (single API) handles card + mobile money. The channel follows
-    // the method: MTN → cm.mtn, Orange → cm.orange, card → no lock.
-    if (notchpay.isConfigured()) {
+    // ✅ Notch Pay Sync: money routes to the COMPANY's connected account.
+    if (notchpay.isConfigured() && company.notchpay_sync_id) {
       try {
         const baseUrl =
           process.env.APP_BASE_URL || 'https://drink-quick-cal-kja1.onrender.com';
@@ -405,6 +418,7 @@ router.post('/payment/initiate', async (req, res) => {
           country: channel ? 'CM' : undefined,
           description: `Order ${orderId || transactionId}`,
           callback: `${baseUrl}/api/payment/notchpay-return`,
+          syncId: company.notchpay_sync_id,
         });
         if (data.authorizationUrl) {
           paymentUrl = data.authorizationUrl;
@@ -572,13 +586,21 @@ router.get('/payment/status/:transactionId', async (req, res) => {
     }
 
 
-    // ✅ Notch Pay auto-verification (card + mtn/orange).
+    // ✅ Notch Pay Sync auto-verification (card + mtn/orange).
+    const syncResult = await req.db.query(
+      `SELECT notchpay_sync_id FROM companies WHERE id = $1`,
+      [companyId]
+    );
+    const companySyncId =
+      syncResult.rows[0] && syncResult.rows[0].notchpay_sync_id;
     if (
       transaction.status === 'pending' &&
-      ['mtn', 'orange', 'card'].includes(transaction.payment_method) &&
-      notchpay.isConfigured()
+      companySyncId &&
+      ['mtn', 'orange', 'card'].includes(transaction.payment_method)
     ) {
-      const npStatus = await notchpay.getPaymentStatus(transactionId);
+      const npStatus = await notchpay.getPaymentStatus(transactionId, {
+        syncId: companySyncId,
+      });
       if (npStatus === 'completed') {
         await req.db.query(
           `UPDATE payment_transactions SET status = 'completed', confirmed_at = NOW() WHERE transaction_id = $1`,
