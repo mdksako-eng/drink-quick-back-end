@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
+import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/models/inventory_model.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
 import 'package:drinks_calculator_fixed/utils/helpers.dart';
@@ -445,6 +446,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
             IconButton(
               icon: const Icon(Icons.assessment),
               onPressed: () {
+                final plan = context.read<PlanProvider>();
+                if (!plan.canAccess('reports')) {
+                  Helpers.showToast(t('upgradeRequired'), isError: true);
+                  return;
+                }
                 Navigator.push(
                   context,
                   MaterialPageRoute(

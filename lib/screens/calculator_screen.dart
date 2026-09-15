@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/providers/order_provider.dart';
+import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/models/drink_model.dart';
 import 'package:drinks_calculator_fixed/utils/helpers.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
@@ -1793,6 +1794,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 icon: const Icon(Icons.notifications,
                     color: Colors.white, size: 20),
                 onPressed: () {
+                  final plan = context.read<PlanProvider>();
+                  if (!plan.canAccess('inbox')) {
+                    Helpers.showToast(t('upgradeRequired'), isError: true);
+                    return;
+                  }
                   Navigator.push(
                     context,
                     MaterialPageRoute(
