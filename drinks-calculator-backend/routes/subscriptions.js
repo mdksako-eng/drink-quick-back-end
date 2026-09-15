@@ -764,6 +764,7 @@ router.get('/subscriptions/notchpay/health', (req, res) => {
   res.json({
     success: true,
     notchpayConfigured: notchpay.isConfigured(),
+    ...notchpay.status(),
   });
 });
 

@@ -20,6 +20,14 @@ function isConfigured() {
   return Boolean(PUBLIC_KEY);
 }
 
+function status() {
+  return {
+    publicKeySet: Boolean(PUBLIC_KEY),
+    privateKeySet: Boolean(PRIVATE_KEY),
+    webhookSecretSet: Boolean(WEBHOOK_SECRET),
+  };
+}
+
 /**
  * Initialize a payment. Notch Pay returns a hosted checkout URL; optionally
  * lock it to a single channel/country so the customer skips method selection.
@@ -154,6 +162,7 @@ function verifyWebhookSignature(rawBody, signatureHeader, hash) {
 
 module.exports = {
   isConfigured,
+  status,
   initiatePayment,
   getPaymentStatus,
   normalizeStatus,
