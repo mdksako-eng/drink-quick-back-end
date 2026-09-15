@@ -2126,10 +2126,23 @@ app.post('/api/ai/chat', requireSession(pool), requirePlan(['pro']), async (req,
       return res.status(500).json({ success: false, error: 'AI service not configured' });
     }
 
+    // ✅ Role-aware help guide: adapt the assistant to the user's role & scope.
+    const role = String(req.user.role || 'Customer').toLowerCase();
+    let scope;
+    if (role === 'administrator' || role === 'admin') {
+      scope = 'Administrator — full access: billing & subscriptions, all companies and users, settings, inventory, reports, analytics, forecasting and staff management.';
+    } else if (role === 'manager') {
+      scope = 'Manager of one company — help with drinks, inventory, staff, orders, reports, analytics and company settings. Do NOT help with company billing/subscription or other companies; refer those to the Administrator.';
+    } else if (role === 'staff') {
+      scope = 'Staff — help with taking orders, checking drink stock and completing sales. For settings, reports, analytics or management tasks, refer the user to their Manager.';
+    } else {
+      scope = 'Customer — help with browsing drinks and placing orders. For anything else, refer the user to staff or the manager.';
+    }
+
     const messages = [
       {
         role: 'system',
-        content: 'You are a helpful drink ordering assistant for "Drink Quick Cal". Be concise, friendly, and helpful. Keep responses under 150 words.',
+        content: `You are the help guide for "Drink Quick Cal". Be friendly, concise and practical; keep answers under 150 words. ${scope} Never reveal data or give instructions outside the user's role.`,
       },
       ...(Array.isArray(history) ? history : []),
       { role: 'user', content: prompt },
