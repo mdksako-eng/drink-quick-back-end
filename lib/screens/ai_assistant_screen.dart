@@ -2,6 +2,8 @@
 import 'dart:convert';
 import '../utils/i18n.dart';
 import 'package:flutter/material.dart';
+import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
+import '../widgets/upgrade_required.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:provider/provider.dart';
@@ -645,6 +647,9 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
 
   @override
   Widget build(BuildContext context) {
+    if (!context.read<PlanProvider>().canAccess('ai')) {
+      return const UpgradeRequiredView();
+    }
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;

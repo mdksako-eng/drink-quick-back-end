@@ -1,5 +1,7 @@
 // screens/manager_panel.dart
 import 'package:flutter/material.dart';
+import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
+import '../widgets/upgrade_required.dart';
 import '../utils/i18n.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
@@ -475,6 +477,9 @@ class _ManagerPanelState extends State<ManagerPanel>
 
   @override
   Widget build(BuildContext context) {
+    if (!context.read<PlanProvider>().canAccess('staff')) {
+      return const UpgradeRequiredView();
+    }
     final authProvider = Provider.of<AuthProvider>(context);
     final isManager = authProvider.user?.role.toLowerCase() == 'manager';
 

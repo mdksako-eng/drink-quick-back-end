@@ -2,6 +2,8 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
+import '../widgets/upgrade_required.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -63,6 +65,9 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    if (!context.read<PlanProvider>().canAccess('analytics')) {
+      return const UpgradeRequiredView();
+    }
     final s = _snapshot;
     final primary = Theme.of(context).primaryColor;
     return Scaffold(

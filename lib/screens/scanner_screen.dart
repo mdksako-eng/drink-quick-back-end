@@ -1,5 +1,7 @@
 // screens/scanner_screen.dart
 import 'package:flutter/material.dart';
+import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
+import '../widgets/upgrade_required.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import '../models/drink_model.dart';
@@ -54,6 +56,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!context.read<PlanProvider>().canAccess('scanner')) {
+      return const UpgradeRequiredView();
+    }
     final primary = Theme.of(context).primaryColor;
     return Scaffold(
       backgroundColor: Colors.black,

@@ -1,6 +1,8 @@
 // screens/forecast_screen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
+import '../widgets/upgrade_required.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -97,6 +99,9 @@ class _ForecastScreenState extends State<ForecastScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!context.read<PlanProvider>().canAccess('forecast')) {
+      return const UpgradeRequiredView();
+    }
     final primary = Theme.of(context).primaryColor;
     final result = _result;
     return Scaffold(

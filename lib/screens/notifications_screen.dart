@@ -3,6 +3,9 @@
 // payments), with mark-all-read and clear-all. Works on mobile, web, desktop.
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
+import '../widgets/upgrade_required.dart';
 import '../services/notification_service.dart';
 import '../utils/i18n.dart';
 
@@ -50,6 +53,9 @@ class NotificationsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!context.read<PlanProvider>().canAccess('inbox')) {
+      return const UpgradeRequiredView();
+    }
     final theme = Theme.of(context);
     final service = NotificationService();
 

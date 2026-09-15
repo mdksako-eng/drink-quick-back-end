@@ -1,5 +1,7 @@
 // screens/inventory_report_screen.dart
 import 'package:flutter/material.dart';
+import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
+import '../widgets/upgrade_required.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
@@ -202,6 +204,9 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (!context.read<PlanProvider>().canAccess('reports')) {
+      return const UpgradeRequiredView();
+    }
     final theme = Theme.of(context);
 
     return GestureDetector(
