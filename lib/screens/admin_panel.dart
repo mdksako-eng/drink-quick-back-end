@@ -117,44 +117,55 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
     );
 
     if (result != null && result.isNotEmpty) {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      if (authProvider.verifyPassword(result)) {
-        setState(() => _isAuthenticated = true);
+      setState(() {
+        _isAuthenticated = true;
         _adminToken = result;
-        await _loadUsers();
+      });
+      final ok = await _loadUsers();
+      if (ok) {
         Helpers.showToast(t('admin_granted'));
       } else {
+        if (mounted) {
+          setState(() => _isAuthenticated = false);
+        }
         Helpers.showToast(t('admin_wrongPassword'));
         _showPasswordDialog();
       }
     }
   }
 
-  Future<void> _loadUsers() async {
+  Future<bool> _loadUsers() async {
     setState(() => _isLoading = true);
     
     try {
       final response = await http.get(
-        Uri.parse(ApiConfig.usersUrl),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse(ApiConfig.adminUsers),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_adminToken',
+        },
       ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['status'] == 'success' && data['data'] != null) {
-          final usersList = data['data']['users'];
-          if (usersList is List && usersList.isNotEmpty) {
-            _processUsers(usersList);
-            return;
-          }
+        final usersList = data['data']?['users'];
+        if (usersList is List) {
+          _processUsers(usersList);
+          return true;
         }
       }
+
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        _setEmptyUsers();
+        return false;
+      }
+
       _setEmptyUsers();
+      return true;
     } catch (e) {
       _setEmptyUsers();
+      return false;
     }
-    
-    setState(() => _isLoading = false);
   }
 
   void _processUsers(List<dynamic> users) {
