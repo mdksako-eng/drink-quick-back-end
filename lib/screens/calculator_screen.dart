@@ -35,6 +35,7 @@ enum PaymentMethod {
   cash,
   mtnMobileMoney,
   orangeMoney,
+  card,
 }
 
 class CalculatorScreen extends StatefulWidget {
@@ -66,6 +67,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   bool _businessPaymentsEnabled = false;
   bool _mtnEnabled = false;
   bool _orangeEnabled = false;
+  bool _cardEnabled = false;
   final TextEditingController _customerPhoneController =
       TextEditingController();
   bool _isProcessingPayment = false;
@@ -400,6 +402,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       _businessPaymentsEnabled = paymentHelper.businessPaymentsEnabled;
       _mtnEnabled = paymentHelper.mtnEnabled;
       _orangeEnabled = paymentHelper.orangeEnabled;
+      _cardEnabled = paymentHelper.cardEnabled;
 
       if (_selectedPaymentMethod == PaymentMethod.mtnMobileMoney &&
           !_mtnEnabled) {
@@ -517,6 +520,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         _businessPaymentsEnabled = paymentHelper.businessPaymentsEnabled;
         _mtnEnabled = paymentHelper.mtnEnabled;
         _orangeEnabled = paymentHelper.orangeEnabled;
+        _cardEnabled = paymentHelper.cardEnabled;
       });
     }
   }
@@ -712,7 +716,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         Helpers.showToast(t('insufficientPayment'), isError: true);
         return;
       }
-    } else {
+    } else if (_selectedPaymentMethod != PaymentMethod.card) {
       if (_customerPhoneController.text.trim().isEmpty) {
         Helpers.showToast(t('pleaseEnterCustomerPhone'), isError: true);
         return;
@@ -757,6 +761,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         paymentSuccess = await _processMobileMoneyPayment(
           'orange',
           _customerPhoneController.text.trim(),
+          _totalAmount,
+          customerName,
+        );
+      } else if (_selectedPaymentMethod == PaymentMethod.card) {
+        paymentSuccess = await _processMobileMoneyPayment(
+          'card',
+          '',
           _totalAmount,
           customerName,
         );
@@ -821,7 +832,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         _createdOrder?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
 
     // ✅ Validate phone number
-    if (!_validatePhoneNumber(customerPhone, paymentMethod)) {
+    if (paymentMethod != 'card' && !_validatePhoneNumber(customerPhone, paymentMethod)) {
       setState(() {
         _paymentStatus = 'failed';
         _paymentMessage = 'Invalid phone number for $paymentMethod';
@@ -3332,6 +3343,20 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       theme: theme,
                       isMobile: isMobile,
                     ),
+                  if (_cardEnabled)
+                    _buildPaymentMethodOption(
+                      icon: Icons.credit_card,
+                      label: 'Card',
+                      isSelected: _selectedPaymentMethod == PaymentMethod.card,
+                      color: Colors.blue,
+                      onTap: () {
+                        setState(() {
+                          _selectedPaymentMethod = PaymentMethod.card;
+                        });
+                      },
+                      theme: theme,
+                      isMobile: isMobile,
+                    ),
                 ],
               )
             : Row(
@@ -3391,9 +3416,29 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       ),
                     ),
                   ],
+                  if (_cardEnabled) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildPaymentMethodOption(
+                        icon: Icons.credit_card,
+                        label: 'Card',
+                        isSelected:
+                            _selectedPaymentMethod == PaymentMethod.card,
+                        color: Colors.blue,
+                        onTap: () {
+                          setState(() {
+                            _selectedPaymentMethod = PaymentMethod.card;
+                          });
+                        },
+                        theme: theme,
+                        isMobile: isMobile,
+                      ),
+                    ),
+                  ],
                 ],
               ),
-        if (_selectedPaymentMethod != PaymentMethod.cash) ...[
+        if (_selectedPaymentMethod != PaymentMethod.cash &&
+            _selectedPaymentMethod != PaymentMethod.card) ...[
           SizedBox(height: 12),
           _buildCustomerPhoneInput(
             controller: _customerPhoneController,

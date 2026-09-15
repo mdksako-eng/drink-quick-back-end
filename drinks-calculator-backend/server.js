@@ -152,6 +152,7 @@ app.use(async (req, res, next) => {
         await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS notchpay_private_key TEXT`);
         await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS notchpay_sync_id TEXT`);
         await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS notchpay_webhook_hash TEXT`);
+        await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS card_enabled BOOLEAN DEFAULT false`);
         console.log('✅ Company Notch Pay columns ensured');
       } catch (notchColErr) {
         console.log('⚠️ Notch Pay columns warning:', notchColErr.message);

@@ -16,6 +16,7 @@ class PaymentHelper extends ChangeNotifier {
   bool _businessPaymentsEnabled = false;
   bool _mtnEnabled = false;
   bool _orangeEnabled = false;
+  bool _cardEnabled = false;
   String _mtnMerchantPhone = '';
   String _orangeMerchantPhone = '';
   bool _mtnSandboxMode = true;
@@ -34,6 +35,7 @@ class PaymentHelper extends ChangeNotifier {
   bool get businessPaymentsEnabled => _businessPaymentsEnabled;
   bool get mtnEnabled => _mtnEnabled;
   bool get orangeEnabled => _orangeEnabled;
+  bool get cardEnabled => _cardEnabled;
   String get mtnMerchantPhone => _mtnMerchantPhone;
   String get orangeMerchantPhone => _orangeMerchantPhone;
   bool get mtnSandboxMode => _mtnSandboxMode;
@@ -73,6 +75,7 @@ class PaymentHelper extends ChangeNotifier {
         _businessPaymentsEnabled = company['businessPaymentsEnabled'] ?? false;
         _mtnEnabled = company['mtnEnabled'] ?? true;
         _orangeEnabled = company['orangeEnabled'] ?? true;
+        _cardEnabled = company['cardEnabled'] ?? false;
         _mtnMerchantPhone = company['mtnMerchantPhone'] ?? '';
         _orangeMerchantPhone = company['orangeMerchantPhone'] ?? '';
         _mtnSandboxMode = company['mtnSandboxMode'] ?? true;

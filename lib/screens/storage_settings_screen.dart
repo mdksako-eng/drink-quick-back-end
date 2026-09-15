@@ -64,12 +64,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
   String _orangeMerchantId = '';
   String _orangeMerchantPhone = '';
   bool _orangeSandboxMode = true;
-
-  // Notch Pay settings (per-company keys or Sync account — B2C money goes to the company)
-  String _notchpayPublicKey = '';
-  String _notchpayPrivateKey = '';
-  String _notchpaySyncId = '';
-  String _notchpayWebhookHash = '';
+  bool _cardEnabled = false;
 
   // User-specific settings
   bool _autoSync = false;
@@ -106,14 +101,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
   final TextEditingController _orangeMerchantIdController =
       TextEditingController();
   final TextEditingController _orangeMerchantPhoneController =
-      TextEditingController();
-  final TextEditingController _notchpayPublicKeyController =
-      TextEditingController();
-  final TextEditingController _notchpayPrivateKeyController =
-      TextEditingController();
-  final TextEditingController _notchpaySyncIdController =
-      TextEditingController();
-  final TextEditingController _notchpayWebhookHashController =
       TextEditingController();
 
   // Country selection variables
@@ -180,10 +167,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     _orangeSecretKeyController.dispose();
     _orangeMerchantIdController.dispose();
     _orangeMerchantPhoneController.dispose();
-    _notchpayPublicKeyController.dispose();
-    _notchpayPrivateKeyController.dispose();
-    _notchpaySyncIdController.dispose();
-    _notchpayWebhookHashController.dispose();
     super.dispose();
   }
 
@@ -244,10 +227,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               _mtnSecretKey = paymentSettings['mtnSecretKey'] ?? '';
               _orangeApiKey = paymentSettings['orangeApiKey'] ?? '';
               _orangeSecretKey = paymentSettings['orangeSecretKey'] ?? '';
-              _notchpayPublicKey = paymentSettings['notchpayPublicKey'] ?? '';
-              _notchpayPrivateKey = paymentSettings['notchpayPrivateKey'] ?? '';
-              _notchpaySyncId = paymentSettings['notchpaySyncId'] ?? '';
-              _notchpayWebhookHash = paymentSettings['notchpayWebhookHash'] ?? '';
+              _cardEnabled = paymentSettings['cardEnabled'] ?? false;
             }
           } catch (e) {
             debugPrint('❌ Error loading payment settings from backend: $e');
@@ -361,10 +341,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     _orangeSecretKeyController.text = _orangeSecretKey;
     _orangeMerchantIdController.text = _orangeMerchantId;
     _orangeMerchantPhoneController.text = _orangeMerchantPhone;
-    _notchpayPublicKeyController.text = _notchpayPublicKey;
-    _notchpayPrivateKeyController.text = _notchpayPrivateKey;
-    _notchpaySyncIdController.text = _notchpaySyncId;
-    _notchpayWebhookHashController.text = _notchpayWebhookHash;
 
     setState(() {
       _hasUnsavedChanges = false;
@@ -498,10 +474,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             'orangeSecretKey': _orangeSecretKey,
             'orangeMerchantId': _orangeMerchantId,
             'orangeSandboxMode': _orangeSandboxMode,
-            'notchpayPublicKey': _notchpayPublicKey,
-            'notchpayPrivateKey': _notchpayPrivateKey,
-            'notchpaySyncId': _notchpaySyncId,
-            'notchpayWebhookHash': _notchpayWebhookHash,
+            'cardEnabled': _cardEnabled,
           };
           final secretsSaved =
               await PaymentService.updateCompanyPaymentSettings(paymentSecrets);
@@ -2491,6 +2464,30 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         ),
                       ],
                     ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Credit Card',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        Switch(
+                          value: _cardEnabled,
+                          onChanged: isManager
+                              ? (value) {
+                                  setState(() {
+                                    _cardEnabled = value;
+                                    _markUnsaved();
+                                  });
+                                }
+                              : null,
+                        ),
+                      ],
+                    ),
                     if (_orangeEnabled) ...[
                       const SizedBox(height: 12),
                       Text(
@@ -2564,106 +2561,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                             ? (value) {
                                 setState(() {
                                   _orangeApiKey = value;
-                                  _markUnsaved();
-                                });
-                              }
-                            : null,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Notch Pay (single API for MTN MoMo + Orange)',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: theme.textTheme.bodyLarge?.color,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Per-company account — money goes directly to this company. Use your own Notch Pay keys, or a Sync account ID.',
-                        style: TextStyle(fontSize: 11, color: theme.hintColor),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _notchpayPublicKeyController,
-                        decoration: InputDecoration(
-                          labelText: 'Public Key (pk_...)',
-                          hintText: 'pk_live_...',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon:
-                              Icon(Icons.vpn_key, color: primaryColorValue),
-                        ),
-                        onChanged: isManager
-                            ? (value) {
-                                setState(() {
-                                  _notchpayPublicKey = value;
-                                  _markUnsaved();
-                                });
-                              }
-                            : null,
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _notchpayPrivateKeyController,
-                        decoration: InputDecoration(
-                          labelText: 'Private Key (sk_...)',
-                          hintText: 'sk_live_...',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon:
-                              Icon(Icons.vpn_key, color: primaryColorValue),
-                        ),
-                        obscureText: true,
-                        onChanged: isManager
-                            ? (value) {
-                                setState(() {
-                                  _notchpayPrivateKey = value;
-                                  _markUnsaved();
-                                });
-                              }
-                            : null,
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _notchpaySyncIdController,
-                        decoration: InputDecoration(
-                          labelText: 'Sync Account ID (optional)',
-                          hintText: 'Only if using Notch Pay Sync',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon:
-                              Icon(Icons.link, color: primaryColorValue),
-                        ),
-                        onChanged: isManager
-                            ? (value) {
-                                setState(() {
-                                  _notchpaySyncId = value;
-                                  _markUnsaved();
-                                });
-                              }
-                            : null,
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _notchpayWebhookHashController,
-                        decoration: InputDecoration(
-                          labelText: 'Webhook Hash Key',
-                          hintText: 'From Notch Pay dashboard',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon:
-                              Icon(Icons.shield, color: primaryColorValue),
-                        ),
-                        obscureText: true,
-                        onChanged: isManager
-                            ? (value) {
-                                setState(() {
-                                  _notchpayWebhookHash = value;
                                   _markUnsaved();
                                 });
                               }
