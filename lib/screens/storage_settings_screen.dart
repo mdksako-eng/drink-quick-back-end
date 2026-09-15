@@ -2236,7 +2236,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         ),
                         Switch(
                           value: _mtnEnabled,
-                          onChanged: isManager
+                          onChanged: (isManager && _notchpaySyncId.isNotEmpty)
                               ? (value) {
                                   setState(() {
                                     _mtnEnabled = value;
@@ -2459,7 +2459,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         ),
                         Switch(
                           value: _orangeEnabled,
-                          onChanged: isManager
+                          onChanged: (isManager && _notchpaySyncId.isNotEmpty)
                               ? (value) {
                                   setState(() {
                                     _orangeEnabled = value;
@@ -2484,7 +2484,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         ),
                         Switch(
                           value: _cardEnabled,
-                          onChanged: isManager
+                          onChanged: (isManager && _notchpaySyncId.isNotEmpty)
                               ? (value) {
                                   setState(() {
                                     _cardEnabled = value;
@@ -2501,7 +2501,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       decoration: InputDecoration(
                         labelText: 'Notch Pay Sync Account ID',
                         hintText:
-                            "Connects this company's Notch Pay account (money goes to them)",
+                            "Set this to enable payment methods (money goes to the company)",
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
