@@ -6,7 +6,11 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:drinks_calculator_fixed/config/api_config.dart';
+import 'package:drinks_calculator_fixed/services/secure_storage_service.dart';
+import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
 import 'package:drinks_calculator_fixed/services/tts/tts_factory.dart'
     as tts;
@@ -22,6 +26,9 @@ class NotificationService extends ChangeNotifier {
   static const String _storageKey = 'app_notifications';
   static const String _soundEnabledKey = 'show_notifications';
   static const int _maxNotifications = 50;
+
+  /// Notifications older than this are deleted automatically (2 months).
+  static const int _maxAgeDays = 60;
 
   final List<AppNotification> _notifications = [];
   bool _initialized = false;
@@ -53,6 +60,7 @@ class NotificationService extends ChangeNotifier {
     } catch (e) {
       debugPrint('⚠️ Notification history load failed: $e');
     }
+    _pruneOld(); // 🧹 drop anything older than 2 months
     notifyListeners();
   }
 
@@ -73,6 +81,8 @@ class NotificationService extends ChangeNotifier {
     }
     _persist();
     notifyListeners();
+    // ☁️ Keep a per-user copy online so the history survives a reinstall.
+    _pushToServer(notification);
   }
 
   Future<void> _persist() async {
@@ -147,12 +157,167 @@ class NotificationService extends ChangeNotifier {
     }
   }
 
-  void markAllRead() {
+void markAllRead() {
     for (final n in _notifications) {
       n.isRead = true;
     }
     _persist();
     notifyListeners();
+    _markAllReadOnServer();
+  }
+
+  /// Marks one notification as read (called when the user taps it) — locally
+  /// and on the server so the state follows the user across devices.
+  void markAsRead(String id) {
+    final index = _notifications.indexWhere((n) => n.id == id);
+    if (index == -1) return;
+    if (_notifications[index].isRead) return;
+    _notifications[index].isRead = true;
+    _persist();
+    notifyListeners();
+    _patchReadOnServer(id, true);
+  }
+
+  void toggleRead(String id) {
+    final index = _notifications.indexWhere((n) => n.id == id);
+    if (index == -1) return;
+    final newValue = !_notifications[index].isRead;
+    _notifications[index].isRead = newValue;
+    _persist();
+    notifyListeners();
+    _patchReadOnServer(id, newValue);
+  }
+
+  Future<void> deleteNotification(String id) async {
+    _notifications.removeWhere((n) => n.id == id);
+    _persist();
+    notifyListeners();
+    if (!SupabaseService.canUseSupabase) return;
+    try {
+      await http.delete(
+        Uri.parse('${ApiConfig.dataNotifications}/${Uri.encodeComponent(id)}'),
+        headers: await _authedHeaders(),
+      );
+    } catch (e) {
+      debugPrint('⚠️ Notification delete sync failed: $e');
+    }
+  }
+
+  // ============================================================
+  // ☁️ ONLINE SYNC (per user) + 🧹 2-month retention
+  // ============================================================
+
+  /// Drops notifications older than [_maxAgeDays] (2 months).
+  void _pruneOld() {
+    final cutoff = DateTime.now().subtract(const Duration(days: _maxAgeDays));
+    final before = _notifications.length;
+    _notifications.removeWhere((n) => n.time.isBefore(cutoff));
+    if (_notifications.length != before) {
+      debugPrint('🧹 Pruned ${before - _notifications.length} old notifications');
+    }
+  }
+
+  /// Loads this user's notifications from the server and merges them with the
+  /// local cache (deduplicating by id, newest first).
+  Future<void> syncWithServer() async {
+    if (!SupabaseService.canUseSupabase) return;
+    try {
+      final response = await http.get(
+        Uri.parse(ApiConfig.dataNotifications),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode != 200) return;
+
+      final rows = List<Map<String, dynamic>>.from(jsonDecode(response.body));
+      final byId = <String, AppNotification>{
+        for (final n in _notifications) n.id: n,
+      };
+
+      for (final row in rows) {
+        final id = row['id']?.toString();
+        if (id == null || id.isEmpty) continue;
+        final remote = AppNotification(
+          id: id,
+          title: row['title']?.toString() ?? '',
+          message: row['message']?.toString() ?? '',
+          type: NotificationType.values.firstWhere(
+            (t) => t.name == row['type']?.toString(),
+            orElse: () => NotificationType.system,
+          ),
+          time: DateTime.tryParse('${row['created_at']}') ?? DateTime.now(),
+          isRead: row['is_read'] == true,
+        );
+        final local = byId[id];
+        byId[id] = remote;
+        // Keep local-only rows that were never pushed (state is local truth).
+        if (local != null && local.isRead && !remote.isRead) {
+          remote.isRead = true;
+          _patchReadOnServer(id, true);
+        }
+      }
+
+      _notifications
+        ..clear()
+        ..addAll(byId.values);
+      _notifications.sort((a, b) => b.time.compareTo(a.time));
+      _pruneOld();
+      _persist();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('⚠️ Notification sync failed: $e');
+    }
+  }
+
+  Future<Map<String, String>> _authedHeaders() async {
+    final token = await SecureStorageService.getSessionToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  Future<void> _pushToServer(AppNotification n) async {
+    if (!SupabaseService.canUseSupabase) return;
+    try {
+      await http.post(
+        Uri.parse(ApiConfig.dataNotifications),
+        headers: await _authedHeaders(),
+        body: jsonEncode({
+          'id': n.id,
+          'title': n.title,
+          'message': n.message,
+          'type': n.type.name,
+          'created_at': n.time.toIso8601String(),
+        }),
+      );
+    } catch (e) {
+      debugPrint('⚠️ Notification push failed: $e');
+    }
+  }
+
+  Future<void> _patchReadOnServer(String id, bool isRead) async {
+    if (!SupabaseService.canUseSupabase) return;
+    try {
+      await http.patch(
+        Uri.parse('${ApiConfig.dataNotifications}/${Uri.encodeComponent(id)}'),
+        headers: await _authedHeaders(),
+        body: jsonEncode({'is_read': isRead}),
+      );
+    } catch (e) {
+      debugPrint('⚠️ Notification read sync failed: $e');
+    }
+  }
+
+  Future<void> _markAllReadOnServer() async {
+    if (!SupabaseService.canUseSupabase) return;
+    try {
+      await http.patch(
+        Uri.parse('${ApiConfig.dataNotifications}/read-all'),
+        headers: await _authedHeaders(),
+      );
+    } catch (e) {
+      debugPrint('⚠️ Notification read-all sync failed: $e');
+    }
   }
 
   void clearAll() {
@@ -169,15 +334,27 @@ class NotificationService extends ChangeNotifier {
 }
 
 class AppNotification {
+  /// Stable id (also used as the primary key online) so the same notification
+  /// can be deduplicated between the device and the server.
+  final String id;
   final String title;
   final String message;
   final NotificationType type;
   final DateTime time;
   bool isRead;
 
-  AppNotification({required this.title, required this.message, required this.type, DateTime? time, this.isRead = false}) : time = time ?? DateTime.now();
+  AppNotification({
+    String? id,
+    required this.title,
+    required this.message,
+    required this.type,
+    DateTime? time,
+    this.isRead = false,
+  })  : id = id ?? 'n_${DateTime.now().microsecondsSinceEpoch}',
+        time = time ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
+        'id': id,
         'title': title,
         'message': message,
         'type': type.name,
@@ -186,13 +363,15 @@ class AppNotification {
       };
 
   factory AppNotification.fromJson(Map<String, dynamic> json) => AppNotification(
+        id: json['id']?.toString() ??
+            'n_${DateTime.tryParse('${json['time']}')?.microsecondsSinceEpoch ?? DateTime.now().microsecondsSinceEpoch}',
         title: json['title']?.toString() ?? '',
         message: json['message']?.toString() ?? '',
         type: NotificationType.values.firstWhere(
           (t) => t.name == json['type'],
           orElse: () => NotificationType.order,
         ),
-        time: DateTime.tryParse('${json['time']}'),
+        time: DateTime.tryParse('${json['time']}') ?? DateTime.now(),
         isRead: json['isRead'] == true,
       );
 }

@@ -735,6 +735,17 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         debugPrint('🔄 Loading inventory from Supabase...');
         await inventoryProvider.loadInventoryFromSupabase();
         debugPrint('✅ Inventory loaded');
+
+        // 🔄 Give the sync indicator real work: it reloads orders + inventory
+        // instead of pretending to sync.
+        try {
+          context.read<SyncProvider>().attachReloaders(
+                orders: orderProvider.reloadOrders,
+                inventory: inventoryProvider.loadInventoryFromSupabase,
+              );
+        } catch (e) {
+          debugPrint('⚠️ Could not attach sync reloaders: $e');
+        }
 // ✅ Verify inventory loaded for staff
         if (role == 'Staff') {
           debugPrint(

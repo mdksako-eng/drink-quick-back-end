@@ -371,6 +371,7 @@ class OrderProvider with ChangeNotifier {
           date: order.date,
           isActive: isActive,
           customerName: order.customerName,
+          staffName: order.staffName,
         );
         _orderHistory[index] = updatedOrder;
         await _saveOrders();

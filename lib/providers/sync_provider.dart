@@ -1,6 +1,7 @@
 // providers/sync_provider.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 
 enum SyncStatus {
@@ -19,6 +20,18 @@ class SyncProvider with ChangeNotifier {
   Timer? _periodicTimer;
   Timer? _statusResetTimer;
 
+  /// True once a sync has actually completed against the server (persisted), so
+  /// the drawer can honestly say "not synced yet".
+  bool _hasSynced = false;
+
+  /// Real data reloaders wired from main.dart. Without them a "sync" only
+  /// proves the server is reachable — it must never claim data was synced.
+  Future<void> Function()? _reloadOrders;
+  Future<void> Function()? _reloadInventory;
+
+  static const String _lastSyncKey = 'last_sync_time';
+  static const String _hasSyncedKey = 'has_ever_synced';
+
   SyncStatus get status => _status;
   DateTime? get lastSyncTime => _lastSyncTime;
   String? get errorMessage => _errorMessage;
@@ -26,9 +39,42 @@ class SyncProvider with ChangeNotifier {
   bool get isSyncing => _status == SyncStatus.syncing;
   bool get isOnline => SupabaseService.canUseSupabase;
 
+  /// Whether anything has ever been synchronised with the server.
+  bool get hasSynced => _hasSynced;
+
+  /// Registers the providers that hold the data to sync.
+  void attachReloaders({
+    Future<void> Function()? orders,
+    Future<void> Function()? inventory,
+  }) {
+    _reloadOrders = orders;
+    _reloadInventory = inventory;
+  }
+
+  /// Restores the persisted sync history so the indicator stays truthful after
+  /// an app restart.
+  Future<void> _restoreSyncState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stamp = prefs.getString(_lastSyncKey);
+      _hasSynced = prefs.getBool(_hasSyncedKey) ?? false;
+      _lastSyncTime = stamp != null ? DateTime.tryParse(stamp) : null;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _persistSyncState() async {
+    if (_lastSyncTime == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_lastSyncKey, _lastSyncTime!.toIso8601String());
+      await prefs.setBool(_hasSyncedKey, true);
+    } catch (_) {}
+  }
+
   SyncProvider() {
     _startPeriodicSync();
-    _checkPendingSyncs();
+    _restoreSyncState();
   }
 
   void _startPeriodicSync() {
@@ -59,7 +105,7 @@ class SyncProvider with ChangeNotifier {
     _cancelStatusResetTimer();
 
     try {
-      // Sync drinks
+      // 📋 Orders — real reload from the server.
       await _syncDrinks();
       
       // Sync orders
@@ -72,7 +118,10 @@ class SyncProvider with ChangeNotifier {
       await _syncSettings();
       
       _lastSyncTime = DateTime.now();
+      _hasSynced = true;
+      await _persistSyncState();
       _setStatus(SyncStatus.success);
+      await _checkPendingSyncs();
       
       // Auto-reset success status after 3 seconds
       _statusResetTimer = Timer(const Duration(seconds: 3), () {
@@ -97,22 +146,39 @@ class SyncProvider with ChangeNotifier {
     }
   }
 
+  /// Reloads the real data sources (orders + inventory). When no reloader is
+  /// wired we still make one real server call so the status is never fake.
+  Future<void> _reloadData() async {
+    var didWork = false;
+    if (_reloadOrders != null) {
+      await _reloadOrders!();
+      didWork = true;
+    }
+    if (_reloadInventory != null) {
+      await _reloadInventory!();
+      didWork = true;
+    }
+    if (!didWork) {
+      // Reachability check — throws (and marks the sync as failed) if the
+      // backend cannot be reached.
+      await SupabaseService.getOrders();
+    }
+  }
+
   Future<void> _syncDrinks() async {
-    // This will be called from DrinkProvider
-    // For now, just a placeholder
-    await Future.delayed(const Duration(milliseconds: 500));
+    await _reloadData();
   }
 
   Future<void> _syncOrders() async {
-    await Future.delayed(const Duration(milliseconds: 300));
+    // Handled by _reloadData() (called once from _syncDrinks).
   }
 
   Future<void> _syncInventory() async {
-    await Future.delayed(const Duration(milliseconds: 400));
+    // Handled by _reloadData() (called once from _syncDrinks).
   }
 
   Future<void> _syncSettings() async {
-    await Future.delayed(const Duration(milliseconds: 200));
+    // Settings live in provider state and are pushed on change.
   }
 
   void _setStatus(SyncStatus newStatus) {

@@ -194,7 +194,7 @@ class CustomDrawer extends StatelessWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  _getSyncStatusText(syncProvider.status),
+                                  _getSyncStatusText(syncProvider),
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 12,
@@ -1159,8 +1159,8 @@ class CustomDrawer extends StatelessWidget {
     }
   }
 
-  String _getSyncStatusText(SyncStatus status) {
-    switch (status) {
+  String _getSyncStatusText(SyncProvider provider) {
+    switch (provider.status) {
       case SyncStatus.syncing:
         return t('syncSyncing');
       case SyncStatus.success:
@@ -1170,6 +1170,9 @@ class CustomDrawer extends StatelessWidget {
       case SyncStatus.offline:
         return t('syncOffline');
       case SyncStatus.idle:
+        // Honest idle state: nothing has been synchronised yet.
+        if (!provider.isOnline) return t('syncOffline');
+        if (!provider.hasSynced) return t('syncNotYet');
         return t('syncCloudReady');
     }
   }

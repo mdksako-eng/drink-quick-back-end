@@ -70,3 +70,14 @@ services:
         sync: false # your Notch Pay private key (sk_...)
       - key: NOTCHPAY_WEBHOOK_SECRET
         sync: false # Notch Pay dashboard "Hash Key" (webhook HMAC-SHA256 secret)
+      - key: NOTCHPAY_BASE_URL
+        sync: false # optional — defaults to https://api.notchpay.co
+        value: https://api.notchpay.co
+      # Public URL of THIS backend (used for Notch Pay / Orange return callbacks).
+      - key: APP_BASE_URL
+        sync: false # e.g. https://drink-quick-cal-kja1.onrender.com
+      # ⚠️ LIVE PAYMENTS: set to false to collect REAL subscription money through
+      # direct MTN MoMo. Leave true only while testing.
+      - key: PLATFORM_MTN_SANDBOX
+        sync: false
+        value: "false"

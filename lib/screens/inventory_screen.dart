@@ -24,6 +24,10 @@ class InventoryScreen extends StatefulWidget {
 class _InventoryScreenState extends State<InventoryScreen> {
   String _searchQuery = '';
   String _filterCategory = 'All';
+
+  /// When true the list shows only items at/below their minimum level — set by
+  /// tapping the low-stock warning icon in the app bar.
+  bool _lowStockOnly = false;
   String _sortBy = 'Name';
   final TextEditingController _searchController = TextEditingController();
 
@@ -69,6 +73,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   List<InventoryItem> _getFilteredItems(List<InventoryItem> items) {
     List<InventoryItem> filtered = items;
+
+    // ⚠️ Low-stock focus (set from the warning icon in the app bar).
+    if (_lowStockOnly) {
+      filtered = filtered.where((item) => item.isLowStock).toList();
+    }
 
     // Search filter
     if (_searchQuery.isNotEmpty) {
@@ -465,12 +474,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.warning_amber),
+                    tooltip: t('lowStock'),
                     onPressed: () {
+                      // Show every low-stock item in the list below.
                       setState(() {
+                        _lowStockOnly = true;
                         _filterCategory = 'All';
                         _searchQuery = '';
                         _searchController.clear();
                       });
+                      Helpers.showToast(t('showingLowStockOnly'));
                     },
                   ),
                   Positioned(
@@ -497,6 +510,31 @@ class _InventoryScreenState extends State<InventoryScreen> {
             ? const _InventorySkeletonList()
             : Column(
                 children: [
+                  // ⚠️ Low-stock focus banner (dismissable)
+                  if (_lowStockOnly)
+                    Container(
+                      width: double.infinity,
+                      color: Colors.orange.shade100,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Row(children: [
+                        const Icon(Icons.warning_amber,
+                            color: Colors.orange, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${t('lowStock')}: ${inventoryProvider.lowStockCount}',
+                            style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () =>
+                              setState(() => _lowStockOnly = false),
+                          child: Text(t('showAllItems')),
+                        ),
+                      ]),
+                    ),
                   // Stats Bar
                   Container(
                     padding: const EdgeInsets.all(12),

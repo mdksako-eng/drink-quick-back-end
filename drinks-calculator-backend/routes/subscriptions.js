@@ -760,11 +760,30 @@ router.get('/subscriptions/notchpay-return', (req, res) => {
   res.send('<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Payment Complete</title></head><body style="font-family:system-ui,sans-serif;background:#f7f8fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center;background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,0.08);max-width:420px"><div style="font-size:48px">✅</div><h2 style="margin:16px 0 8px">Payment received</h2><p style="color:#555;margin:0 0 24px">Your subscription is being activated. Return to the app and tap Refresh.</p></div></body></html>');
 });
 
+//  Payment readiness (no secrets) — confirms whether subscriptions can take
+// REAL money: Notch Pay (platform account) in live mode and/or direct operator
+// credentials in live (non-sandbox) mode.
 router.get('/subscriptions/notchpay/health', (req, res) => {
+  const notch = notchpay.status();
   res.json({
     success: true,
     notchpayConfigured: notchpay.isConfigured(),
-    ...notchpay.status(),
+    ...notch,
+    //  'live' means real money will be collected from customers.
+    notchpayMode: notch.mode,
+    platformMomo: {
+      mtnConfigured: momo.isConfigured(platformMomo),
+      orangeConfigured: orangeMoney.isConfigured(platformMomo),
+      mtnMode: platformMomo.mtn_sandbox_mode ? 'sandbox' : 'live',
+      mtnMerchantPhoneSet: Boolean(platformMomo.mtn_merchant_phone),
+      orangeMerchantPhoneSet: Boolean(platformMomo.orange_merchant_phone),
+    },
+    // ✅ True when at least one LIVE path is ready for real subscriptions.
+    liveReady: notch.mode === 'live'
+      || (!platformMomo.mtn_sandbox_mode && platformMomo.mtn_merchant_phone),
+    hint: notch.mode === 'live'
+      ? 'Live Notch Pay keys detected — subscription payments are real.'
+      : 'Set NOTCHPAY_PUBLIC_KEY/PRIVATE_KEY to your pk_live_/sk_live_ keys (and PLATFORM_MTN_SANDBOX=false for direct MoMo) to take live payments.',
   });
 });
 

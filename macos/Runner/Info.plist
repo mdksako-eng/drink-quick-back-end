@@ -28,5 +28,13 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- 🎙️ Voice ordering (speech recognition + AI voice replies) -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Drink Quick Cal uses the microphone so you can add drinks to an order by voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Drink Quick Cal uses speech recognition to turn your spoken order into items in the calculator.</string>
+	<!-- 📷 Photo orders + barcode/QR scanning -->
+	<key>NSCameraUsageDescription</key>
+	<string>Drink Quick Cal uses the camera to photograph an order or scan a product barcode/QR code.</string>
 </dict>
 </plist>

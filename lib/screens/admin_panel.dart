@@ -7,6 +7,7 @@ import 'dart:convert';
 import '../providers/auth_provider.dart';
 import '../utils/helpers.dart';
 import '../config/api_config.dart';
+import '../services/secure_storage_service.dart';
 import '../utils/i18n.dart';
 
 class AdminPanel extends StatefulWidget {
@@ -239,18 +240,47 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
     if (confirmed == true) {
       setState(() => _isLoading = true);
       try {
+        // 🔐 /api/auth/block-user requires a real SESSION token (the admin
+        // password only unlocks /api/admin/*), so send the bearer session —
+        // without it the request 401s and nothing happens.
         final response = await http.post(
           Uri.parse(ApiConfig.blockUser(user['id'])),
-          headers: {'Content-Type': 'application/json'},
+          headers: await _adminActionHeaders(),
         ).timeout(const Duration(seconds: 10));
         
         if (response.statusCode == 200) {
           Helpers.showToast('${user['username']} ${t('admin_blockedToast')}');
           await _loadUsers();
+        } else {
+          if (mounted) {
+            Helpers.showToast(_errorMessage(response, t('admin_blockFailed')),
+                isError: true);
+          }
         }
-      } catch (e) { Helpers.showToast('Error: $e'); }
+      } catch (e) { Helpers.showToast('Error: $e', isError: true); }
       setState(() => _isLoading = false);
     }
+  }
+
+  /// Headers for account actions: the admin password (as an Administrator
+  /// override) plus the signed-in session token, which /api/auth/* requires.
+  Future<Map<String, String>> _adminActionHeaders() async {
+    final token = await SecureStorageService.getSessionToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      // Recognised by the backend as a platform Administrator.
+      if (_adminToken.isNotEmpty) 'X-Admin-Password': _adminToken,
+    };
+  }
+
+  String _errorMessage(http.Response response, String fallback) {
+    try {
+      final body = json.decode(response.body);
+      final msg = body['message'] ?? body['error'];
+      if (msg != null && msg.toString().trim().isNotEmpty) return msg.toString();
+    } catch (_) {}
+    return '$fallback (${response.statusCode})';
   }
 
   Future<void> _unblockUser(Map<String, dynamic> user) async {
@@ -271,14 +301,19 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
       try {
         final response = await http.post(
           Uri.parse(ApiConfig.unblockUser(user['id'])),
-          headers: {'Content-Type': 'application/json'},
+          headers: await _adminActionHeaders(),
         ).timeout(const Duration(seconds: 10));
         
         if (response.statusCode == 200) {
           Helpers.showToast('${user['username']} ${t('admin_unblockedToast')}');
           await _loadUsers();
+        } else {
+          if (mounted) {
+            Helpers.showToast(_errorMessage(response, t('admin_unblockFailed')),
+                isError: true);
+          }
         }
-      } catch (e) { Helpers.showToast('Error: $e'); }
+      } catch (e) { Helpers.showToast('Error: $e', isError: true); }
       setState(() => _isLoading = false);
     }
   }

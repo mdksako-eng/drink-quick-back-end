@@ -11,6 +11,7 @@ import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
+import 'package:drinks_calculator_fixed/widgets/skeleton.dart';
 import '../utils/i18n.dart';
 
 class SideSlider extends StatefulWidget {
@@ -51,6 +52,12 @@ class _SideSliderState extends State<SideSlider> {
   String _searchQuery = '';
   bool _showInactive = false;
   bool _isLoading = false;
+
+  /// True while the invoice history is re-reading the company's orders.
+  bool _syncing = false;
+
+  /// Company the current order list was loaded for (detects company switches).
+  int? _companyAtLoad;
   final TextEditingController _searchController = TextEditingController();
   bool _canManageOrders = false;
 
@@ -64,7 +71,38 @@ class _SideSliderState extends State<SideSlider> {
     super.initState();
     CurrencyHelper.addListener(_refreshCurrency);
     _checkUserRole();
-    _ensureOrdersLoaded();
+    _companyAtLoad = SupabaseService.currentCompanyId;
+    _refreshOrders(force: true);
+  }
+
+  /// Reloads the company-scoped orders whenever the company context changed or
+  /// the history is opened, so data from another company never lingers.
+  Future<void> _refreshOrders({bool force = false}) async {
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final companyId = SupabaseService.currentCompanyId;
+    final companyChanged = _companyAtLoad != companyId;
+    if (!force && !companyChanged) return;
+
+    _companyAtLoad = companyId;
+    if (mounted) setState(() => _syncing = true);
+    try {
+      await orderProvider.reloadOrders();
+    } catch (e) {
+      debugPrint('⚠️ Invoice history refresh failed: $e');
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  @override
+  void didUpdateWidget(SideSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Opening the invoice history always re-reads the latest orders — this also
+    // picks up a company switch while the app was open.
+    if (widget.isOpen && !oldWidget.isOpen) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _refreshOrders(force: true));
+    }
   }
 
   /// If the provider was never able to load from Supabase (e.g. the user's
@@ -880,7 +918,13 @@ class _SideSliderState extends State<SideSlider> {
                             ),
                             const SizedBox(height: 8),
                             filteredOrders.isEmpty
-                                ? Container(
+                                ? (_syncing
+                                    // ⏳ Skeleton while the (company-scoped) orders load.
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(12),
+                                        child: SkeletonList(),
+                                      )
+                                    : Container(
                                     height: screenHeight * 0.4,
                                     child: Center(
                                       child: Padding(
@@ -925,7 +969,7 @@ class _SideSliderState extends State<SideSlider> {
                                         ),
                                       ),
                                     ),
-                                  )
+                                  ))
                                 : ListView.builder(
                                     shrinkWrap: true,
                                     physics:

@@ -61,9 +61,13 @@ class ApiConfig {
   static const String dataOrders = '$apiBase/data/orders';
   static const String dataInventory = '$apiBase/data/inventory';
   static const String dataInventoryUpsert = '$apiBase/data/inventory/upsert';
+  static const String dataInventorySell = '$apiBase/data/inventory/sell';
+  static const String dataInventoryAdjust = '$apiBase/data/inventory/adjust';
   static const String dataInventoryTransactions =
       '$apiBase/data/inventory-transactions';
   static const String dataSettings = '$apiBase/data/settings';
+  static const String dataEvents = '$apiBase/data/events';
+  static const String dataNotifications = '$apiBase/data/notifications';
   static const String dataPaymentTransactions =
       '$apiBase/data/payment-transactions';
   static String dataCompany(dynamic id) => '$apiBase/data/company/$id';

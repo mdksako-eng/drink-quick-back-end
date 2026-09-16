@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/forecast_model.dart';
 import '../providers/inventory_provider.dart';
 import '../services/groq_service.dart';
+import '../services/supabase_service.dart';
 import '../utils/forecast_helper.dart';
 import '../utils/helpers.dart';
 import '../utils/holidays.dart';
@@ -40,24 +41,143 @@ class _ForecastScreenState extends State<ForecastScreen> {
     await _loadEvents();
   }
 
+  static const String _cacheKey = 'forecast_custom_events';
+  static const String _pendingKey = 'forecast_pending_events';
+
+  /// Server id per event, keyed by `date|name` (events are company-wide online).
+  final Map<String, int> _eventIds = {};
+
+  String _keyFor(DateTime date, String name) =>
+      '${date.toIso8601String().split('T').first}|$name';
+
   Future<void> _loadEvents() async {
+    // Any event created while offline is pushed first so nothing is lost.
+    await _syncPendingEvents();
+
+    // 1) Online copy (company-wide) is the source of truth when reachable.
+    final online = await SupabaseService.getForecastEvents();
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('forecast_custom_events');
-    List<EventDay> events = [];
+
+    if (online != null) {
+      _applyRows(online, includeIds: true);
+      await prefs.setString(
+          _cacheKey, jsonEncode(_customEvents.map((e) => e.toJson()).toList()));
+      if (mounted) {
+        setState(() => _result = _compute());
+      }
+      return;
+    }
+
+    // 2) Offline: fall back to the locally cached events.
+    final raw = prefs.getString(_cacheKey);
     if (raw != null && raw.isNotEmpty) {
       try {
-        final list = jsonDecode(raw) as List;
-        events = list
-            .map((e) => EventDay.fromJson(Map<String, dynamic>.from(e)))
-            .toList();
+        _applyRows(jsonDecode(raw) as List, includeIds: false);
       } catch (_) {}
     }
     if (mounted) {
-      setState(() {
-        _customEvents = events;
-        _result = _compute();
-      });
+      setState(() => _result = _compute());
     }
+  }
+
+  /// Parses backend rows (`event_date`) or cached events (`date`).
+  void _applyRows(List<dynamic> rows, {required bool includeIds}) {
+    final events = <EventDay>[];
+    final ids = <String, int>{};
+    for (final raw in rows) {
+      if (raw is! Map) continue;
+      final row = Map<String, dynamic>.from(raw);
+      final parsed = DateTime.tryParse('${row['event_date'] ?? row['date']}');
+      if (parsed == null) continue;
+      final day = DateTime(parsed.year, parsed.month, parsed.day);
+      final name = row['name']?.toString().trim() ?? '';
+      if (name.isEmpty) continue;
+      events.add(EventDay(
+        date: day,
+        name: name,
+        multiplier: (row['multiplier'] ?? 1.25).toDouble(),
+      ));
+      final id = int.tryParse('${row['id']}');
+      if (includeIds && id != null) ids[_keyFor(day, name)] = id;
+    }
+    _customEvents = events;
+    _eventIds
+      ..clear()
+      ..addAll(ids);
+  }
+
+  /// Queues an event locally and uploads it as soon as the backend is reachable.
+  Future<void> _queuePendingEvent(EventDay event) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_pendingKey);
+    final pending = <Map<String, dynamic>>[];
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        pending.addAll((jsonDecode(raw) as List)
+            .map((e) => Map<String, dynamic>.from(e as Map)));
+      } catch (_) {}
+    }
+    pending.add(event.toJson());
+    await prefs.setString(_pendingKey, jsonEncode(pending));
+  }
+
+  /// Uploads events that were created offline. Keeps them queued on failure.
+  Future<void> _syncPendingEvents() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_pendingKey);
+    if (raw == null || raw.isEmpty) return;
+
+    List<Map<String, dynamic>> pending;
+    try {
+      pending = (jsonDecode(raw) as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    } catch (_) {
+      await prefs.remove(_pendingKey);
+      return;
+    }
+
+    final stillPending = <Map<String, dynamic>>[];
+    for (final row in pending) {
+      final event = EventDay.fromJson(row);
+      final saved = await SupabaseService.saveForecastEvent(
+        name: event.name,
+        date: event.date,
+        multiplier: event.multiplier,
+      );
+      if (saved == null) stillPending.add(row);
+    }
+    if (stillPending.isEmpty) {
+      await prefs.remove(_pendingKey);
+    } else {
+      await prefs.setString(_pendingKey, jsonEncode(stillPending));
+    }
+  }
+
+  Future<void> _deleteEvent(EventDay e) async {
+    final id = _eventIds[_keyFor(e.date, e.name)];
+    if (id != null) {
+      // Remove it online first — otherwise it would reappear on next refresh.
+      final ok = await SupabaseService.deleteForecastEvent(id);
+      if (!ok) {
+        if (mounted) Helpers.showToast(t('forecastDeleteFailed'), isError: true);
+        return;
+      }
+    }
+    setState(() {
+      _customEvents
+          .removeWhere((x) => x.date == e.date && x.name == e.name);
+      _eventIds.remove(_keyFor(e.date, e.name));
+      _result = _compute();
+    });
+    await _saveEvents();
+  }
+
+  /// Mirrors the current events into the local cache (offline safety net).
+  Future<void> _saveEvents() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        _cacheKey, jsonEncode(_customEvents.map((e) => e.toJson()).toList()));
   }
 
   List<EventDay> _buildEvents() {
@@ -94,6 +214,8 @@ class _ForecastScreenState extends State<ForecastScreen> {
   Future<void> _refresh() async {
     final inv = Provider.of<InventoryProvider>(context, listen: false);
     await inv.loadInventory();
+    // Re-pull the company events (online) so nothing added elsewhere is missed.
+    await _loadEvents();
     if (mounted) setState(() => _result = _compute());
   }
 
@@ -309,13 +431,30 @@ class _ForecastScreenState extends State<ForecastScreen> {
   }
 
   Widget _buildEventTile(EventDay e) {
+    final online = _eventIds.containsKey(_keyFor(e.date, e.name));
     return ListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
       leading: const Icon(Icons.event, color: Colors.orange),
       title: Text(e.name, style: const TextStyle(fontSize: 14)),
-      subtitle: Text(DateFormat('MMM d, y').format(e.date),
-          style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+      subtitle: Row(children: [
+        Text(DateFormat('MMM d, y').format(e.date),
+            style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        const SizedBox(width: 6),
+        Icon(
+          online ? Icons.cloud_done : Icons.cloud_off,
+          size: 13,
+          color: online ? Colors.green : Colors.grey,
+        ),
+        const SizedBox(width: 3),
+        Flexible(
+          child: Text(
+            online ? t('forecastOnline') : t('forecastPendingSync'),
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+          ),
+        ),
+      ]),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         Text('+${((e.multiplier - 1) * 100).toStringAsFixed(0)}%',
             style: const TextStyle(
@@ -326,22 +465,6 @@ class _ForecastScreenState extends State<ForecastScreen> {
         ),
       ]),
     );
-  }
-
-  Future<void> _deleteEvent(EventDay e) async {
-    setState(() {
-      _customEvents.removeWhere((x) =>
-          x.date.toIso8601String() == e.date.toIso8601String() &&
-          x.name == e.name);
-    });
-    await _saveEvents();
-    if (mounted) setState(() => _result = _compute());
-  }
-
-  Future<void> _saveEvents() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('forecast_custom_events',
-        jsonEncode(_customEvents.map((e) => e.toJson()).toList()));
   }
 
   Future<void> _showAddEventDialog() async {
@@ -411,12 +534,33 @@ class _ForecastScreenState extends State<ForecastScreen> {
     if (result == true) {
       final name = nameController.text.trim();
       if (name.isEmpty) return;
+      final event = EventDay(date: date, name: name, multiplier: multiplier);
+
+      // ☁️ Save online first so the event is shared with the company and never
+      // lost. If the backend is unreachable it is queued and uploaded later.
+      final saved = await SupabaseService.saveForecastEvent(
+        name: event.name,
+        date: event.date,
+        multiplier: event.multiplier,
+      );
+      if (saved == null) {
+        await _queuePendingEvent(event);
+      } else {
+        final id = int.tryParse('${saved['id']}');
+        if (id != null) _eventIds[_keyFor(event.date, event.name)] = id;
+      }
+
       setState(() {
-        _customEvents
-            .add(EventDay(date: date, name: name, multiplier: multiplier));
+        _customEvents.add(event);
         _result = _compute();
       });
       await _saveEvents();
+      if (mounted) {
+        Helpers.showToast(
+          saved == null ? t('forecastEventQueued') : t('forecastEventSaved'),
+          isError: saved == null,
+        );
+      }
     }
   }
 

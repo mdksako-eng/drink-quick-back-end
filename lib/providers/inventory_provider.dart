@@ -15,6 +15,9 @@ class InventoryProvider with ChangeNotifier {
   List<InventoryTransaction> _transactions = [];
   bool _isLoading = false;
   String? _error;
+
+  /// How many units were actually available when a sale was refused.
+  int? _insufficientAvailable;
   final InventoryService _inventoryService = InventoryService();
   DrinkProvider? _drinkProvider;
 
@@ -36,6 +39,9 @@ class InventoryProvider with ChangeNotifier {
   List<InventoryTransaction> get transactions => _transactions;
   bool get isLoading => _isLoading;
   String? get error => _error;
+
+  /// Units actually available when the last sale was refused (null = none).
+  int? get insufficientAvailable => _insufficientAvailable;
 
   // Computed properties
   List<InventoryItem> get lowStockItems =>
@@ -417,13 +423,46 @@ class InventoryProvider with ChangeNotifier {
       return false;
     }
 
-    if (_inventoryItems[index].quantity < quantity) {
-      _error = 'Insufficient stock for $drinkName';
-      notifyListeners();
-      return false;
+    // 🔒 Ask the SERVER to move the stock first. The guarded UPDATE is atomic,
+    // so if two staff sell the last item at the same moment only one succeeds
+    // and the balance can never go negative.
+    bool serverApplied = false;
+    if (SupabaseService.canUseSupabase) {
+      final move = await SupabaseService.sellStock(
+        drinkId: drinkId,
+        quantity: quantity,
+        reason: reason,
+        orderId: orderId,
+      );
+      if (move.insufficient) {
+        _insufficientAvailable = move.available;
+        _error = move.message ?? 'Not enough stock for $drinkName';
+        debugPrint('🛑 Sale refused by server: ${_error}');
+        notifyListeners();
+        return false;
+      }
+      if (move.ok) {
+        serverApplied = true;
+        _insufficientAvailable = null;
+        // Trust the server's authoritative remaining quantity.
+        _inventoryItems[index].quantity = move.remaining;
+      } else if (!move.offline) {
+        _error = move.message ?? 'Stock update failed';
+        debugPrint('❌ Server stock move failed: $_error');
+        notifyListeners();
+        return false;
+      }
     }
 
-    _inventoryItems[index].quantity -= quantity;
+    if (!serverApplied) {
+      if (_inventoryItems[index].quantity < quantity) {
+        _insufficientAvailable = _inventoryItems[index].quantity;
+        _error = 'Insufficient stock for $drinkName';
+        notifyListeners();
+        return false;
+      }
+      _inventoryItems[index].quantity -= quantity;
+    }
 
     // ✅ Sync to DrinkProvider
     try {
@@ -469,7 +508,7 @@ class InventoryProvider with ChangeNotifier {
     await _saveToLocalStorage();
     notifyListeners();
 
-    if (SupabaseService.canUseSupabase) {
+    if (SupabaseService.canUseSupabase && !serverApplied) {
       try {
         final upsertOk = await SupabaseService.upsertInventory(_inventoryItems[index].toJson());
         final txnOk = await SupabaseService.saveTransaction(transaction.toJson());
@@ -483,6 +522,11 @@ class InventoryProvider with ChangeNotifier {
         debugPrint('❌ Supabase sync error: $e');
         NotificationService().showSyncFailed(action: 'Stock removal', detail: drinkName);
       }
+    } else if (serverApplied) {
+      // ✅ The server already moved the stock atomically and logged the movement,
+      // so never push an absolute quantity here (that would clobber a concurrent
+      // sale from another device).
+      debugPrint('✅ Stock moved server-side (atomic): $drinkName, left ${_inventoryItems[index].quantity}');
     }
 
     return true;

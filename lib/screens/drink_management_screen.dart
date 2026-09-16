@@ -11,6 +11,9 @@ import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import 'package:drinks_calculator_fixed/models/inventory_model.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
+import 'package:drinks_calculator_fixed/services/secure_storage_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 import '../utils/i18n.dart';
 import 'barcode_scan_page.dart';
 
@@ -33,7 +36,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
   final _barcodeController = TextEditingController();
   final _unitsPerPackController = TextEditingController();
   String _selectedUnit = 'Bottle';
-  final List<String> _units = [
+  static const List<String> _defaultUnits = [
     'Bottle',
     'Can',
     'Glass',
@@ -43,8 +46,27 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     'Pack',
     'Crate'
   ];
+  static const List<String> _unitKinds = ['volume', 'mass', 'count'];
+
+  /// Sentinel value used by the dropdowns for the "＋ Add new" entry.
+  static const String _newOptionValue = '__add_new__';
+  static const String _customCategoriesKey = 'custom_drink_categories';
+  static const String _customUnitsKey = 'custom_drink_units';
+
+  /// Units present the user added themselves (persisted per device).
+  List<String> _units = [..._defaultUnits];
+
+  /// What the selected unit measures: volume / mass / count.
+  String _selectedUnitKind = 'count';
+
+  /// Optional batch dates for the drink.
+  DateTime? _productionDate;
+  DateTime? _expiryDate;
+
   String? _editingDrinkId;
-  final List<String> _categories = AppConstants.drinkCategories;
+
+  /// Categories present in the dropdown (defaults + user additions).
+  List<String> _categories = [...AppConstants.drinkCategories];
   String _selectedCategory = AppConstants.drinkCategories.first;
 
   // Sorting and filtering
@@ -65,6 +87,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     _loadDrinks().then((_) {
       setState(() {}); // Refresh UI after loading
     });
+    _loadCustomOptions(); // categories/units the user added earlier
     _searchController.addListener(_onSearchChanged);
     CurrencyHelper.addListener(_refreshCurrency);
 
@@ -210,6 +233,109 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     return drinks;
   }
 
+  /// Loads the categories/units the user created earlier.
+  Future<void> _loadCustomOptions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cats = prefs.getStringList(_customCategoriesKey) ?? [];
+      final units = prefs.getStringList(_customUnitsKey) ?? [];
+      if (!mounted) return;
+      setState(() {
+        _categories = [
+          ...AppConstants.drinkCategories,
+          ...cats.where((c) => !AppConstants.drinkCategories.contains(c)),
+        ];
+        _units = [..._defaultUnits, ...units.where((u) => !_defaultUnits.contains(u))];
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _persistCustomOption(String key, String value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final existing = prefs.getStringList(key) ?? [];
+      if (!existing.contains(value)) {
+        existing.add(value);
+        await prefs.setStringList(key, existing);
+      }
+    } catch (_) {}
+  }
+
+  /// ➕ Lets the user create a category or unit on the fly from the dropdown.
+  Future<void> _promptNewOption({required bool isCategory}) async {
+    final controller = TextEditingController();
+    final title = isCategory ? t('dm_newCategory') : t('dm_newUnit');
+    final value = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            labelText: title,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: Text(t('cancel'))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: Text(t('save')),
+          ),
+        ],
+      ),
+    );
+
+    if (value == null || value.isEmpty) return;
+    if (isCategory) {
+      if (_categories.contains(value)) {
+        setState(() => _selectedCategory = value);
+        return;
+      }
+      setState(() {
+        _categories.add(value);
+        _selectedCategory = value;
+      });
+      await _persistCustomOption(_customCategoriesKey, value);
+    } else {
+      if (_units.contains(value)) {
+        setState(() => _selectedUnit = value);
+        return;
+      }
+      setState(() {
+        _units.add(value);
+        _selectedUnit = value;
+      });
+      await _persistCustomOption(_customUnitsKey, value);
+    }
+    if (mounted) Helpers.showToast('${t('dm_optionAdded')}: $value');
+  }
+
+  Future<void> _pickBatchDate({required bool isExpiry}) async {
+    final now = DateTime.now();
+    final initial = (isExpiry ? _expiryDate : _productionDate) ?? now;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 10),
+      helpText: isExpiry ? t('dm_expiryDate') : t('dm_productionDate'),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isExpiry) {
+        _expiryDate = picked;
+      } else {
+        _productionDate = picked;
+      }
+    });
+  }
+
   void _clearForm() {
     _nameController.clear();
     _priceController.clear();
@@ -222,6 +348,9 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     _editingDrinkId = null;
     _selectedCategory = AppConstants.drinkCategories.first;
     _selectedUnit = 'Bottle';
+    _selectedUnitKind = 'count';
+    _productionDate = null;
+    _expiryDate = null;
     _sellingPriceError = null;
     _showProfitPreview = false;
   }
@@ -237,6 +366,9 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
       _minimumLevelController.text = drink.minimumLevel.toString();
       _purchasePriceController.text = drink.purchasePrice.toStringAsFixed(0);
       _selectedUnit = drink.unit;
+      _selectedUnitKind = drink.unitKind;
+      _productionDate = drink.productionDate;
+      _expiryDate = drink.expiryDate;
       _barcodeController.text = drink.barcode;
       _unitsPerPackController.text = drink.unitsPerPack.toString();
       _sellingPriceError = null;
@@ -300,6 +432,14 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
 
     final int newStock = int.tryParse(_currentStockController.text) ?? 0;
 
+    // 🧪 The expiry date must be after the production date.
+    if (_productionDate != null &&
+        _expiryDate != null &&
+        !_expiryDate!.isAfter(_productionDate!)) {
+      Helpers.showToast(t('dm_invalidBatchDates'), isError: true);
+      return;
+    }
+
     final drink = Drink(
       id: _editingDrinkId ?? DateTime.now().millisecondsSinceEpoch.toString(),
       name: _nameController.text.trim(),
@@ -314,6 +454,9 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
       purchasePrice: double.tryParse(_purchasePriceController.text) ?? 0,
       barcode: _barcodeController.text.trim(),
       unitsPerPack: int.tryParse(_unitsPerPackController.text) ?? 1,
+      unitKind: _selectedUnitKind,
+      productionDate: _productionDate,
+      expiryDate: _expiryDate,
     );
 
     if (_isSaving) return;
@@ -330,8 +473,39 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
             .firstOrNull;
 
         if (existingItem != null) {
-          // ✅ Update existing inventory item
-          existingItem.quantity = newStock;
+          //  A stock edit is a MOVEMENT, not a blind overwrite: the difference
+          // is applied atomically server-side and logged as stock-in/stock-out,
+          // so it can never push the balance negative.
+          final delta = newStock - existingItem.quantity;
+          if (delta != 0) {
+            final move = await SupabaseService.adjustStock(
+              drinkId: drink.id,
+              delta: delta,
+              type: delta > 0 ? 'in' : 'out',
+              reason: 'stock_edit',
+            );
+
+            if (!move.ok && !move.offline && !move.insufficient) {
+              Helpers.showToast(move.message ?? t('dm_stockEditFailed'),
+                  isError: true);
+              setState(() => _isSaving = false);
+              return;
+            }
+
+            if (move.ok) {
+              existingItem.quantity = move.remaining; // server truth
+            } else if (move.offline) {
+              // Offline: keep the local edit, it will sync with the next move.
+              existingItem.quantity = newStock;
+            } else {
+              // Refused (would go negative) — keep the true balance.
+              Helpers.showToast(
+                '${t('dm_stockEditFailed')} — ${move.message ?? ''}',
+                isError: true,
+              );
+            }
+          }
+
           existingItem.minStockLevel = drink.minimumLevel;
           existingItem.category = drink.category;
           existingItem.unit = drink.unit;
@@ -343,11 +517,11 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
           inventoryProvider.refreshInventory();
           await inventoryProvider.saveInventoryToStorage();
 
-          // ✅ Sync inventory to Supabase
+          // ✅ Sync the remaining fields to Supabase
           final success =
               await SupabaseService.upsertInventory(existingItem.toJson());
           debugPrint(
-              '✅ Inventory updated in Supabase: ${drink.name} stock = $newStock, success: $success');
+              '✅ Inventory updated in Supabase: ${drink.name} stock = ${existingItem.quantity}, success: $success');
         } else {
           // ✅ Create new inventory item
           await inventoryProvider.addInventoryItem(InventoryItem(
@@ -472,21 +646,34 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                       _buildSearchSortCard(isMobile, primaryColor, allDrinks),
                       SizedBox(height: isMobile ? 16 : 24),
 
+                      // 🔍 While searching, show the matching drinks FIRST so the
+                      // result is visible without scrolling past the add form.
+                      if (_searchQuery.isNotEmpty) ...[
+                        _buildDrinksHeader(
+                            isMobile, primaryColor, allDrinks, drinkProvider),
+                        SizedBox(height: isMobile ? 12 : 16),
+                        if (allDrinks.isEmpty)
+                          _buildEmptyState(isMobile, primaryColor, theme)
+                        else
+                          _buildDrinksGrid(isMobile, isTablet, allDrinks),
+                        SizedBox(height: isMobile ? 24 : 32),
+                      ],
+
                       // Add/Edit Drink Form Card
                       _buildFormCard(isMobile, isTablet, primaryColor, theme),
                       SizedBox(height: isMobile ? 24 : 32),
 
-                      // Custom Drinks Header
-                      _buildDrinksHeader(
-                          isMobile, primaryColor, allDrinks, drinkProvider),
-                      SizedBox(height: isMobile ? 16 : 24),
-
-                      // Drinks Grid
-                      if (allDrinks.isEmpty)
-                        _buildEmptyState(isMobile, primaryColor, theme)
-                      else
-                        _buildDrinksGrid(isMobile, isTablet, allDrinks),
-                      SizedBox(height: isMobile ? 24 : 32),
+                      // Full list (hidden while searching — it is shown above)
+                      if (_searchQuery.isEmpty) ...[
+                        _buildDrinksHeader(
+                            isMobile, primaryColor, allDrinks, drinkProvider),
+                        SizedBox(height: isMobile ? 16 : 24),
+                        if (allDrinks.isEmpty)
+                          _buildEmptyState(isMobile, primaryColor, theme)
+                        else
+                          _buildDrinksGrid(isMobile, isTablet, allDrinks),
+                        SizedBox(height: isMobile ? 24 : 32),
+                      ],
 
                       // Quick Tips
                       if (allDrinks.isNotEmpty)
@@ -722,6 +909,10 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
 
               // Unit
               _buildUnitDropdown(isMobile, primaryColor, theme),
+              SizedBox(height: isMobile ? 16 : 20),
+
+              // Measure type (volume / mass / count) + batch dates
+              _buildMeasureAndBatchFields(isMobile, primaryColor, theme),
               SizedBox(height: isMobile ? 16 : 20),
 
               // Current Stock
@@ -1076,15 +1267,34 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                 style: TextStyle(
                     color: theme.textTheme.bodyLarge?.color,
                     fontSize: isMobile ? 14 : 16),
-                items: _categories.map((category) {
-                  return DropdownMenuItem(
-                      value: category,
-                      child: Text(t('cat_' + category),
-                          style: const TextStyle(fontWeight: FontWeight.w500)));
-                }).toList(),
+                items: [
+                  ..._categories.map((category) {
+                    return DropdownMenuItem(
+                        value: category,
+                        child: Text(t('cat_' + category),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w500)));
+                  }),
+                  // ➕ create a category without leaving the form
+                  DropdownMenuItem(
+                    value: _newOptionValue,
+                    child: Row(children: [
+                      Icon(Icons.add, size: 18, color: primaryColor),
+                      const SizedBox(width: 6),
+                      Text(t('dm_newCategory'),
+                          style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.w600)),
+                    ]),
+                  ),
+                ],
                 onChanged: (String? newValue) {
-                  if (newValue != null)
-                    setState(() => _selectedCategory = newValue);
+                  if (newValue == null) return;
+                  if (newValue == _newOptionValue) {
+                    _promptNewOption(isCategory: true);
+                    return;
+                  }
+                  setState(() => _selectedCategory = newValue);
                 },
               ),
             ),
@@ -1121,17 +1331,138 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                 style: TextStyle(
                     color: theme.textTheme.bodyLarge?.color,
                     fontSize: isMobile ? 14 : 16),
-                items: _units
-                    .map((unit) =>
-                        DropdownMenuItem(value: unit, child: Text(t('unit_' + unit))))
-                    .toList(),
+                items: [
+                  ..._units.map((unit) => DropdownMenuItem(
+                      value: unit, child: Text(t('unit_' + unit)))),
+                  // ➕ create a unit without leaving the form
+                  DropdownMenuItem(
+                    value: _newOptionValue,
+                    child: Row(children: [
+                      Icon(Icons.add, size: 18, color: primaryColor),
+                      const SizedBox(width: 6),
+                      Text(t('dm_newUnit'),
+                          style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.w600)),
+                    ]),
+                  ),
+                ],
                 onChanged: (value) {
-                  if (value != null) setState(() => _selectedUnit = value);
+                  if (value == null) return;
+                  if (value == _newOptionValue) {
+                    _promptNewOption(isCategory: false);
+                    return;
+                  }
+                  setState(() => _selectedUnit = value);
                 },
               ),
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  /// 🧪 What the unit measures (volume / mass / items) plus the optional
+  /// production & expiry dates of the batch (saved to Supabase).
+  Widget _buildMeasureAndBatchFields(
+      bool isMobile, Color primaryColor, ThemeData theme) {
+    final dateFmt = DateFormat('yyyy-MM-dd');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(t('dm_measureType'),
+            style: TextStyle(
+                color: theme.hintColor,
+                fontSize: isMobile ? 14 : 15,
+                fontWeight: FontWeight.w500)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: _unitKinds.map((kind) {
+            final selected = _selectedUnitKind == kind;
+            return ChoiceChip(
+              avatar: Icon(
+                kind == 'volume'
+                    ? Icons.local_drink
+                    : kind == 'mass'
+                        ? Icons.scale
+                        : Icons.numbers,
+                size: 16,
+                color: selected ? Colors.white : primaryColor,
+              ),
+              label: Text(t('dm_unitKind_$kind')),
+              selected: selected,
+              onSelected: (_) => setState(() => _selectedUnitKind = kind),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 12),
+
+        Text(t('dm_batchDates'),
+            style: TextStyle(
+                color: theme.hintColor,
+                fontSize: isMobile ? 14 : 15,
+                fontWeight: FontWeight.w500)),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.agriculture_outlined, size: 18),
+              label: Text(
+                _productionDate == null
+                    ? t('dm_productionDate')
+                    : dateFmt.format(_productionDate!),
+                overflow: TextOverflow.ellipsis,
+              ),
+              onPressed: () => _pickBatchDate(isExpiry: false),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.event_busy_outlined, size: 18),
+              label: Text(
+                _expiryDate == null
+                    ? t('dm_expiryDate')
+                    : dateFmt.format(_expiryDate!),
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _expiryDate != null &&
+                        !_expiryDate!.isAfter(DateTime.now())
+                    ? Colors.red
+                    : null,
+              ),
+              onPressed: () => _pickBatchDate(isExpiry: true),
+            ),
+          ),
+        ]),
+        if (_expiryDate != null && !_expiryDate!.isAfter(DateTime.now()))
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(children: [
+              const Icon(Icons.warning_amber, color: Colors.red, size: 16),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(t('dm_alreadyExpired'),
+                    style: const TextStyle(color: Colors.red, fontSize: 12)),
+              ),
+            ]),
+          ),
+        if (_productionDate != null || _expiryDate != null)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              icon: const Icon(Icons.close, size: 16),
+              label: Text(t('dm_clearDates')),
+              onPressed: () => setState(() {
+                _productionDate = null;
+                _expiryDate = null;
+              }),
+            ),
+          ),
       ],
     );
   }

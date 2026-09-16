@@ -25,7 +25,31 @@ function status() {
     publicKeySet: Boolean(PUBLIC_KEY),
     privateKeySet: Boolean(PRIVATE_KEY),
     webhookSecretSet: Boolean(WEBHOOK_SECRET),
+    mode: keyMode(PUBLIC_KEY),
+    baseUrl: NOTCHPAY_BASE_URL,
   };
+}
+
+/**
+ * Infers whether the configured Notch Pay keys are live or test keys.
+ * Notch Pay uses the same host for both and switches on the key prefix
+ * (pk_live_… / sk_live_… vs pk_test_… / sk_test_…).
+ * @returns {'live'|'test'|'unknown'|'missing'}
+ */
+function keyMode(publicKey) {
+  const key = String(publicKey || PUBLIC_KEY || '').toLowerCase();
+  if (!key) return 'missing';
+  if (key.startsWith('pk_live') || key.startsWith('sk_live')) return 'live';
+  if (key.startsWith('pk_test') || key.startsWith('sk_test')
+    || key.startsWith('pk_sandbox') || key.startsWith('sk_sandbox')) {
+    return 'test';
+  }
+  return 'unknown';
+}
+
+/** True when real money will move (live keys configured). */
+function isLive() {
+  return keyMode() === 'live';
 }
 
 /**
@@ -162,6 +186,8 @@ function verifyWebhookSignature(rawBody, signatureHeader, hash) {
 
 module.exports = {
   isConfigured,
+  isLive,
+  keyMode,
   status,
   initiatePayment,
   getPaymentStatus,

@@ -7,6 +7,52 @@ import 'secure_storage_service.dart';
 // ✅ Import for Realtime
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Outcome of an atomic stock movement (sell / adjust).
+class StockMoveResult {
+  final bool ok;
+
+  /// True when the server refused because there is not enough stock.
+  final bool insufficient;
+
+  /// True when the server could not be reached (offline / not signed in) —
+  /// the caller should fall back to its local behaviour.
+  final bool offline;
+
+  /// Authoritative quantity left after the movement.
+  final int remaining;
+
+  /// Quantity the server reported when the movement was refused.
+  final int available;
+
+  final String? message;
+
+  const StockMoveResult._({
+    required this.ok,
+    this.insufficient = false,
+    this.offline = false,
+    this.remaining = 0,
+    this.available = 0,
+    this.message,
+  });
+
+  factory StockMoveResult.success(int remaining) =>
+      StockMoveResult._(ok: true, remaining: remaining);
+
+  factory StockMoveResult.insufficient({required int available, String? message}) =>
+      StockMoveResult._(
+        ok: false,
+        insufficient: true,
+        available: available,
+        message: message ?? 'Only $available left in stock',
+      );
+
+  factory StockMoveResult.failed(String message) =>
+      StockMoveResult._(ok: false, message: message);
+
+  factory StockMoveResult.offline() =>
+      const StockMoveResult._(ok: false, offline: true);
+}
+
 class SupabaseService {
   static int? _currentCompanyId;
   static int? _currentUserId;
@@ -399,6 +445,7 @@ class SupabaseService {
                 'date': order['date'],
                 'isActive': order['is_active'],
                 'customerName': order['customer_name'],
+                'staffName': order['staff_name'] ?? order['staffName'] ?? '',
               };
             })
             .toList();
@@ -440,6 +487,7 @@ class SupabaseService {
         'date': order['date'] ?? DateTime.now().toIso8601String(),
         'is_active': order['isActive'] ?? true,
         'customer_name': order['customerName'] ?? '',
+        'staff_name': (order['staffName'] ?? order['staff_name'] ?? '').toString(),
         'created_by': _currentUserId,
         'created_at': DateTime.now().toIso8601String(),
       };
@@ -476,6 +524,165 @@ class SupabaseService {
       return response.statusCode == 204;
     } catch (e) {
       return false;
+    }
+  }
+
+  // ============================================================
+  // 📅 FORECAST EVENTS (stored online so an event is never lost)
+  // ============================================================
+
+  /// Loads the company's forecast events from the backend.
+  ///
+  /// Returns `null` when the events could not be fetched (offline / not signed
+  /// in) so the caller can fall back to its local cache instead of assuming the
+  /// company has no events. An empty list means "no events online".
+  static Future<List<Map<String, dynamic>>?> getForecastEvents() async {
+    if (!canUseSupabase) {
+      print('⚠️ Cannot load forecast events - Supabase not available');
+      return null;
+    }
+    try {
+      final response = await http.get(
+        Uri.parse(ApiConfig.dataEvents),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode != 200) {
+        print('❌ Failed to get forecast events: ${response.statusCode}');
+        return null;
+      }
+      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase getForecastEvents error: $e');
+      return null;
+    }
+  }
+
+  /// Saves an event online. Returns the stored row (with its `id`) or null.
+  static Future<Map<String, dynamic>?> saveForecastEvent({
+    required String name,
+    required DateTime date,
+    required double multiplier,
+  }) async {
+    if (!canUseSupabase) {
+      print('⚠️ Cannot save forecast event - Supabase not available');
+      return null;
+    }
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataEvents),
+        headers: await _authedHeaders(),
+        body: jsonEncode({
+          'company_id': _currentCompanyId,
+          'name': name,
+          'event_date': date.toIso8601String().split('T').first,
+          'multiplier': multiplier,
+          'created_by': _currentUserId,
+        }),
+      );
+      if (response.statusCode != 201) {
+        print('❌ Failed to save forecast event: ${response.body}');
+        return null;
+      }
+      return Map<String, dynamic>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase saveForecastEvent error: $e');
+      return null;
+    }
+  }
+
+  /// Deletes an event online (company-scoped).
+  static Future<bool> deleteForecastEvent(dynamic id) async {
+    if (!canUseSupabase) return false;
+    try {
+      final response = await http.delete(
+        Uri.parse('${ApiConfig.dataEvents}/$id'),
+        headers: await _authedHeaders(),
+      );
+      return response.statusCode == 204;
+    } catch (e) {
+      print('❌ Supabase deleteForecastEvent error: $e');
+      return false;
+    }
+  }
+
+  // ============================================================
+  // 🔒 ATOMIC STOCK MOVEMENTS
+  // ============================================================
+
+  /// Sells stock through the server's atomic guarded update.
+  ///
+  /// The check ("is there enough?") and the write happen in one statement on
+  /// the server, so two staff selling the last item at the same moment cannot
+  /// both succeed and the balance can never go negative.
+  static Future<StockMoveResult> sellStock({
+    required String drinkId,
+    required int quantity,
+    String reason = 'sale',
+    String? orderId,
+  }) async {
+    return _stockMove(
+      ApiConfig.dataInventorySell,
+      {
+        'drink_id': drinkId,
+        'quantity': quantity,
+        'reason': reason,
+        if (orderId != null && orderId.isNotEmpty) 'order_id': orderId,
+        if (_currentUserId != null) 'performed_by': _currentUserId.toString(),
+      },
+    );
+  }
+
+  /// Stock-in / stock-out adjustment (manager stock edits stay auditable).
+  static Future<StockMoveResult> adjustStock({
+    required String drinkId,
+    required int delta,
+    required String type, // 'in' | 'out'
+    String? reason,
+  }) async {
+    return _stockMove(
+      ApiConfig.dataInventoryAdjust,
+      {
+        'drink_id': drinkId,
+        'delta': delta,
+        'type': type,
+        if (reason != null) 'reason': reason,
+        if (_currentUserId != null) 'performed_by': _currentUserId.toString(),
+      },
+    );
+  }
+
+  static Future<StockMoveResult> _stockMove(
+      String url, Map<String, dynamic> body) async {
+    if (!canUseSupabase) return StockMoveResult.offline();
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: await _authedHeaders(),
+        body: jsonEncode(body),
+      );
+      Map<String, dynamic> data = {};
+      try {
+        data = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+      } catch (_) {}
+
+      if (response.statusCode == 200) {
+        return StockMoveResult.success(
+          (data['remaining'] as num?)?.toInt() ?? 0,
+        );
+      }
+      if (response.statusCode == 409) {
+        return StockMoveResult.insufficient(
+          available: (data['available'] as num?)?.toInt() ?? 0,
+          message: data['message']?.toString(),
+        );
+      }
+      return StockMoveResult.failed(
+        data['message']?.toString() ??
+            'Stock update failed (${response.statusCode})',
+      );
+    } catch (e) {
+      print('❌ Supabase stock move error: $e');
+      return StockMoveResult.offline();
     }
   }
 

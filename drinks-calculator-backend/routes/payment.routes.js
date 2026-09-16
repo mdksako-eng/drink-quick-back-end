@@ -891,11 +891,87 @@ router.post('/payment/webhook', async (req, res) => {
 // ============================================================
 // 🔄 HEALTH CHECK
 // ============================================================
-router.get('/payment/health', (req, res) => {
-  res.json({
+// Anonymous: simple liveness ping.
+// Signed in as a Manager/Administrator: adds B2C payment readiness so the app
+// can tell whether this company can take REAL customer payments.
+router.get('/payment/health', async (req, res) => {
+  const base = {
     status: 'ok',
     timestamp: new Date().toISOString(),
-  });
+  };
+
+  try {
+    const user = await requireSessionUser(req);
+    if (!user) return res.json(base);
+    if (!['Manager', 'Administrator', 'Admin'].includes(user.role)) {
+      return res.json(base);
+    }
+
+    const companyId = user.role === 'Administrator'
+      ? (req.query.company_id || user.company_id)
+      : user.company_id;
+    if (!companyId) return res.json(base);
+
+    const result = await req.db.query(
+      `SELECT business_payments_enabled, mtn_enabled, orange_enabled, card_enabled,
+              mtn_merchant_id, orange_merchant_id,
+              mtn_api_key, mtn_secret_key, orange_api_key, orange_secret_key,
+              mtn_sandbox_mode, orange_sandbox_mode, notchpay_sync_id
+       FROM companies WHERE id = $1`,
+      [companyId]
+    );
+    if (result.rows.length === 0) return res.json(base);
+    const c = result.rows[0];
+
+    const notchpayAvailable = notchpay.isConfigured();
+    const companySync = Boolean(c.notchpay_sync_id);
+    // 🔀 Notch Pay Sync settles into the COMPANY's own account, so it is the
+    // preferred path for real B2C money (their account controls live/sandbox).
+    const notchpayPath = notchpayAvailable && companySync;
+
+    const mtnCreds = Boolean(c.mtn_api_key && c.mtn_secret_key && c.mtn_merchant_id);
+    const orangeCreds = Boolean(c.orange_api_key && c.orange_secret_key && c.orange_merchant_id);
+
+    const blockers = [];
+    if (!c.business_payments_enabled) {
+      blockers.push('Business payments are disabled in settings');
+    }
+    if (!notchpayPath && !(c.mtn_enabled && mtnCreds) && !(c.orange_enabled && orangeCreds)) {
+      blockers.push('Connect a Notch Pay account or add live MoMo API credentials');
+    }
+    if (!notchpayPath && c.mtn_enabled && mtnCreds && c.mtn_sandbox_mode) {
+      blockers.push('MTN is in sandbox mode — turn it off to collect real money');
+    }
+    if (!notchpayPath && c.orange_enabled && orangeCreds && c.orange_sandbox_mode) {
+      blockers.push('Orange is in sandbox mode — turn it off to collect real money');
+    }
+
+    return res.json({
+      ...base,
+      payments: {
+        companyId,
+        businessPaymentsEnabled: Boolean(c.business_payments_enabled),
+        methods: {
+          mtn: { enabled: Boolean(c.mtn_enabled), credentials: mtnCreds, mode: c.mtn_sandbox_mode ? 'sandbox' : 'live' },
+          orange: { enabled: Boolean(c.orange_enabled), credentials: orangeCreds, mode: c.orange_sandbox_mode ? 'sandbox' : 'live' },
+          card: { enabled: Boolean(c.card_enabled), requiresNotchpaySync: true },
+        },
+        notchpay: {
+          platformConfigured: notchpayAvailable,
+          platformMode: notchpay.keyMode(),
+          companyAccountConnected: companySync,
+        },
+        liveReady: Boolean(c.business_payments_enabled) &&
+          (notchpayPath ||
+            (!c.mtn_sandbox_mode && mtnCreds) ||
+            (!c.orange_sandbox_mode && orangeCreds)),
+        blockers,
+      },
+    });
+  } catch (error) {
+    console.error('GET /payment/health error:', error.message);
+    return res.json(base);
+  }
 });
 
 // ============================================================

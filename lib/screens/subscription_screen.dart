@@ -292,6 +292,24 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final provider = context.watch<PlanProvider>();
     final info = provider.info;
 
+    // ⏳ The plan must be resolved before the plans/prices are shown, otherwise
+    // the user could land on the subscription screen with stale or empty data.
+    if (provider.loading) {
+      return Scaffold(
+        appBar: AppBar(title: Text(t('subscription'))),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Loading your plan…', style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: Text(t('subscription'))),
       body: RefreshIndicator(

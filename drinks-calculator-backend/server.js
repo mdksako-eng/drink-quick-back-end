@@ -188,6 +188,82 @@ app.use(async (req, res, next) => {
       } catch (drinkColErr) {
         console.log('⚠️ drinks columns warning:', drinkColErr.message);
       }
+
+      // 🔔 NOTIFICATIONS — per-user, stored online so each user keeps their own
+      // history across devices. Rows older than ~2 months are pruned on read.
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS notifications (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            company_id INTEGER,
+            title TEXT NOT NULL,
+            message TEXT DEFAULT '',
+            type TEXT DEFAULT 'general',
+            is_read BOOLEAN DEFAULT false,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await pool.query(
+          `CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC)`
+        );
+        console.log('✅ notifications table ensured');
+      } catch (notifTableErr) {
+        console.log('⚠️ notifications table warning:', notifTableErr.message);
+      }
+
+      // 🧪 DRINKS — unit kind (volume | mass | count) + production/expiry dates
+      // so batch freshness can be tracked per drink.
+      try {
+        await pool.query(`ALTER TABLE drinks ADD COLUMN IF NOT EXISTS unit_kind TEXT DEFAULT 'count'`);
+        await pool.query(`ALTER TABLE drinks ADD COLUMN IF NOT EXISTS production_date DATE`);
+        await pool.query(`ALTER TABLE drinks ADD COLUMN IF NOT EXISTS expiry_date DATE`);
+        console.log('✅ drinks unit_kind/production_date/expiry_date columns ensured');
+      } catch (drinkBatchErr) {
+        console.log('⚠️ drinks batch columns warning:', drinkBatchErr.message);
+      }
+
+      // 🧑‍💼 ORDERS — ensure staff_name so the manager dashboard's
+      // "Sales by Staff" (analytics) survives refreshes and is shared across
+      // devices. Orders saved before the column existed are backfilled from
+      // the user who created them (orders.created_by -> users.username).
+      try {
+        await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS staff_name VARCHAR(100)`);
+        await pool.query(`
+          UPDATE orders o
+          SET staff_name = u.username
+          FROM users u
+          WHERE o.created_by = u.id
+            AND (o.staff_name IS NULL OR o.staff_name = '')
+        `);
+        console.log('✅ orders staff_name column ensured (backfilled from created_by)');
+      } catch (orderStaffColErr) {
+        console.log('⚠️ orders staff_name warning:', orderStaffColErr.message);
+      }
+
+      // 📅 FORECAST EVENTS — company-wide events (holidays, parties, match days)
+      // that boost demand forecasting. Stored online so an event added on one
+      // device is never lost and is shared with the whole company.
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS forecast_events (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            name VARCHAR(120) NOT NULL,
+            event_date DATE NOT NULL,
+            multiplier NUMERIC(5,2) DEFAULT 1.25,
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await pool.query(
+          `CREATE INDEX IF NOT EXISTS idx_forecast_events_company ON forecast_events(company_id, event_date)`
+        );
+        console.log('✅ forecast_events table ensured');
+      } catch (eventTableErr) {
+        console.log('⚠️ forecast_events table warning:', eventTableErr.message);
+      }
+
       // 🎁 One-time: grandfather all existing companies into Pro (except id 1).
       // Guarded by an app_flags marker so it runs exactly once.
       try {
@@ -448,6 +524,15 @@ const verifyAdmin = (req, res, next) => {
     res.status(403).json({ success: false, message: 'Wrong admin password' });
   }
 };
+
+// The Admin Panel sends the platform admin password in `X-Admin-Password`
+// alongside the normal session token: it means "act as a platform
+// Administrator" for account actions (block / unblock / delete).
+function isPlatformAdminRequest(req) {
+  if (!ADMIN_PASSWORD) return false;
+  const provided = req.headers['x-admin-password'];
+  return typeof provided === 'string' && provided.length > 0 && provided === ADMIN_PASSWORD;
+}
 
 // ========== PASSWORD RESET WITH EMAIL CODE ==========
 const resetCodes = {};
@@ -1155,11 +1240,16 @@ app.post('/api/auth/block-user/:id', requireSession(pool), async (req, res) => {
     if (userResult.rowCount === 0) return res.status(404).json({ status: 'error', message: 'User not found' });
     
     const user = userResult.rows[0];
-    if (user.role === 'Administrator') return res.status(403).json({ status: 'error', message: 'Cannot block Administrator' });
+    // 🔐 Platform admin password (sent by the Admin Panel) acts as a global
+    // Administrator override — it is NOT the same as a user session.
+    const platformAdmin = isPlatformAdminRequest(req);
+    if (user.role === 'Administrator' && !platformAdmin) {
+      return res.status(403).json({ status: 'error', message: 'Cannot block Administrator' });
+    }
     
-    const isAdmin = req.user?.role === 'Administrator';
+    const isAdmin = platformAdmin || req.user?.role === 'Administrator';
 
-    // 🔒 Non-admins may only manage users inside their own company
+    //  Non-admins may only manage users inside their own company
     if (!isAdmin && req.user?.company_id != null && user.company_id != null && user.company_id !== req.user.company_id) {
       return res.status(403).json({ status: 'error', message: 'You can only manage users in your own company' });
     }
@@ -1176,12 +1266,13 @@ app.post('/api/auth/block-user/:id', requireSession(pool), async (req, res) => {
       }
     }
 
-    // 🔐 Company owners cannot be blocked by other managers
-    if (req.user?.company_id) {
+    // 🔐 Company owners cannot be blocked by other managers (the platform
+    // Administrator may still do it deliberately).
+    if (!platformAdmin && req.user?.company_id) {
       try {
         const ownRow = await pool.query('SELECT owner_id FROM companies WHERE id = $1', [req.user.company_id]);
         if (ownRow.rows.length > 0 && ownRow.rows[0].owner_id === user.id) {
-          return res.status(403).json({ status: 'error', message: 'Cannot block the company owner' });
+          return res.status(403).json({ status: 'error', message: 'Cannot block an owner of a company' });
         }
       } catch (e) { /* owner column may not exist yet — fail open */ }
     }
@@ -1205,9 +1296,10 @@ app.post('/api/auth/unblock-user/:id', requireSession(pool), async (req, res) =>
     if (userResult.rowCount === 0) return res.status(404).json({ status: 'error', message: 'User not found' });
 
     const user = userResult.rows[0];
-    const isAdmin = req.user?.role === 'Administrator';
+    const platformAdmin = isPlatformAdminRequest(req);
+    const isAdmin = platformAdmin || req.user?.role === 'Administrator';
 
-    // 🔒 Non-admins may only manage users inside their own company
+    //  Non-admins may only manage users inside their own company
     if (!isAdmin && req.user?.company_id != null && user.company_id != null && user.company_id !== req.user.company_id) {
       return res.status(403).json({ status: 'error', message: 'You can only manage users in your own company' });
     }
@@ -1306,28 +1398,34 @@ app.get('/api/users', requireSession(pool), async (req, res) => {
       return res.status(403).json({ status: 'error', message: 'Not authorized to list users' });
     }
     
-    let query = 'SELECT id, username, email, role, company_id, is_active, created_at, last_login FROM users WHERE 1=1';
+    let query = `SELECT u.id, u.username, u.email, u.role, u.company_id, u.is_active, u.created_at, u.last_login,
+                        (c.owner_id = u.id) AS is_owner
+                 FROM users u
+                 LEFT JOIN companies c ON c.id = u.company_id
+                 WHERE 1=1`;
     const params = [];
     let p = 1;
     
-    if (role) { query += ` AND role = $${p}`; params.push(role); p++; }
-    if (search) { query += ` AND (username ILIKE $${p} OR email ILIKE $${p})`; params.push(`%${search}%`); p++; }
+    if (role) { query += ` AND u.role = $${p}`; params.push(role); p++; }
+    if (search) { query += ` AND (u.username ILIKE $${p} OR u.email ILIKE $${p})`; params.push(`%${search}%`); p++; }
     if (requesterRole === 'Manager') {
       const managerCompanyId = req.user.company_id;
       if (managerCompanyId) {
-        query += ` AND company_id = $${p}`;
+        query += ` AND u.company_id = $${p}`;
         params.push(managerCompanyId);
         p++;
         console.log(`🔒 Filtering by company_id: ${managerCompanyId}`);
       }
     }
 
-    query += ' ORDER BY created_at DESC';
+    query += ' ORDER BY u.created_at DESC';
     const result = await pool.query(query, params);
     
     res.json({
       status: 'success',
-      data: { users: result.rows.map(u => ({ _id: u.id, id: u.id, username: u.username, email: u.email, role: u.role, companyId: u.company_id, isActive: u.is_active, createdAt: u.created_at, lastLogin: u.last_login })) }
+      // 👑 isOwner lets the app crown the company founder and block attempts to
+      // block/deactivate them.
+      data: { users: result.rows.map(u => ({ _id: u.id, id: u.id, username: u.username, email: u.email, role: u.role, companyId: u.company_id, isActive: u.is_active, createdAt: u.created_at, lastLogin: u.last_login, isOwner: u.is_owner === true })) }
     });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });
@@ -2261,6 +2359,102 @@ app.post('/api/ai/chat', requireSession(pool), requirePlan(['pro']), async (req,
     });
   } catch (error) {
     console.error('❌ AI chat error:', error.message);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ========== AI VISION (photo → drinks) ==========
+// Reads a photo of a handwritten order / receipt / screenshot and returns the
+// ordered drinks both as text and as a machine-readable ORDER_JSON block the
+// app can push straight into the calculator.
+app.post('/api/ai/vision', requireSession(pool), requirePlan(['pro']), async (req, res) => {
+  try {
+    const { image, prompt, drinks } = req.body || {};
+    if (!image || typeof image !== 'string') {
+      return res.status(400).json({ success: false, error: 'Image is required' });
+    }
+
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      console.error(' GROQ_API_KEY not set on server');
+      return res.status(500).json({ success: false, error: 'AI service not configured' });
+    }
+
+    // The app sends a data URL; accept bare base64 too.
+    const dataUrl = image.startsWith('data:')
+      ? image
+      : `data:image/jpeg;base64,${image}`;
+
+    const menu = Array.isArray(drinks)
+      ? drinks.filter(Boolean).slice(0, 60).join(', ')
+      : '';
+
+    const instructions = [
+      'You read photos of drink orders (handwritten notes, receipts, screenshots, menus).',
+      menu ? `This shop only sells: ${menu}.` : '',
+      'Extract every ordered drink and its quantity.',
+      'Start with one short friendly sentence describing what you found, then a line exactly like:',
+      'ORDER_JSON: [{"name":"<drink>","qty":<number>}]',
+      'Use the drink names exactly as written above when they match.',
+      'If the image contains no order, say so and do NOT include an ORDER_JSON line.',
+      prompt ? `Extra context from the user: ${prompt}` : '',
+    ].filter(Boolean).join(' ');
+
+    // Vision-capable Groq models, best first.
+    const VISION_MODELS = [
+      'meta-llama/llama-4-scout-17b-16e-instruct',
+      'meta-llama/llama-4-maverick-17b-128e-instruct',
+      'llama-3.2-11b-vision-preview',
+    ];
+
+    let lastError = null;
+    for (const model of VISION_MODELS) {
+      try {
+        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            temperature: 0.2,
+            max_tokens: 700,
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'text', text: instructions },
+                { type: 'image_url', image_url: { url: dataUrl } },
+              ],
+            }],
+          }),
+        });
+
+        const data = await groqResponse.json().catch(() => ({}));
+        if (groqResponse.ok) {
+          const content = (data.choices && data.choices[0] && data.choices[0].message
+            ? data.choices[0].message.content
+            : '').trim() || 'No response';
+          return res.json({ success: true, content, model });
+        }
+
+        lastError = (data && data.error && data.error.message) || `Vision request failed (${groqResponse.status})`;
+        // Model not available on this key → try the next one.
+        const msg = String(lastError).toLowerCase();
+        const retryable = msg.includes('does not exist')
+          || msg.includes('decommissioned')
+          || msg.includes('not supported')
+          || msg.includes('no longer support');
+        if (!retryable) break;
+      } catch (fetchErr) {
+        lastError = fetchErr.message;
+      }
+    }
+
+    console.error('❌ Groq vision error:', String(lastError).slice(0, 300));
+    return res.status(502).json({ success: false, error: lastError || 'Vision model unavailable' });
+  } catch (error) {
+    console.error('❌ AI vision error:', error.message);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });

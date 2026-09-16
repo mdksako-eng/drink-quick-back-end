@@ -45,5 +45,20 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- ️ Voice ordering (speech_to_text) + AI voice replies -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Drink Quick Cal uses the microphone so you can add drinks to an order by voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Drink Quick Cal uses speech recognition to turn your spoken order into items in the calculator.</string>
+	<!-- 📷 Photo orders + barcode/QR scanning -->
+	<key>NSCameraUsageDescription</key>
+	<string>Drink Quick Cal uses the camera to photograph an order or scan a product barcode/QR code.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Drink Quick Cal needs access to your photos so the AI can read an order from an image you choose.</string>
+	<!-- 🖨️ Receipt printing over Bluetooth -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Drink Quick Cal uses Bluetooth to send receipts to a thermal printer.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Drink Quick Cal uses Bluetooth to send receipts to a thermal printer.</string>
 </dict>
 </plist>

@@ -164,7 +164,14 @@ class _ManagerPanelState extends State<ManagerPanel>
     setState(() => _isCreating = false);
   }
 
+  /// 👑 The company owner can never be blocked — by anyone, including a
+  /// co-manager. Guarded here (fast feedback) and on the backend (authoritative).
   Future<void> _blockStaff(Map<String, dynamic> staff) async {
+    if (staff['isOwner'] == true) {
+      if (mounted) Helpers.showToast(t('staffCannotBlockOwner'), isError: true);
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -198,6 +205,14 @@ class _ManagerPanelState extends State<ManagerPanel>
         if (response.statusCode == 200) {
           await _loadStaff();
           Helpers.showToast(t('b3_blocked'));
+        } else {
+          // The backend also refuses to block the company owner.
+          String message = t('staffBlockFailed');
+          try {
+            final body = json.decode(response.body);
+            if (body['message'] != null) message = body['message'].toString();
+          } catch (_) {}
+          if (mounted) Helpers.showToast(message, isError: true);
         }
       } catch (e) {
         Helpers.showToast('Error: $e');
@@ -679,9 +694,35 @@ class _ManagerPanelState extends State<ManagerPanel>
                       color: Colors.white, fontWeight: FontWeight.bold)),
             ),
             title: Row(children: [
+              if (s['isOwner'] == true)
+                const Padding(
+                  padding: EdgeInsets.only(right: 4),
+                  child: Icon(Icons.workspace_premium,
+                      size: 16, color: Colors.amber),
+                ),
               Expanded(
                   child: Text(s['username'] ?? 'Unknown',
                       style: const TextStyle(fontWeight: FontWeight.w500))),
+              if (s['isOwner'] == true)
+                Container(
+                  margin: const EdgeInsets.only(left: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.emoji_events,
+                        size: 12, color: Colors.orange),
+                    const SizedBox(width: 3),
+                    Text(t('staffOwner'),
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade800)),
+                  ]),
+                ),
               if (s['id'].toString() ==
                   Provider.of<AuthProvider>(context, listen: false)
                       .user
@@ -721,38 +762,34 @@ class _ManagerPanelState extends State<ManagerPanel>
                 ),
               ),
             ]),
-            trailing: PopupMenuButton<String>(
-              onSelected: (action) {
-                if (action == 'edit') _editStaff(s);
-                if (action == 'block') _blockStaff(s);
-                if (action == 'unblock') _unblockStaff(s);
-              },
-              itemBuilder: (ctx) => [
-                PopupMenuItem(
-                    value: 'edit',
-                    child: Row(children: [
-                      const Icon(Icons.edit, size: 18),
-                      const SizedBox(width: 8),
-                      Text(t('edit'))
-                    ])),
-                if (isActive)
-                  PopupMenuItem(
-                      value: 'block',
-                      child: Row(children: [
-                        const Icon(Icons.block, color: Colors.red, size: 18),
-                        const SizedBox(width: 8),
-                        Text(t('b3_block'))
-                      ])),
-                if (!isActive)
-                  PopupMenuItem(
-                      value: 'unblock',
-                      child: Row(children: [
-                        const Icon(Icons.check_circle, color: Colors.green, size: 18),
-                        const SizedBox(width: 8),
-                        Text(t('b3_unblock'))
-                      ])),
-              ],
-            ),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              // ✏️ edit
+              IconButton(
+                tooltip: t('edit'),
+                icon: const Icon(Icons.edit_outlined, size: 20),
+                onPressed: () => _editStaff(s),
+              ),
+              // 🚫 block / ✅ unblock — always visible as icons.
+              if (isActive)
+                IconButton(
+                  tooltip: s['isOwner'] == true
+                      ? t('staffCannotBlockOwner')
+                      : t('b3_block'),
+                  icon: Icon(Icons.block,
+                      size: 20,
+                      color: s['isOwner'] == true
+                          ? Colors.grey
+                          : Colors.red),
+                  onPressed: () => _blockStaff(s),
+                )
+              else
+                IconButton(
+                  tooltip: t('b3_unblock'),
+                  icon: const Icon(Icons.lock_open,
+                      size: 20, color: Colors.green),
+                  onPressed: () => _unblockStaff(s),
+                ),
+            ]),
           ),
         );
       },

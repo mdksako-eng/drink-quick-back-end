@@ -452,7 +452,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     });
   }
 
-  Future<void> _deductInventoryFromOrder() async {
+  Future<bool> _deductInventoryFromOrder() async {
     debugPrint('🔴🔴🔴 _deductInventoryFromOrder() CALLED 🔴🔴🔴');
     final inventoryProvider =
         Provider.of<InventoryProvider>(context, listen: false);
@@ -469,6 +469,10 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     final orderId =
         _createdOrder?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
     debugPrint('   Order ID: $orderId');
+
+    // 🔒 Every line is committed atomically server-side. If any line cannot be
+    // sold (someone else took the last unit), the whole sale is refused instead
+    // of pushing the inventory negative.
     for (final entry in summary.entries) {
       final drink = _selectedDrinks.firstWhere((d) => d.name == entry.key);
       debugPrint(
@@ -490,9 +494,24 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         debugPrint(
             '   ✅ Drink updated: ${drink.name} stock = ${updatedDrink.currentStock}');
       } else {
+        final available = inventoryProvider.insufficientAvailable;
+        final detail = available != null
+            ? '${drink.name}: $available ${t('remainingInStock')}'
+            : drink.name;
         debugPrint('   ❌ Failed to remove stock for ${drink.name}');
+        if (mounted) {
+          Helpers.showToast(
+            '${t('insufficientStockSale')} — $detail',
+            isError: true,
+          );
+          // Re-pull the true balance so the screen shows reality.
+          await inventoryProvider.loadInventoryFromSupabase();
+          if (mounted) setState(() {});
+        }
+        return false;
       }
     }
+    return true;
     await drinkProvider.loadDrinksFromSupabase();
     debugPrint('   ✅ Forced drinks refresh from Supabase');
   }
@@ -897,7 +916,17 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       customerName,
       staffName: staffName,
     );
-    await _deductInventoryFromOrder();
+
+    // 🔒 Atomic stock commit; the payment is already collected, so on failure we
+    // roll the order back and tell the operator to reconcile.
+    final stockOk = await _deductInventoryFromOrder();
+    if (!stockOk) {
+      if (_createdOrder != null) {
+        await orderProvider.toggleOrderStatus(_createdOrder!.id, false);
+        _createdOrder = null;
+      }
+      return false;
+    }
 
     // ✅ Update transaction status in Supabase
     await SupabaseService.updateTransactionStatus(orderId, 'completed');
@@ -1062,7 +1091,17 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       customerName,
       staffName: staffName,
     );
-    await _deductInventoryFromOrder();
+
+    // 🔒 Commit the stock atomically. If the last unit was taken by someone
+    // else in the meantime the sale is rolled back instead of going negative.
+    final stockOk = await _deductInventoryFromOrder();
+    if (!stockOk) {
+      if (_createdOrder != null) {
+        await orderProvider.toggleOrderStatus(_createdOrder!.id, false);
+        _createdOrder = null;
+      }
+      return false;
+    }
     return true;
   }
 

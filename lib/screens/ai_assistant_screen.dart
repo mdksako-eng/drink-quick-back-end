@@ -1,6 +1,7 @@
 // screens/ai_assistant_screen.dart
 import 'dart:convert';
 import '../utils/i18n.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import '../widgets/upgrade_required.dart';
@@ -16,6 +17,10 @@ import 'package:drinks_calculator_fixed/services/groq_service.dart';
 import 'package:drinks_calculator_fixed/screens/calculator_screen.dart';
 import 'package:drinks_calculator_fixed/services/order_bridge.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:drinks_calculator_fixed/utils/ai_order_parser.dart';
+import 'package:drinks_calculator_fixed/widgets/ai_thinking_indicator.dart';
 
 class AIAssistantScreen extends StatefulWidget {
   const AIAssistantScreen({Key? key}) : super(key: key);
@@ -33,6 +38,8 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
   
   bool _isListening = false;
   bool _isLoading = false;
+  bool _isReadingImage = false;
+  String _loadingLabel = '';
   String _voiceStatus = '';
   bool _voiceFeedbackEnabled = true;
   double _speechRate = 0.5;
@@ -256,35 +263,126 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     );
   }
 
+  /// 📷 Reads a photo of an order (handwritten note, receipt, screenshot, menu)
+  /// and turns the detected drinks into a pending order ready for the calculator.
+  Future<void> _analyzeImage(ImageSource source) async {
+    final drinkProvider = Provider.of<DrinkProvider>(context, listen: false);
+    final drinks = drinkProvider.customDrinks;
+
+    try {
+      //  The camera needs the runtime permission on Android/iOS/macOS. On the
+      // web there is no runtime permission API, so the browser prompt is used
+      // and we must not block the picker.
+      if (source == ImageSource.camera && !kIsWeb) {
+        try {
+          final status = await Permission.camera.request();
+          if (!status.isGranted) {
+            if (mounted) _showToast(t('ai_cameraDenied'), isError: true);
+            return;
+          }
+        } catch (_) {
+          // Platform without a runtime permission API — let the picker decide.
+        }
+      }
+
+      final picked = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1400,
+        imageQuality: 70,
+      );
+      if (picked == null) return;
+
+      final bytes = await picked.readAsBytes();
+      final base64Image = base64Encode(bytes);
+
+      setState(() {
+        _isReadingImage = true;
+        _loadingLabel = t('ai_readingImage');
+      });
+      _messages.add({'text': '📷 ${t('ai_imageSent')}', 'isUser': true});
+      _scrollToBottom();
+
+      final response = await _groqService.analyzeImage(
+        base64Image: base64Image,
+        drinks: drinks.map((d) => d.name).toList(),
+        prompt: _pendingOrder.isEmpty
+            ? ''
+            : 'The order already contains ${_pendingOrder.map((i) => '${i['quantity']}x ${(i['drink'] as Drink).name}').join(', ')}.',
+      );
+
+      // Any drinks the vision model recognised are added to the pending order.
+      final matched = AIOrderParser.matchLines(
+        AIOrderParser.extractOrderLines(response),
+        drinks,
+      );
+      setState(() {
+        _isReadingImage = false;
+        for (final line in matched) {
+          _addToOrderSilently(line.drink, line.quantity);
+        }
+        final visible = AIOrderParser.stripOrderBlock(response);
+        _messages.add({
+          'text': matched.isEmpty
+              ? visible
+              : '$visible\n\n✅ ${t('ai_addedItems').replaceAll('@items', matched.map((m) => '${m.quantity}x ${m.drink.name}').join(', '))}',
+          'isUser': false,
+        });
+      });
+      _persistMemory();
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isReadingImage = false);
+        _showToast('${t('ai_imageFailed')}: $e', isError: true);
+      }
+    }
+  }
+
+  /// Lets the user choose camera or gallery before analysing.
+  void _showImageSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: Text(t('ai_takePhoto')),
+            onTap: () {
+              Navigator.pop(ctx);
+              _analyzeImage(ImageSource.camera);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: Text(t('ai_chooseImage')),
+            onTap: () {
+              Navigator.pop(ctx);
+              _analyzeImage(ImageSource.gallery);
+            },
+          ),
+        ]),
+      ),
+    );
+  }
+
   void _processVoiceCommand(String text) {
     final command = VoiceService.parseCommand(text);
-    final drinkProvider = Provider.of<DrinkProvider>(context, listen: false);
 
     _messages.add({'text': '"$text"', 'isUser': true});
     _scrollToBottom();
 
     switch (command.type) {
       case VoiceCommandType.add:
-        if (command.drinkName != null) {
-          final drinks = drinkProvider.customDrinks;
-          final matchedDrink = drinks.where((d) => 
-            d.name.toLowerCase().contains(command.drinkName!.toLowerCase())
-          ).firstOrNull;
-
-          if (matchedDrink != null) {
-            _addToOrder(matchedDrink, command.quantity);
-          } else {
-            _messages.add({
-              'text': t('ai_drinkNotFoundSimple').replaceAll('@name', command.drinkName!),
-              'isUser': false,
-            });
-            if (_voiceFeedbackEnabled) _voiceService.speak(t('ai_drinkNotFoundShort'));
-          }
-        }
+        // 🎙️ Handles several items in one breath ("2 beer and a soda") and
+        // fuzzy names ("mutzi" → Mutzig).
+        _handleOrderText(text);
         break;
 
       case VoiceCommandType.clear:
-        setState(() { _pendingOrder.clear(); });
+        setState(() => _pendingOrder.clear());
         _messages.add({'text': t('ai_orderClearedLong'), 'isUser': false});
         if (_voiceFeedbackEnabled) _voiceService.speak(t('ai_orderClearedShort'));
         break;
@@ -295,10 +393,11 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
         break;
 
       default:
-        _messages.add({
-          'text': t('ai_trySaying'),
-          'isUser': false,
-        });
+        if (command.drinkName != null) {
+          _handleOrderText(text);
+        } else {
+          _messages.add({'text': t('ai_trySaying'), 'isUser': false});
+        }
         break;
     }
 
@@ -307,26 +406,73 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     _scrollToBottom();
   }
 
-  void _addToOrder(Drink drink, int quantity) {
+  /// Parses an order phrase, matches it against the inventory and adds every
+  /// line to the pending order. Returns the number of items added.
+  int _handleOrderText(String text, {bool announce = true}) {
+    final drinkProvider = Provider.of<DrinkProvider>(context, listen: false);
+    final drinks = drinkProvider.customDrinks;
+
+    final requests = AIOrderParser.parseOrderLines(text, inventory: drinks);
+    final matched = AIOrderParser.matchLines(requests, drinks);
+
+    if (matched.isEmpty) {
+      final unknown = requests.isNotEmpty
+          ? requests.map((r) => r.name).join(', ')
+          : text.trim();
+      _messages.add({
+        'text': t('ai_drinkNotFoundSimple').replaceAll('@name', unknown),
+        'isUser': false,
+      });
+      if (_voiceFeedbackEnabled) _voiceService.speak(t('ai_drinkNotFoundShort'));
+      return 0;
+    }
+
     setState(() {
-      final existingIndex = _pendingOrder.indexWhere((item) => 
-        (item['drink'] as Drink).id == drink.id
-      );
-      
-      if (existingIndex != -1) {
-        _pendingOrder[existingIndex]['quantity'] += quantity;
-      } else {
-        _pendingOrder.add({'drink': drink, 'quantity': quantity});
+      for (final line in matched) {
+        _addToOrderSilently(line.drink, line.quantity);
       }
     });
-    
-    final total = _getOrderTotal();
-    final responseText = 'Added ${quantity}x ${drink.name}. Total: ${CurrencyHelper.format(total)}. Add more or checkout?';
-    
-    _messages.add({'text': responseText, 'isUser': false});
-    _conversationHistory.add({'role': 'assistant', 'content': responseText});
-    if (_voiceFeedbackEnabled) _voiceService.speak(t('ai_addedToOrder').replaceAll('@count', '${quantity}').replaceAll('@name', '${drink.name}'));
+
+    // 📉 Warn when the request exceeds what is in stock (still added so the
+    // manager can decide, mirroring the calculator's behaviour).
+    final shortages = matched
+        .where((m) => m.drink.currentStock < m.quantity)
+        .map((m) => '${m.drink.name} (${m.drink.currentStock})')
+        .toList();
+
+    final summary = matched
+        .map((m) => '${m.quantity}x ${m.drink.name}')
+        .join(', ');
+    final total = CurrencyHelper.format(_getOrderTotal());
+
+    if (announce) {
+      _messages.add({
+        'text': '${t('ai_addedItems').replaceAll('@items', summary)}\n'
+            '${t('ai_orderTotal')}: $total'
+            '${shortages.isEmpty ? '' : '\n⚠️ ${t('ai_lowStockWarning').replaceAll('@items', shortages.join(', '))}'}',
+        'isUser': false,
+      });
+      if (_voiceFeedbackEnabled) {
+        _voiceService.speak(
+          t('ai_addedToOrder')
+              .replaceAll('@count', '${matched.fold<int>(0, (s, m) => s + m.quantity)}')
+              .replaceAll('@name', matched.map((m) => m.drink.name).join(', ')),
+        );
+      }
+    }
     _scrollToBottom();
+    return matched.length;
+  }
+
+  /// Same as [_addToOrder] but without chat/voice feedback (used in bulk).
+  void _addToOrderSilently(Drink drink, int quantity) {
+    final existingIndex =
+        _pendingOrder.indexWhere((item) => (item['drink'] as Drink).id == drink.id);
+    if (existingIndex != -1) {
+      _pendingOrder[existingIndex]['quantity'] += quantity;
+    } else {
+      _pendingOrder.add({'drink': drink, 'quantity': quantity});
+    }
   }
 
   double _getOrderTotal() {
@@ -350,11 +496,15 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
   }
 
   void _generateAIResponse(String userMessage) async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadingLabel = t('ai_thinking');
+    });
     final response = await _getAIResponseAsync(userMessage);
     setState(() {
       _messages.add({'text': response, 'isUser': false});
       _isLoading = false;
+      _loadingLabel = '';
     });
     _persistMemory(); // 💾 remember across restarts
     _scrollToBottom();
@@ -364,32 +514,27 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     final drinkProvider = Provider.of<DrinkProvider>(context, listen: false);
     final drinks = drinkProvider.customDrinks;
     final lowerMessage = message.toLowerCase();
-    
-    // Parse order commands
-    final orderMatch = RegExp(r'(?:order|buy|add|get)\s+(\d+)\s+(.+)', caseSensitive: false)
-        .firstMatch(lowerMessage);
-    if (orderMatch != null) {
-      final quantity = int.tryParse(orderMatch.group(1) ?? '1') ?? 1;
-      final drinkName = orderMatch.group(2)?.trim() ?? '';
-      final matchedDrink = drinks.where((d) => 
-        d.name.toLowerCase().contains(drinkName.toLowerCase())
-      ).firstOrNull;
-      
-      if (matchedDrink != null) {
-        if (matchedDrink.currentStock >= quantity) {
-          _addToOrder(matchedDrink, quantity);
-          return 'Processing your order...';
-        } else {
-          return 'Insufficient stock! ${matchedDrink.name} only has ${matchedDrink.currentStock} left.';
-        }
-      } else {
-        final suggestions = drinks.where((d) => 
-          d.name.toLowerCase().contains(drinkName.substring(0, 3))
-        ).take(3).map((d) => d.name).join(', ');
-        return '"$drinkName" not found. Did you mean: $suggestions?';
+
+    // 🧠 Order intent — handled locally with the smart parser (multi-item, fuzzy)
+    // so ordering never depends on the network.
+    final orderIntent = RegExp(
+      r'\b(order|add|buy|get|give|bring|want|need|take)\b',
+      caseSensitive: false,
+    ).hasMatch(lowerMessage);
+    if (orderIntent) {
+      final added = _handleOrderText(message, announce: false);
+      if (added > 0) {
+        final summary = _pendingOrder
+            .map((item) =>
+                '${item['quantity']}x ${(item['drink'] as Drink).name}')
+            .join(', ');
+        return '${t('ai_addedItems').replaceAll('@items', summary)}\n'
+            '${t('ai_orderTotal')}: ${CurrencyHelper.format(_getOrderTotal())}\n'
+            '${t('ai_sendToCalculatorHint')}';
       }
+      // Nothing matched — fall through so the AI can clarify.
     }
-    
+
     // Checkout command
     if (lowerMessage.contains('checkout') || lowerMessage.contains('proceed') || 
         lowerMessage == 'yes' || lowerMessage == 'ok' || lowerMessage == 'y') {
@@ -470,25 +615,51 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     }
     
     final prompt = '''
-You are Drink Quick Cal AI - smart, friendly, concise. Answer in under 100 words.
+You are Drink Quick Cal AI - smart, friendly and concise. Answer in under 100 words.
+You are also the shop's ordering assistant: the user's order is added to the
+calculator automatically when you emit a machine-readable line.
 
-INVENTORY:
+INVENTORY (name: price | stock | profit):
 $drinkDetails
 $orderContext
 $conversationContext
 
 USER: $message
 
-Be helpful. Suggest drinks. Ask follow-ups naturally.
+Rules:
+- Recommend drinks from the inventory above and quote real prices/stock.
+- If the user wants to order/buy/add anything, finish your reply with one line:
+ORDER_JSON: [{"name":"<exact drink name as written above>","qty":<number>}]
+  Include every requested drink in that single line, and never invent drinks
+  that are not in the inventory.
+- If the user is not ordering, do NOT output ORDER_JSON.
+- Be helpful, suggest alternatives and ask follow-ups naturally.
 ''';
 
     try {
       final response = await _groqService.getResponse(prompt);
-      _conversationHistory.add({'role': 'assistant', 'content': response});
+
+      // 🛒 The reply may carry an ORDER_JSON block — apply it directly to the
+      // pending order so it is one tap away from the calculator.
+      final lines = AIOrderParser.extractOrderLines(response);
+      if (lines.isNotEmpty) {
+        final matched = AIOrderParser.matchLines(lines, drinks);
+        if (matched.isNotEmpty) {
+          setState(() {
+            for (final line in matched) {
+              _addToOrderSilently(line.drink, line.quantity);
+            }
+          });
+        }
+      }
+
+      final visible = AIOrderParser.stripOrderBlock(response);
+      final historyText = visible.isEmpty ? response : visible;
+      _conversationHistory.add({'role': 'assistant', 'content': historyText});
       if (_conversationHistory.length > 20) {
         _conversationHistory = _conversationHistory.sublist(_conversationHistory.length - 20);
       }
-      return response;
+      return historyText;
     } catch (e) {
       return "Sorry, I'm having trouble connecting. Please try again.";
     }
@@ -504,20 +675,36 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
   Future<void> _loadVoicePreferences() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
+    final storedTtsLocale = prefs.getString('speech_language') ?? 'en-US';
     setState(() {
       _speechRate = prefs.getDouble('speech_rate') ?? 0.5;
-      _speechLanguage = prefs.getString('speech_language') ?? 'en-US';
+      _speechLanguage =
+          storedTtsLocale.toLowerCase().startsWith('fr') ? 'fr-FR' : 'en-US';
       _voiceGender = prefs.getString('voice_gender') ?? 'female';
     });
+    // Apply immediately so the very first spoken reply uses the right voice.
+    await _voiceService.applyVoiceSettings(
+      language: _speechLanguage,
+      gender: _voiceGender,
+      rate: _speechRate,
+      persist: false,
+    );
   }
 
   Future<void> _saveVoiceSettings() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('voice_feedback', _voiceFeedbackEnabled);
-    await VoiceService.setVoiceEnabled(_voiceFeedbackEnabled); // 🌐 global key
+    await VoiceService.setVoiceEnabled(_voiceFeedbackEnabled); //  global key
     await prefs.setDouble('speech_rate', _speechRate);
     await prefs.setString('speech_language', _speechLanguage);
     await prefs.setString('voice_gender', _voiceGender);
+    // 🗣️ Push language + gender to the engine (works for EN and FR).
+    await _voiceService.applyVoiceSettings(
+      language: _speechLanguage,
+      gender: _voiceGender,
+      rate: _speechRate,
+      persist: false,
+    );
   }
 
   void _clearVoiceStatus() {
@@ -568,71 +755,141 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
   void _showVoiceSettings() {
     double tempRate = _speechRate;
     String tempGender = _voiceGender;
-    
+    String tempLanguage = _speechLanguage;
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmall = screenWidth < 380;
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: isSmall ? 12 : 24,
+            vertical: 24,
+          ),
+          // 📱 scrollable so the dialog never overflows on small phones
+          scrollable: true,
           title: Text(t('ai_voiceSettingsTitle')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SwitchListTile(
-                title: Text(t('ai_voiceFeedbackSwitch')),
-                subtitle: Text(_voiceFeedbackEnabled ? t('ai_onState') : t('ai_offState')),
-                value: _voiceFeedbackEnabled,
-                onChanged: (value) {
-                  setDialogState(() {});
-                  setState(() {
-        _voiceFeedbackEnabled = value;
-        VoiceService.setVoiceEnabled(value); // 🌐 toggles voice for the WHOLE app
-        if (!value) _voiceService.stopSpeaking(); // cut off any speech mid-sentence
-      });
-                },
-              ),
-              const Divider(),
-              ListTile(
-                title: Text(t('ai_voiceGenderTitle')),
-                subtitle: Text(tempGender == 'male' ? t('ai_maleOpt') : t('ai_femaleOpt')),
-                trailing: SegmentedButton<String>(
-                  segments: [
-                    ButtonSegment(value: 'female', label: Text(t('ai_femaleOpt'))),
-                    ButtonSegment(value: 'male', label: Text(t('ai_maleOpt'))),
-                  ],
-                  selected: {tempGender},
-                  onSelectionChanged: (set) => setDialogState(() => tempGender = set.first),
+          content: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 420,
+              minWidth: isSmall ? 240 : 300,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(t('ai_voiceFeedbackSwitch')),
+                  subtitle: Text(_voiceFeedbackEnabled
+                      ? t('ai_onState')
+                      : t('ai_offState')),
+                  value: _voiceFeedbackEnabled,
+                  onChanged: (value) {
+                    setDialogState(() {});
+                    setState(() {
+                      _voiceFeedbackEnabled = value;
+                      VoiceService.setVoiceEnabled(value); // 🌐 whole app
+                      if (!value) _voiceService.stopSpeaking();
+                    });
+                  },
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const Divider(),
+
+                // 🌍 Language (voice + recognition) — EN and FR supported.
+                Text(t('ai_voiceLanguageTitle'),
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
                   children: [
-                    Text(t('ai_speechSpeedLabel')),
-                    Slider(
-                      value: tempRate,
-                      min: 0.25,
-                      max: 1.0,
-                      divisions: 3,
-                      label: '${(tempRate * 100).toInt()}%',
-                      onChanged: (value) => setDialogState(() => tempRate = value),
+                    ChoiceChip(
+                      label: Text(t('ai_languageEnglish')),
+                      selected: tempLanguage.startsWith('en'),
+                      onSelected: (_) =>
+                          setDialogState(() => tempLanguage = 'en-US'),
+                    ),
+                    ChoiceChip(
+                      label: Text(t('ai_languageFrench')),
+                      selected: tempLanguage.startsWith('fr'),
+                      onSelected: (_) =>
+                          setDialogState(() => tempLanguage = 'fr-FR'),
                     ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+
+                // 🗣️ Male / female voice — works in both languages.
+                Text(t('ai_voiceGenderTitle'),
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    ChoiceChip(
+                      label: Text(t('ai_femaleOpt')),
+                      selected: tempGender == 'female',
+                      onSelected: (_) =>
+                          setDialogState(() => tempGender = 'female'),
+                    ),
+                    ChoiceChip(
+                      label: Text(t('ai_maleOpt')),
+                      selected: tempGender == 'male',
+                      onSelected: (_) =>
+                          setDialogState(() => tempGender = 'male'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                Text(t('ai_speechSpeedLabel'),
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                Slider(
+                  value: tempRate,
+                  min: 0.25,
+                  max: 1.0,
+                  divisions: 3,
+                  label: '${(tempRate * 100).toInt()}%',
+                  onChanged: (value) => setDialogState(() => tempRate = value),
+                ),
+
+                // 🔊 Try the selected combination right away.
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.volume_up, size: 18),
+                    label: Text(t('ai_testVoice')),
+                    onPressed: () async {
+                      await _voiceService.applyVoiceSettings(
+                        language: tempLanguage,
+                        gender: tempGender,
+                        rate: tempRate,
+                        persist: false,
+                      );
+                      await _voiceService.stopSpeaking();
+                      await _voiceService.speak(t('ai_voiceTestSentence'));
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text(t('ai_cancel'))),
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(t('ai_cancel'))),
             ElevatedButton(
               onPressed: () {
                 setState(() {
                   _speechRate = tempRate;
                   _voiceGender = tempGender;
+                  _speechLanguage = tempLanguage;
                 });
-                _voiceService.updateSpeechSettings(rate: _speechRate);
-                _voiceService.setVoiceGender(_voiceGender);
                 _saveVoiceSettings();
                 Navigator.pop(context);
                 _showToast(t('ai_voiceSettingsSaved'));
@@ -698,20 +955,17 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
         ),
         child: Column(
           children: [
-            // Loading indicator
-            if (_isLoading)
+            // Loading indicator — professional animated "AI is thinking" pill
+            if (_isLoading || _isReadingImage)
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                color: Colors.black54,
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-                      const SizedBox(width: 8),
-                      Text(t('ai_thinking'), style: const TextStyle(color: Colors.white, fontSize: 12)),
-                    ],
-                  ),
+                width: double.infinity,
+                color: Colors.black26,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                alignment: Alignment.center,
+                child: AiThinkingIndicator(
+                  label: _loadingLabel.isNotEmpty
+                      ? _loadingLabel
+                      : (_isReadingImage ? t('ai_readingImage') : t('ai_thinking')),
                 ),
               ),
             
@@ -785,6 +1039,35 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
                 ),
               ),
             
+            // 🛒 Pending order bar — one tap to send everything to the calculator.
+            if (_pendingOrder.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                color: theme.colorScheme.secondaryContainer,
+                child: Row(children: [
+                  const Icon(Icons.shopping_cart_checkout, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${_pendingOrder.fold<int>(0, (s, i) => s + (i['quantity'] as int))} '
+                      '${t('ai_itemsInOrder')} · ${CurrencyHelper.format(_getOrderTotal())}',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _pendingOrder.clear()),
+                    icon: const Icon(Icons.close, size: 16),
+                    label: Text(t('ai_clearOrderShort')),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: _goToCalculator,
+                    icon: const Icon(Icons.send, size: 16),
+                    label: Text(t('ai_toCalculator')),
+                  ),
+                ]),
+              ),
+
             // Input bar
             Container(
               padding: EdgeInsets.all(isMobile ? 10 : 12),
@@ -803,6 +1086,24 @@ Be helpful. Suggest drinks. Ask follow-ups naturally.
                       child: Icon(
                         _isListening ? Icons.mic : Icons.mic_none,
                         color: Colors.white,
+                        size: isMobile ? 20 : 22,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // 📷 Analyse a photo of an order (camera or gallery).
+                  GestureDetector(
+                    onTap: _isReadingImage ? null : _showImageSourceSheet,
+                    child: Container(
+                      width: isMobile ? 44 : 48,
+                      height: isMobile ? 44 : 48,
+                      decoration: BoxDecoration(
+                        color: theme.primaryColor.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.photo_camera_outlined,
+                        color: theme.primaryColor,
                         size: isMobile ? 20 : 22,
                       ),
                     ),

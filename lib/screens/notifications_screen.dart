@@ -9,8 +9,24 @@ import '../widgets/upgrade_required.dart';
 import '../services/notification_service.dart';
 import '../utils/i18n.dart';
 
-class NotificationsScreen extends StatelessWidget {
+class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({Key? key}) : super(key: key);
+
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
+  /// Notifications the user opened (reveals the brief view + marks them read).
+  final Set<String> _expandedIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    // ☁️ Per-user history: pull this user's notifications from the server
+    // (also prunes anything older than 2 months).
+    NotificationService().syncWithServer();
+  }
 
   Color _typeColor(NotificationType type) {
     switch (type) {
@@ -136,12 +152,26 @@ class NotificationsScreen extends StatelessWidget {
       itemBuilder: (context, index) {
         final n = items[index];
         final color = _typeColor(n.type);
+        final expanded = _expandedIds.contains(n.id);
         return Card(
           margin: const EdgeInsets.only(bottom: 10),
           elevation: n.isRead ? 1 : 3,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: ListTile(
+          child: Column(children: [
+            ListTile(
+            onTap: () {
+              // 👆 Opening a notification marks it read and reveals the detail.
+              service.markAsRead(n.id);
+              setState(() {
+                if (expanded) {
+                  _expandedIds.remove(n.id);
+                } else {
+                  _expandedIds.add(n.id);
+                }
+              });
+            },
+            onLongPress: () => _confirmDelete(n),
             leading: CircleAvatar(
               backgroundColor:
                   n.isRead ? color.withValues(alpha: 0.15) : color,
@@ -156,6 +186,9 @@ class NotificationsScreen extends StatelessWidget {
                         ? theme.hintColor
                         : theme.textTheme.bodyLarge?.color)),
             subtitle: Text(n.message,
+                maxLines: expanded ? null : 2,
+                overflow:
+                    expanded ? TextOverflow.visible : TextOverflow.ellipsis,
                 style: TextStyle(
                     fontSize: 12,
                     color: n.isRead
@@ -175,11 +208,78 @@ class NotificationsScreen extends StatelessWidget {
                     decoration:
                         BoxDecoration(color: color, shape: BoxShape.circle),
                   ),
+                Icon(expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 18, color: theme.hintColor),
               ],
             ),
-          ),
+            ),
+            // 📄 Brief view of the opened notification (exact time + actions).
+            if (expanded) _buildExpandedDetail(theme, service, n),
+          ]),
         );
       },
     );
+  }
+
+  Widget _buildExpandedDetail(
+      ThemeData theme, NotificationService service, AppNotification n) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Divider(height: 12),
+          Row(children: [
+            Icon(Icons.schedule, size: 13, color: theme.hintColor),
+            const SizedBox(width: 6),
+            Text(_fullTime(n.time),
+                style: TextStyle(fontSize: 11, color: theme.hintColor)),
+            const Spacer(),
+            TextButton.icon(
+              icon: const Icon(Icons.done_all, size: 15),
+              label: Text(n.isRead ? t('notifMarkUnread') : t('notifMarkRead'),
+                  style: const TextStyle(fontSize: 12)),
+              onPressed: () => service.toggleRead(n.id),
+            ),
+            IconButton(
+              tooltip: t('delete'),
+              icon: const Icon(Icons.delete_outline, size: 18),
+              onPressed: () => _confirmDelete(n),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  String _fullTime(DateTime time) {
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${two(time.day)}/${two(time.month)}/${time.year} '
+        '${two(time.hour)}:${two(time.minute)}';
+  }
+
+  Future<void> _confirmDelete(AppNotification n) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(t('delete')),
+        content: Text(n.title),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(t('cancel'))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(t('delete')),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await NotificationService().deleteNotification(n.id);
+      if (mounted) setState(() => _expandedIds.remove(n.id));
+    }
   }
 }
