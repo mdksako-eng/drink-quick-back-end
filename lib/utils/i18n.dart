@@ -374,6 +374,16 @@ const Map<String, String> _en = {
   'dm_unitKind_count': 'Items / units',
   'dm_batchDates': 'Batch dates (optional)',
   'dm_productionDate': 'Production date',
+  'dm_uploadImage': 'Upload a picture',
+  'dm_imageUploaded': 'Picture uploaded — the URL was filled in',
+  'dm_imageUploadFailed': 'Could not upload the picture',
+  'dm_imageBucketMissing':
+      'Storage bucket "drink-images" is missing — run sql/storage_drink_images.sql in Supabase',
+  'dm_imagePolicyDenied':
+      'Upload refused by the storage policy — check the insert policy on the drink-images bucket',
+  'dm_imageTooLarge': 'Picture is too large (max 5 MB)',
+  'dm_imageBadType': 'Only PNG, JPG, WEBP or GIF pictures are supported',
+  'dm_imagePreviewFailed': 'The URL does not load a picture',
   'dm_expiryDate': 'Expiry date',
   'dm_alreadyExpired': 'This batch has already expired',
   'dm_clearDates': 'Clear dates',
@@ -1319,6 +1329,16 @@ const Map<String, String> _fr = {
   'dm_unitKind_count': 'Articles / unités',
   'dm_batchDates': 'Dates du lot (facultatif)',
   'dm_productionDate': 'Date de production',
+  'dm_uploadImage': 'Téléverser une image',
+  'dm_imageUploaded': 'Image téléversée — l\'URL a été remplie',
+  'dm_imageUploadFailed': 'Impossible de téléverser l\'image',
+  'dm_imageBucketMissing':
+      'Le bucket de stockage « drink-images » est absent — exécutez sql/storage_drink_images.sql dans Supabase',
+  'dm_imagePolicyDenied':
+      'Téléversement refusé par la politique de stockage — vérifiez la politique d\'insertion du bucket drink-images',
+  'dm_imageTooLarge': 'Image trop volumineuse (max 5 Mo)',
+  'dm_imageBadType': 'Seuls les formats PNG, JPG, WEBP ou GIF sont acceptés',
+  'dm_imagePreviewFailed': 'L\'URL ne charge pas d\'image',
   'dm_expiryDate': "Date d'expiration",
   'dm_alreadyExpired': 'Ce lot est déjà expiré',
   'dm_clearDates': 'Effacer les dates',

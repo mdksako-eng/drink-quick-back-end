@@ -199,6 +199,21 @@ Requested in one batch; shipped as nine independently validated changes.
    known framework re-entrancy assertion
    (`mouse_tracker.dart … !_debugDuringDeviceUpdate`, flutter/flutter#137938) and
    counts it; a periodic rebuild storm in the connectivity banner was removed too.
+   The same guard now prints a **one-per-location pointer** for real layout
+   failures ("RenderBox was not laid out", `box.dart:2251`) so the offending
+   `file:line` is visible instead of drowning in per-frame repeats.
+10. **In-app drink pictures** — the image field in Drink Management has an upload
+    button (camera/gallery) that stores the picture in the public Supabase Storage
+    bucket `drink-images` and fills the URL automatically
+    (`lib/services/drink_image_service.dart`, bucket + policies in
+    `sql/storage_drink_images.sql`: 5 MB, images only, no overwrite/delete).
+11. **AI assistant image + voice** — a captured photo is shown inside the
+    conversation (Gemini-style) and survives a restart on native, spoken commands
+    are persisted like typed ones (mic badge), and the pending-order button is
+    labelled **Proceed**.
+12. **Scan restock asks the quantity** — "Add stock" opens a dialog (quantity
+    field with ±, +1/+pack shortcuts, validation, resulting total) instead of
+    silently adding a whole pack.
 
 ### Validation
 - `flutter analyze lib` → 0 errors

@@ -14,6 +14,10 @@ import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/secure_storage_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:drinks_calculator_fixed/services/drink_image_service.dart';
 import '../utils/i18n.dart';
 import 'barcode_scan_page.dart';
 
@@ -36,6 +40,9 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
   final _barcodeController = TextEditingController();
   final _unitsPerPackController = TextEditingController();
   String _selectedUnit = 'Bottle';
+
+  /// True while a picture is being uploaded to Supabase Storage.
+  bool _isUploadingImage = false;
   static const List<String> _defaultUnits = [
     'Bottle',
     'Can',
@@ -1528,28 +1535,160 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
 
   Widget _buildImageUrlField(
       bool isMobile, Color primaryColor, ThemeData theme) {
-    return TextFormField(
-      controller: _imageUrlController,
-      decoration: InputDecoration(
-        labelText: t('dm_imageUrl'),
-        labelStyle: TextStyle(color: theme.hintColor),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: theme.dividerColor)),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: primaryColor, width: 2)),
-        prefixIcon: Icon(Icons.image, color: primaryColor),
-        filled: true,
-        fillColor: theme.cardColor,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      ),
-      style: TextStyle(
-          color: theme.textTheme.bodyLarge?.color,
-          fontSize: isMobile ? 14 : 16),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          controller: _imageUrlController,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            labelText: t('dm_imageUrl'),
+            labelStyle: TextStyle(color: theme.hintColor),
+            border:
+                OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: theme.dividerColor)),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: primaryColor, width: 2)),
+            prefixIcon: Icon(Icons.image, color: primaryColor),
+            // 📤 Upload straight from the camera/gallery and let the app fill the
+            // URL (the picture is hosted in the public `drink-images` bucket).
+            suffixIcon: IconButton(
+              tooltip: t('dm_uploadImage'),
+              icon: _isUploadingImage
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : Icon(Icons.cloud_upload_outlined, color: primaryColor),
+              onPressed: _isUploadingImage ? null : _uploadDrinkImage,
+            ),
+            filled: true,
+            fillColor: theme.cardColor,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+          style: TextStyle(
+              color: theme.textTheme.bodyLarge?.color,
+              fontSize: isMobile ? 14 : 16),
+        ),
+        if (_imageUrlController.text.trim().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                _imageUrlController.text.trim(),
+                height: 110,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Container(
+                  height: 60,
+                  alignment: Alignment.center,
+                  color: theme.dividerColor.withValues(alpha: 0.2),
+                  child: Text(t('dm_imagePreviewFailed'),
+                      style: TextStyle(fontSize: 12, color: theme.hintColor)),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
+  }
+
+  /// Camera/gallery → Supabase Storage → fills the image URL field.
+  Future<void> _uploadDrinkImage() async {
+    ImageSource? source;
+    await showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: Text(t('ai_takePhoto')),
+            onTap: () {
+              source = ImageSource.camera;
+              Navigator.pop(ctx);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: Text(t('ai_chooseImage')),
+            onTap: () {
+              source = ImageSource.gallery;
+              Navigator.pop(ctx);
+            },
+          ),
+        ]),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    try {
+      if (source == ImageSource.camera && !kIsWeb) {
+        try {
+          final status = await Permission.camera.request();
+          if (!status.isGranted) {
+            if (mounted) Helpers.showToast(t('ai_cameraDenied'), isError: true);
+            return;
+          }
+        } catch (_) {
+          // Platform without a runtime permission API — let the picker decide.
+        }
+      }
+
+      final picked = await ImagePicker().pickImage(
+        source: source!,
+        maxWidth: 1200,
+        imageQuality: 80,
+      );
+      if (picked == null) return;
+
+      setState(() => _isUploadingImage = true);
+      final bytes = await picked.readAsBytes();
+      final result = await DrinkImageService.upload(
+        bytes: bytes,
+        fileName: picked.name.isNotEmpty
+            ? picked.name
+            : 'drink-${DateTime.now().millisecondsSinceEpoch}.jpg',
+        companyId: SupabaseService.currentCompanyId,
+      );
+      if (!mounted) return;
+      setState(() => _isUploadingImage = false);
+
+      if (result.ok && result.url != null) {
+        setState(() => _imageUrlController.text = result.url!);
+        Helpers.showToast(t('dm_imageUploaded'));
+      } else {
+        Helpers.showToast(_uploadErrorMessage(result.error), isError: true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUploadingImage = false);
+        Helpers.showToast('${t('dm_imageUploadFailed')}: $e', isError: true);
+      }
+    }
+  }
+
+  /// Turns the service's reason code into something actionable.
+  String _uploadErrorMessage(String? code) {
+    switch (code) {
+      case 'bucket-missing':
+        return t('dm_imageBucketMissing');
+      case 'policy-denied':
+        return t('dm_imagePolicyDenied');
+      case 'file-too-large':
+        return t('dm_imageTooLarge');
+      case 'unsupported-image-type':
+        return t('dm_imageBadType');
+      case 'empty-file':
+        return t('dm_imageUploadFailed');
+      default:
+        return '${t('dm_imageUploadFailed')}: ${code ?? ''}';
+    }
   }
 
   Future<void> _scanBarcode() async {

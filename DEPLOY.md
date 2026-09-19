@@ -51,6 +51,26 @@ table is no longer used (the runtime creation of it was removed from
 
 ---
 
+### Step 1d — Drink pictures (Storage bucket)
+
+The app can upload a drink picture straight from the camera/gallery
+(Drink Management → the cloud icon in the image field) and fills the URL for you.
+That needs a public bucket plus a small upload policy:
+
+```
+-- Supabase → SQL Editor → paste the contents of:
+drinks-calculator-backend/sql/storage_drink_images.sql   → Run
+```
+
+It creates a **public** `drink-images` bucket (5 MB limit, png/jpg/webp/gif only)
+with a read policy for everyone and an insert policy for the app's anon key. There
+is deliberately **no** update/delete policy, so an uploader cannot overwrite or
+remove a picture. Until it is applied the app shows
+*"Storage bucket 'drink-images' is missing"* when you tap upload; you can always
+paste any external image URL manually instead.
+
+---
+
 ## Step 2 — Hash existing plaintext passwords
 
 After RLS is on: `cd drinks-culator-backend && npm run migrate:passwords`
