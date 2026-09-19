@@ -1010,9 +1010,12 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                 children: [
                   Icon(Icons.info, color: primaryColor, size: 14),
                   const SizedBox(width: 6),
-                  Text(t('dm_emptyImageHint'),
-                      style: TextStyle(
-                          fontSize: isMobile ? 11 : 12, color: primaryColor)),
+                  // Flexible so the hint wraps instead of overflowing on a phone.
+                  Flexible(
+                    child: Text(t('dm_emptyImageHint'),
+                        style: TextStyle(
+                            fontSize: isMobile ? 11 : 12, color: primaryColor)),
+                  ),
                 ],
               ),
               SizedBox(height: isMobile ? 20 : 28),
@@ -1894,19 +1897,23 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Container(
-                  padding: const EdgeInsets.all(8),
+          Expanded(
+            child: Row(
+              children: [
+                Container(
+                    padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                       color: Colors.white, shape: BoxShape.circle),
                   child: Icon(Icons.local_drink,
                       color: primaryColor, size: isMobile ? 20 : 24)),
-              SizedBox(width: isMobile ? 12 : 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                SizedBox(width: isMobile ? 12 : 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(t('dm_customDrinks'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           fontSize: isMobile ? 18 : 22,
                           fontWeight: FontWeight.bold,
@@ -1917,10 +1924,13 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                         style: TextStyle(
                             fontSize: isMobile ? 12 : 13,
                             color: Colors.white.withValues(alpha: 0.9))),
-                ],
-              ),
-            ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(

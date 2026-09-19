@@ -38,7 +38,14 @@ class _ForecastScreenState extends State<ForecastScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    // ⚠️ InventoryProvider.loadInventory() notifies its listeners synchronously,
+    // so calling it here would run during this screen's first build and throw
+    // "setState() or markNeedsBuild() called during build" — which also leaves a
+    // partially laid-out subtree behind ("RenderBox was not laid out" on the next
+    // frames). Defer the load until after the first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadData();
+    });
   }
 
   Future<void> _loadData() async {

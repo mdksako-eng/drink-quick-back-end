@@ -34,7 +34,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   void initState() {
     super.initState();
-    _loadInventory();
+    // ⚠️ loadInventory()/notifyListeners runs synchronously, so it must not be
+    // called during this screen's first build (that throws "setState() or
+    // markNeedsBuild() called during build" and can leave a half-laid-out
+    // subtree behind). Defer it to after the first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadInventory();
+    });
     // ✅ Listen to real-time inventory changes
     SupabaseService.addInventoryListener(_onInventoryChanged);
   }
