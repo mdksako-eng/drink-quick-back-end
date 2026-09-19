@@ -12,6 +12,8 @@ import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
 import 'package:drinks_calculator_fixed/utils/i18n.dart';
 import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import 'package:drinks_calculator_fixed/services/notification_service.dart';
+import 'package:drinks_calculator_fixed/services/expiry_alert_service.dart';
+import 'package:drinks_calculator_fixed/utils/forecast_helper.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
@@ -760,10 +762,26 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           }
         }
 
-        // ✅ 🔥 CRITICAL FIX: Connect InventoryProvider to DrinkProvider HERE
+        // ✅  CRITICAL FIX: Connect InventoryProvider to DrinkProvider HERE
         inventoryProvider.setDrinkProvider(drinkProvider);
         debugPrint(
             '✅ InventoryProvider connected to DrinkProvider in AuthWrapper!');
+
+        //  Warn about batches expiring within 30 days — joined with the demand
+        // forecast so the alert says how much of the stock is expected to sell
+        // before the date. Announced once per batch per day, device-side only.
+        try {
+          final forecast = computeForecast(
+            transactions: inventoryProvider.transactions,
+            inventory: inventoryProvider.inventoryItems,
+          );
+          await ExpiryAlertService.check(
+            drinks: drinkProvider.customDrinks,
+            forecast: forecast,
+          );
+        } catch (e) {
+          debugPrint('⚠️ Expiry alert startup check failed: $e');
+        }
 
         if (mounted) {
           setState(() {});

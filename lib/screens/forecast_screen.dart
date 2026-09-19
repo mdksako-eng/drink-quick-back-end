@@ -8,8 +8,11 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/forecast_model.dart';
 import '../providers/inventory_provider.dart';
+import '../providers/drink_provider.dart';
+import '../services/expiry_alert_service.dart';
 import '../services/groq_service.dart';
 import '../services/supabase_service.dart';
+import '../utils/expiry_alert_helper.dart';
 import '../utils/forecast_helper.dart';
 import '../utils/helpers.dart';
 import '../utils/holidays.dart';
@@ -29,6 +32,9 @@ class _ForecastScreenState extends State<ForecastScreen> {
   ForecastResult? _result;
   bool _aiLoading = false;
 
+  /// Batches expiring within 30 days, joined with their expected demand.
+  List<ExpiryAlert> _expiring = const [];
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +45,9 @@ class _ForecastScreenState extends State<ForecastScreen> {
     final inv = Provider.of<InventoryProvider>(context, listen: false);
     await inv.loadInventory();
     await _loadEvents();
+    // ⏰ Raise the batch-expiry alerts for this session (device-side, once per
+    // batch per day) now that a forecast is available.
+    await _checkExpiryAlerts();
   }
 
   static const String _cacheKey = 'forecast_custom_events';
@@ -196,12 +205,27 @@ class _ForecastScreenState extends State<ForecastScreen> {
 
   ForecastResult _compute() {
     final inv = Provider.of<InventoryProvider>(context, listen: false);
-    return computeForecast(
+    final drinks = Provider.of<DrinkProvider>(context, listen: false).customDrinks;
+    final result = computeForecast(
       transactions: inv.transactions,
       inventory: inv.inventoryItems,
       horizonDays: _horizonDays,
       events: _buildEvents(),
     );
+    // ⏰ Join the batch expiry dates with expected demand so soon-to-expire
+    // stock can be pushed first instead of being written off.
+    _expiring = computeExpiryAlerts(drinks: drinks, forecast: result);
+    return result;
+  }
+
+  /// Raises the device-side expiry notifications (once per batch per day) and
+  /// refreshes the banner. Wrapped so a failure never breaks the screen.
+  Future<void> _checkExpiryAlerts() async {
+    try {
+      final drinks =
+          Provider.of<DrinkProvider>(context, listen: false).customDrinks;
+      await ExpiryAlertService.check(drinks: drinks, forecast: _result);
+    } catch (_) {}
   }
 
   void _setHorizon(int days) {
@@ -242,6 +266,10 @@ class _ForecastScreenState extends State<ForecastScreen> {
               children: [
                 _buildRangeSelector(),
                 const SizedBox(height: 12),
+                if (_expiring.isNotEmpty) ...[
+                  _buildExpiryBanner(primary),
+                  const SizedBox(height: 16),
+                ],
                 _buildAiButton(primary),
                 const SizedBox(height: 16),
                 _buildEventsSection(primary),
@@ -267,6 +295,79 @@ class _ForecastScreenState extends State<ForecastScreen> {
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildExpiryBanner(Color primary) {
+    // ⏰ Batches expiring within 30 days, each with its expected demand so the
+    // manager/owner can push that stock before the date hits. Prominent because
+    // this is money on its way to the bin.
+    return Card(
+      color: Colors.orange.withValues(alpha: 0.10),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              const Icon(Icons.event_busy, color: Colors.orange),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('${t('expiryAlertTitle')} (${_expiring.length})',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            Text(t('expiryAlertBody'),
+                style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+            const SizedBox(height: 10),
+            ..._expiring.take(5).map((alert) {
+              final expired = alert.isExpired;
+              final colour = expired ? Colors.red : Colors.orange;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Icon(expired ? Icons.error : Icons.schedule,
+                          size: 16, color: colour),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${alert.drinkName} — '
+                          '${expired ? t('expiryAlreadyExpired') : '${alert.daysLeft} ${t('expiryDaysLeft')}'}',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, color: colour),
+                        ),
+                      ),
+                      Text(DateFormat('MMM d').format(alert.expiryDate),
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.grey[600])),
+                    ]),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 22, top: 2),
+                      child: Text(
+                        alert.forecastDemand > 0
+                            ? '${t('expiryExpectedDemand')}: '
+                                '${alert.forecastDemand.toStringAsFixed(1)}'
+                                '${alert.recommendedOrder > 0 ? ' • ${t('expirySuggestedOrder')}: ${alert.recommendedOrder}' : ''}'
+                                ' • ${t('stock')}: ${alert.currentStock}'
+                            : t('expiryNoDemand'),
+                        style: TextStyle(fontSize: 11.5, color: Colors.grey[700]),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            if (_expiring.length > 5)
+              Text('+${_expiring.length - 5} …',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          ],
+        ),
+      ),
     );
   }
 
@@ -590,10 +691,22 @@ class _ForecastScreenState extends State<ForecastScreen> {
     final events = (result?.events ?? const [])
         .map((e) => '${e.name} (${DateFormat('MMM d').format(e.date)})')
         .join(', ');
+    //  Soon-to-expire batches are part of the picture: the assistant must
+    // suggest selling them off while there is still time.
+    final expiring = _expiring.isEmpty
+        ? 'none'
+        : _expiring
+            .take(6)
+            .map((a) =>
+                '${a.drinkName}: ${a.isExpired ? 'EXPIRED' : '${a.daysLeft}d left'}, '
+                'stock ${a.currentStock}, expected demand ${a.forecastDemand.toStringAsFixed(1)}')
+            .join('; ');
     return 'You are a bar/restaurant inventory assistant. '
         '$_horizonDays-day demand forecast: $top. '
         'Upcoming events: ${events.isEmpty ? 'none' : events}. '
-        'Give a concise restocking recommendation in 3-5 short bullet points.';
+        'Batches expiring within 30 days: $expiring. '
+        'Give a concise restocking recommendation in 3-5 short bullet points, '
+        'and say which expiring batches should be pushed first.';
   }
 
   void _showAiDialog(String text) {

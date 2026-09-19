@@ -9,8 +9,11 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
+import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import 'package:drinks_calculator_fixed/services/voice_service.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
+import 'package:drinks_calculator_fixed/utils/expiry_alert_helper.dart';
+import 'package:drinks_calculator_fixed/utils/forecast_helper.dart';
 import 'package:drinks_calculator_fixed/models/drink_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:drinks_calculator_fixed/services/groq_service.dart';
@@ -599,6 +602,29 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
       final profit = d.price - d.purchasePrice;
       return '${d.name}: ${CurrencyHelper.format(d.price)} | Stock: ${d.currentStock} | Profit: ${CurrencyHelper.format(profit)}';
     }).join('\n');
+
+    // ⏰ Batches expiring within 30 days + expected demand, so the assistant can
+    // push soon-to-expire stock and offer bundles instead of letting it spoil.
+    String expiryContext = '';
+    try {
+      final inventoryProvider =
+          Provider.of<InventoryProvider>(context, listen: false);
+      final forecast = computeForecast(
+        transactions: inventoryProvider.transactions,
+        inventory: inventoryProvider.inventoryItems,
+      );
+      final alerts = computeExpiryAlerts(drinks: drinks, forecast: forecast);
+      if (alerts.isNotEmpty) {
+        expiryContext = '\nEXPIRING SOON (within 30 days, with expected demand):\n' +
+            alerts
+                .take(8)
+                .map((a) =>
+                    '${a.drinkName}: ${a.isExpired ? 'EXPIRED' : '${a.daysLeft} days left'} | '
+                    'stock: ${a.currentStock} | expected demand (7 days): ${a.forecastDemand.toStringAsFixed(1)}'
+                    '${a.recommendedOrder > 0 ? ' | suggested order: ${a.recommendedOrder}' : ''}')
+                .join('\n');
+      }
+    } catch (_) {}
     
     String conversationContext = '';
     if (_conversationHistory.isNotEmpty) {
@@ -621,6 +647,7 @@ calculator automatically when you emit a machine-readable line.
 
 INVENTORY (name: price | stock | profit):
 $drinkDetails
+$expiryContext
 $orderContext
 $conversationContext
 
@@ -628,6 +655,8 @@ USER: $message
 
 Rules:
 - Recommend drinks from the inventory above and quote real prices/stock.
+- If the inventory block above lists EXPIRING SOON items, mention which ones
+  should be sold first and suggest a promotion or bundle for them.
 - If the user wants to order/buy/add anything, finish your reply with one line:
 ORDER_JSON: [{"name":"<exact drink name as written above>","qty":<number>}]
   Include every requested drink in that single line, and never invent drinks

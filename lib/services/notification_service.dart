@@ -132,6 +132,40 @@ class NotificationService extends ChangeNotifier {
     osn.osShowNotification('payment_failed', '❌ Payment Failed', '$paymentMethod: $reason');
   }
 
+  /// Warns that a batch is about to expire (or already has), including the
+  /// expected demand for the coming days so the stock can be pushed first.
+  void showExpirySoon({
+    required String drinkName,
+    required int daysLeft,
+    required bool expired,
+    double forecastDemand = 0,
+    int recommendedOrder = 0,
+  }) {
+    final when = expired
+        ? 'has expired'
+        : daysLeft == 0
+            ? 'expires today'
+            : 'expires in $daysLeft day${daysLeft == 1 ? '' : 's'}';
+    final demand = forecastDemand > 0
+        ? ' - expected demand ${forecastDemand.toStringAsFixed(1)}'
+        : '';
+    final order = recommendedOrder > 0 ? ' - order $recommendedOrder' : '';
+    final message = '$drinkName $when$demand$order';
+
+    _addNotification(AppNotification(
+      title: expired ? 'Expired stock' : 'Expiring soon',
+      message: message,
+      type: NotificationType.reminder,
+    ));
+    _speak(expired
+        ? '$drinkName has expired'
+        : '$drinkName expires in $daysLeft days');
+    osn.osShowNotification(
+        expired ? 'stock_expired' : 'stock_expiring',
+        expired ? 'Expired stock' : 'Expiring soon',
+        message);
+  }
+
   /// Surface server-sync failures to the user so they don't assume data saved.
   void showSyncFailed({required String action, required String detail}) {
     _addNotification(AppNotification(
