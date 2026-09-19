@@ -235,7 +235,16 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
               icon: const Icon(Icons.download),
               onPressed: () {
                 if (_report != null) {
-                  ExportHelper.exportInventoryReport(_report!, context);
+                  // The batch dates live on the drinks, so pass them along for
+                  // the expiry section of the export.
+                  final drinks =
+                      Provider.of<DrinkProvider>(context, listen: false)
+                          .customDrinks;
+                  ExportHelper.exportInventoryReport(
+                    _report!,
+                    context,
+                    drinks: drinks,
+                  );
                 }
               },
               tooltip: t('rpt_export'),
