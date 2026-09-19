@@ -40,12 +40,69 @@ void main() {
     });
   });
 
+  group('isLayoutAssertion', () {
+    test('recognises the "RenderBox was not laid out" failure', () {
+      expect(
+        FlutterAssertionGuard.isLayoutAssertion(
+            'RenderBox was not laid out: RenderRepaintBoundary#123 '
+            'relayoutBoundary=up1 NEEDS-PAINT'),
+        isTrue,
+      );
+    });
+
+    test('recognises a debugNeedsLayout failure', () {
+      expect(
+        FlutterAssertionGuard.isLayoutAssertion(
+            'assert(!debugNeedsLayout): is not true.'),
+        isTrue,
+      );
+    });
+
+    test('does not match unrelated errors', () {
+      expect(FlutterAssertionGuard.isLayoutAssertion('Something else broke'),
+          isFalse);
+      expect(FlutterAssertionGuard.isLayoutAssertion(''), isFalse);
+    });
+  });
+
+  group('extractDartLocation', () {
+    test('pulls the widget creation location out of a diagnostics report', () {
+      const report = 'The relevant error-causing widget was:\n'
+          '  Column  file:///C:/proj/lib/screens/ai_assistant_screen.dart:1234:45\n'
+          'When the exception was thrown, this was the stack:\n'
+          '  #0      RenderBox.size (package:flutter/src/rendering/box.dart:2251:12)';
+      expect(
+        FlutterAssertionGuard.extractDartLocation(report),
+        'file:///C:/proj/lib/screens/ai_assistant_screen.dart:1234:45',
+      );
+    });
+
+    test('returns the first location when several are present', () {
+      const report = 'first file:///a/b.dart:1:2 then file:///c/d.dart:3:4';
+      expect(FlutterAssertionGuard.extractDartLocation(report),
+          'file:///a/b.dart:1:2');
+    });
+
+    test('returns null when there is no location', () {
+      expect(FlutterAssertionGuard.extractDartLocation('no path here'), isNull);
+      expect(FlutterAssertionGuard.extractDartLocation(''), isNull);
+    });
+
+    test('does not swallow trailing punctuation', () {
+      expect(
+        FlutterAssertionGuard.extractDartLocation(
+            'see file:///x/y_screen.dart:12:3).'),
+        'file:///x/y_screen.dart:12:3',
+      );
+    });
+  });
+
   group('install', () {
     late void Function(FlutterErrorDetails) original;
 
     setUp(() {
       original = FlutterError.onError!;
-      FlutterAssertionGuard.resetCounter();
+      FlutterAssertionGuard.resetCounters();
     });
 
     tearDown(() {
