@@ -4,7 +4,8 @@ const { Pool } = require('pg');
 require('dotenv').config();
 
 const TABLES = ['companies', 'drinks', 'orders', 'inventory',
-  'inventory_transactions', 'settings', 'payment_transactions'];
+  'inventory_transactions', 'settings', 'payment_transactions',
+  'forecast_events', 'notifications'];
 
 (async () => {
   if (!process.env.DATABASE_URL) {
@@ -17,7 +18,13 @@ const TABLES = ['companies', 'drinks', 'orders', 'inventory',
   });
 
   for (const t of TABLES) {
-    await pool.query(`ALTER TABLE public.${t} ENABLE ROW LEVEL SECURITY`);
+    try {
+      await pool.query(`ALTER TABLE public.${t} ENABLE ROW LEVEL SECURITY`);
+    } catch (e) {
+      // A table that does not exist yet must not abort the lockdown.
+      console.log(`SKIPPED ${t}: ${e.message}`);
+      continue;
+    }
     console.log(`🔒 RLS enabled on ${t}`);
   }
 

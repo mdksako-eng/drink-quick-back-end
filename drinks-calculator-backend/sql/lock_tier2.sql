@@ -26,6 +26,8 @@ ALTER TABLE public.inventory              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_transactions   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.forecast_events        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications          ENABLE ROW LEVEL SECURITY;
 -- 🔐 Join-approval table (owner verification codes) — backend-only
 ALTER TABLE public.company_join_requests  ENABLE ROW LEVEL SECURITY;
 
@@ -40,7 +42,8 @@ BEGIN
     WHERE schemaname = 'public'
       AND tablename IN ('companies','drinks','orders','inventory',
                         'inventory_transactions','settings','payment_transactions',
-                        'company_join_requests')
+                        'company_join_requests','forecast_events',
+                        'notifications')
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I',
                    pol.policyname, pol.schemaname, pol.tablename);
@@ -51,7 +54,8 @@ END $$;
 -- Belt & braces: revoke direct privileges from the client roles as well.
 REVOKE ALL ON public.companies, public.drinks, public.orders,
   public.inventory, public.inventory_transactions, public.settings,
-  public.payment_transactions, public.company_join_requests
+  public.payment_transactions, public.company_join_requests,
+  public.forecast_events, public.notifications
   FROM anon, authenticated;
 
 -- ============================================================

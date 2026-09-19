@@ -26,7 +26,7 @@ async function main() {
   console.log('✅ companies: RLS on, all policies dropped, anon revoked');
 
   // 2) revoke anon writes on business tables (keep SELECT for Realtime)
-  const tables = ['drinks', 'orders', 'inventory', 'inventory_transactions', 'settings', 'payment_transactions'];
+  const tables = ['drinks', 'orders', 'inventory', 'inventory_transactions', 'settings', 'payment_transactions', 'forecast_events', 'notifications'];
   for (const t of tables) {
     await pool.query(`REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public."${t}" FROM anon`);
   }

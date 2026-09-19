@@ -189,28 +189,10 @@ app.use(async (req, res, next) => {
         console.log('⚠️ drinks columns warning:', drinkColErr.message);
       }
 
-      // 🔔 NOTIFICATIONS — per-user, stored online so each user keeps their own
-      // history across devices. Rows older than ~2 months are pruned on read.
-      try {
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS notifications (
-            id TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL,
-            company_id INTEGER,
-            title TEXT NOT NULL,
-            message TEXT DEFAULT '',
-            type TEXT DEFAULT 'general',
-            is_read BOOLEAN DEFAULT false,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          )
-        `);
-        await pool.query(
-          `CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC)`
-        );
-        console.log('✅ notifications table ensured');
-      } catch (notifTableErr) {
-        console.log('⚠️ notifications table warning:', notifTableErr.message);
-      }
+      // NOTIFICATIONS: deliberately NOT stored on the server. The in-app
+      // notification center keeps its history on this device only
+      // (SharedPreferences), so no alert data is written to Supabase.
+      // See lib/services/notification_service.dart in the app repo.
 
       // 🧪 DRINKS — unit kind (volume | mass | count) + production/expiry dates
       // so batch freshness can be tracked per drink.
@@ -259,6 +241,13 @@ app.use(async (req, res, next) => {
         await pool.query(
           `CREATE INDEX IF NOT EXISTS idx_forecast_events_company ON forecast_events(company_id, event_date)`
         );
+        // SECURITY: this table was previously left WITHOUT row level security,
+        // so the anon key shipped in the app could read (and forge) other
+        // companies events over Supabase REST. The app only reaches it through
+        // the session-authenticated backend (/api/data/events) and the backend
+        // owns the table, so it bypasses RLS and keeps working.
+        await pool.query(`ALTER TABLE forecast_events ENABLE ROW LEVEL SECURITY`);
+        await pool.query(`REVOKE ALL ON forecast_events FROM anon, authenticated`);
         console.log('✅ forecast_events table ensured');
       } catch (eventTableErr) {
         console.log('⚠️ forecast_events table warning:', eventTableErr.message);

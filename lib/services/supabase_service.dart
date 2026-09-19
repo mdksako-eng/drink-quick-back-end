@@ -72,6 +72,116 @@ class SupabaseService {
   static bool get canUseSupabase =>
       !_isCustomerMode && _currentCompanyId != null;
 
+  // ============================================================
+  // DRINK ROW / PAYLOAD HELPERS (pure functions - unit tested)
+  // ============================================================
+  // Postgres DATE columns need a plain yyyy-MM-dd string. The old code sent
+  // nothing at all for the batch dates, so production_date / expiry_date were
+  // never written and came back null after every reload. A deliberate null is
+  // sent on PATCH so clearing a date really clears the column.
+  static String? dateOnly(Object? value) {
+    if (value == null) return null;
+    final raw = value.toString().trim();
+    if (raw.isEmpty) return null;
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return raw.length >= 10 ? raw.substring(0, 10) : raw;
+    final y = parsed.year.toString().padLeft(4, '0');
+    final m = parsed.month.toString().padLeft(2, '0');
+    final d = parsed.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  /// Reads a field that may be keyed in camelCase (local Drink.toJson) or
+  /// snake_case (server rows). image_url used to be saved as null because only
+  /// one spelling was read, which wiped the picture on every edit.
+  static Object? eitherKey(
+          Map<String, dynamic> row, String snake, String camel) =>
+      row[snake] ?? row[camel];
+
+  static Object? batchDate(Map<String, dynamic> drink, String which) {
+    if (which == 'production') {
+      return eitherKey(drink, 'production_date', 'productionDate');
+    }
+    return eitherKey(drink, 'expiry_date', 'expiryDate');
+  }
+
+  /// Columns written when a drink is created (POST /api/data/drinks).
+  static Map<String, dynamic> buildDrinkInsertPayload(
+    Map<String, dynamic> drink, {
+    int? companyId,
+    int? userId,
+    DateTime? now,
+  }) {
+    final stamp = (now ?? DateTime.now()).toIso8601String();
+    return {
+      'id': drink['id'],
+      'name': drink['name'],
+      'price': drink['price'],
+      'category': drink['category'],
+      'image_url': eitherKey(drink, 'image_url', 'imageUrl'),
+      'company_id': companyId,
+      'created_by': userId,
+      'is_active': true,
+      'minimum_level': drink['minimumLevel'] ?? drink['minimum_level'] ?? 5,
+      'purchase_price': drink['purchasePrice'] ?? drink['purchase_price'] ?? 0,
+      'unit': drink['unit'] ?? 'Bottle',
+      'barcode': drink['barcode'] ?? '',
+      'units_per_pack': drink['units_per_pack'] ?? drink['unitsPerPack'] ?? 1,
+      'unit_kind': drink['unit_kind'] ?? drink['unitKind'] ?? 'count',
+      'production_date': dateOnly(batchDate(drink, 'production')),
+      'expiry_date': dateOnly(batchDate(drink, 'expiry')),
+      'created_at': stamp,
+      'updated_at': stamp,
+    };
+  }
+
+  /// Columns written when a drink is edited (PATCH /api/data/drinks/:id).
+  static Map<String, dynamic> buildDrinkUpdatePayload(
+    Map<String, dynamic> drink, {
+    DateTime? now,
+  }) {
+    return {
+      'name': drink['name'],
+      'price': drink['price'],
+      'category': drink['category'],
+      'image_url': eitherKey(drink, 'image_url', 'imageUrl'),
+      'minimum_level': drink['minimumLevel'] ?? drink['minimum_level'],
+      'purchase_price': drink['purchasePrice'] ?? drink['purchase_price'],
+      'unit': drink['unit'],
+      'barcode': drink['barcode'] ?? '',
+      'units_per_pack': drink['units_per_pack'] ?? drink['unitsPerPack'] ?? 1,
+      'unit_kind': drink['unit_kind'] ?? drink['unitKind'] ?? 'count',
+      'production_date': dateOnly(batchDate(drink, 'production')),
+      'expiry_date': dateOnly(batchDate(drink, 'expiry')),
+      'updated_at': (now ?? DateTime.now()).toIso8601String(),
+    };
+  }
+
+  /// Maps a server drinks row to the shape Drink.fromJson expects. The batch
+  /// fields used to be dropped here, which made production / expiry dates look
+  /// lost after every reload.
+  static Map<String, dynamic> mapDrinkRow(Map<String, dynamic> row) {
+    return {
+      'id': row['id'],
+      'name': row['name'],
+      'price': row['price'],
+      'category': row['category'],
+      'imageUrl': row['image_url'],
+      'image_url': row['image_url'],
+      'currentStock': row['current_stock'] ?? 0,
+      'minimumLevel': row['minimum_level'] ?? 5,
+      'purchasePrice': row['purchase_price'] ?? 0,
+      'unit': row['unit'] ?? 'Bottle',
+      'barcode': row['barcode'] ?? '',
+      'unitsPerPack': row['units_per_pack'] ?? row['unitsPerPack'] ?? 1,
+      'unit_kind': row['unit_kind'] ?? 'count',
+      'production_date': row['production_date'],
+      'expiry_date': row['expiry_date'],
+      'created_at': row['created_at'],
+    };
+  }
+
+
   // Session-authenticated headers for the backend data API.
   static Future<Map<String, String>> _authedHeaders() async {
     final token = await SecureStorageService.getSessionToken();
@@ -272,21 +382,7 @@ class SupabaseService {
           print('   First drink: ${data.first['name']}');
         }
 
-        final mappedDrinks = data
-            .map((drink) => {
-                  'id': drink['id'],
-                  'name': drink['name'],
-                  'price': drink['price'],
-                  'category': drink['category'],
-                  'imageUrl': drink['image_url'],
-                  'currentStock': drink['current_stock'] ?? 0,
-                  'minimumLevel': drink['minimum_level'] ?? 5,
-                  'purchasePrice': drink['purchase_price'] ?? 0,
-                  'unit': drink['unit'] ?? 'Bottle',
-                  'barcode': drink['barcode'] ?? '',
-                  'unitsPerPack': drink['units_per_pack'] ?? drink['unitsPerPack'] ?? 1,
-                })
-            .toList();
+        final mappedDrinks = data.map(mapDrinkRow).toList();
 
         print('✅ Mapped ${mappedDrinks.length} drinks');
         return mappedDrinks;
@@ -308,27 +404,14 @@ class SupabaseService {
     }
 
     try {
-      final cleanedDrink = {
-        'id': drink['id'],
-        'name': drink['name'],
-        'price': drink['price'],
-        'category': drink['category'],
-        'image_url': drink['imageUrl'],
-        'company_id': _currentCompanyId,
-        'created_by': _currentUserId,
-        'is_active': true,
-        'current_stock': drink['currentStock'] ?? 0,
-        'minimum_level': drink['minimumLevel'] ?? 5,
-        'purchase_price': drink['purchasePrice'] ?? 0,
-        'unit': drink['unit'] ?? 'Bottle',
-        'barcode': drink['barcode'] ?? '',
-        'units_per_pack': drink['units_per_pack'] ?? drink['unitsPerPack'] ?? 1,
-        'created_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      };
+      final cleanedDrink = buildDrinkInsertPayload(
+        drink,
+        companyId: _currentCompanyId,
+        userId: _currentUserId,
+      );
 
       print('📤 Saving drink to Supabase: ${drink['name']}');
-      print('   Current stock: ${cleanedDrink['current_stock']}');
+      print('   Batch: ${cleanedDrink['production_date']} -> ${cleanedDrink['expiry_date']}');
 
       final response = await http.post(
         Uri.parse(ApiConfig.dataDrinks),
@@ -357,19 +440,7 @@ class SupabaseService {
     }
 
     try {
-      final cleanedDrink = {
-        'name': drink['name'],
-        'price': drink['price'],
-        'category': drink['category'],
-        'image_url': drink['imageUrl'],
-        'current_stock': drink['currentStock'],
-        'minimum_level': drink['minimumLevel'],
-        'purchase_price': drink['purchasePrice'],
-        'unit': drink['unit'],
-        'barcode': drink['barcode'] ?? '',
-        'units_per_pack': drink['units_per_pack'] ?? drink['unitsPerPack'] ?? 1,
-        'updated_at': DateTime.now().toIso8601String(),
-      };
+      final cleanedDrink = buildDrinkUpdatePayload(drink);
 
       final response = await http.patch(
         Uri.parse('${ApiConfig.dataDrinks}/$id'),

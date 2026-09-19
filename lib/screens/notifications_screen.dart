@@ -20,14 +20,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   /// Notifications the user opened (reveals the brief view + marks them read).
   final Set<String> _expandedIds = {};
 
-  @override
-  void initState() {
-    super.initState();
-    // ☁️ Per-user history: pull this user's notifications from the server
-    // (also prunes anything older than 2 months).
-    NotificationService().syncWithServer();
-  }
-
   Color _typeColor(NotificationType type) {
     switch (type) {
       case NotificationType.order:

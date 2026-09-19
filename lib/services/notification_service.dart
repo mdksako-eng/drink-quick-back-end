@@ -1,16 +1,14 @@
 // services/notification_service.dart
-// In-app notification center: persists to SharedPreferences, notifies
-// listeners (bell badge updates live), and speaks announcements with a
-// platform-correct TTS (browser SpeechSynthesis on web, flutter_tts natively).
+// In-app notification center. DEVICE-ONLY BY DESIGN: the history lives in
+// SharedPreferences on this device and is never written to Supabase or sent
+// to the backend. It notifies listeners (bell badge updates live) and speaks
+// announcements with a platform-correct TTS (browser SpeechSynthesis on web,
+// flutter_tts natively).
 
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:drinks_calculator_fixed/config/api_config.dart';
-import 'package:drinks_calculator_fixed/services/secure_storage_service.dart';
-import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
 import 'package:drinks_calculator_fixed/services/tts/tts_factory.dart'
     as tts;
@@ -81,8 +79,6 @@ class NotificationService extends ChangeNotifier {
     }
     _persist();
     notifyListeners();
-    // ☁️ Keep a per-user copy online so the history survives a reinstall.
-    _pushToServer(notification);
   }
 
   Future<void> _persist() async {
@@ -157,17 +153,17 @@ class NotificationService extends ChangeNotifier {
     }
   }
 
-void markAllRead() {
+  /// Marks every notification as read (device only).
+  void markAllRead() {
     for (final n in _notifications) {
       n.isRead = true;
     }
     _persist();
     notifyListeners();
-    _markAllReadOnServer();
   }
 
-  /// Marks one notification as read (called when the user taps it) — locally
-  /// and on the server so the state follows the user across devices.
+  /// Marks one notification as read (called when the user taps it).
+  /// The read state is kept on this device only.
   void markAsRead(String id) {
     final index = _notifications.indexWhere((n) => n.id == id);
     if (index == -1) return;
@@ -175,37 +171,23 @@ void markAllRead() {
     _notifications[index].isRead = true;
     _persist();
     notifyListeners();
-    _patchReadOnServer(id, true);
   }
 
+  /// Flips the read state of one notification (device only).
   void toggleRead(String id) {
     final index = _notifications.indexWhere((n) => n.id == id);
     if (index == -1) return;
-    final newValue = !_notifications[index].isRead;
-    _notifications[index].isRead = newValue;
+    _notifications[index].isRead = !_notifications[index].isRead;
     _persist();
     notifyListeners();
-    _patchReadOnServer(id, newValue);
   }
 
+  /// Removes a notification from this device history (device only).
   Future<void> deleteNotification(String id) async {
     _notifications.removeWhere((n) => n.id == id);
     _persist();
     notifyListeners();
-    if (!SupabaseService.canUseSupabase) return;
-    try {
-      await http.delete(
-        Uri.parse('${ApiConfig.dataNotifications}/${Uri.encodeComponent(id)}'),
-        headers: await _authedHeaders(),
-      );
-    } catch (e) {
-      debugPrint('⚠️ Notification delete sync failed: $e');
-    }
   }
-
-  // ============================================================
-  // ☁️ ONLINE SYNC (per user) + 🧹 2-month retention
-  // ============================================================
 
   /// Drops notifications older than [_maxAgeDays] (2 months).
   void _pruneOld() {
@@ -214,109 +196,6 @@ void markAllRead() {
     _notifications.removeWhere((n) => n.time.isBefore(cutoff));
     if (_notifications.length != before) {
       debugPrint('🧹 Pruned ${before - _notifications.length} old notifications');
-    }
-  }
-
-  /// Loads this user's notifications from the server and merges them with the
-  /// local cache (deduplicating by id, newest first).
-  Future<void> syncWithServer() async {
-    if (!SupabaseService.canUseSupabase) return;
-    try {
-      final response = await http.get(
-        Uri.parse(ApiConfig.dataNotifications),
-        headers: await _authedHeaders(),
-      );
-      if (response.statusCode != 200) return;
-
-      final rows = List<Map<String, dynamic>>.from(jsonDecode(response.body));
-      final byId = <String, AppNotification>{
-        for (final n in _notifications) n.id: n,
-      };
-
-      for (final row in rows) {
-        final id = row['id']?.toString();
-        if (id == null || id.isEmpty) continue;
-        final remote = AppNotification(
-          id: id,
-          title: row['title']?.toString() ?? '',
-          message: row['message']?.toString() ?? '',
-          type: NotificationType.values.firstWhere(
-            (t) => t.name == row['type']?.toString(),
-            orElse: () => NotificationType.system,
-          ),
-          time: DateTime.tryParse('${row['created_at']}') ?? DateTime.now(),
-          isRead: row['is_read'] == true,
-        );
-        final local = byId[id];
-        byId[id] = remote;
-        // Keep local-only rows that were never pushed (state is local truth).
-        if (local != null && local.isRead && !remote.isRead) {
-          remote.isRead = true;
-          _patchReadOnServer(id, true);
-        }
-      }
-
-      _notifications
-        ..clear()
-        ..addAll(byId.values);
-      _notifications.sort((a, b) => b.time.compareTo(a.time));
-      _pruneOld();
-      _persist();
-      notifyListeners();
-    } catch (e) {
-      debugPrint('⚠️ Notification sync failed: $e');
-    }
-  }
-
-  Future<Map<String, String>> _authedHeaders() async {
-    final token = await SecureStorageService.getSessionToken();
-    return {
-      'Content-Type': 'application/json',
-      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-    };
-  }
-
-  Future<void> _pushToServer(AppNotification n) async {
-    if (!SupabaseService.canUseSupabase) return;
-    try {
-      await http.post(
-        Uri.parse(ApiConfig.dataNotifications),
-        headers: await _authedHeaders(),
-        body: jsonEncode({
-          'id': n.id,
-          'title': n.title,
-          'message': n.message,
-          'type': n.type.name,
-          'created_at': n.time.toIso8601String(),
-        }),
-      );
-    } catch (e) {
-      debugPrint('⚠️ Notification push failed: $e');
-    }
-  }
-
-  Future<void> _patchReadOnServer(String id, bool isRead) async {
-    if (!SupabaseService.canUseSupabase) return;
-    try {
-      await http.patch(
-        Uri.parse('${ApiConfig.dataNotifications}/${Uri.encodeComponent(id)}'),
-        headers: await _authedHeaders(),
-        body: jsonEncode({'is_read': isRead}),
-      );
-    } catch (e) {
-      debugPrint('⚠️ Notification read sync failed: $e');
-    }
-  }
-
-  Future<void> _markAllReadOnServer() async {
-    if (!SupabaseService.canUseSupabase) return;
-    try {
-      await http.patch(
-        Uri.parse('${ApiConfig.dataNotifications}/read-all'),
-        headers: await _authedHeaders(),
-      );
-    } catch (e) {
-      debugPrint('⚠️ Notification read-all sync failed: $e');
     }
   }
 
