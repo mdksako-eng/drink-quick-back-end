@@ -20,6 +20,35 @@ Option B (you run it in the Supabase Dashboard):
 1. Supabase → your project → **SQL Editor** → paste the whole contents of `drinks-calculator-backend/sql/enable_rls.sql` → **Run**.
 2. Confirm the 4 tables now have `relrowsecurity = true`.
 
+### Step 1b — `forecast_events` (added later)
+
+`forecast_events` was created by the backend **without** row level security, so
+the anon key shipped inside the app could read (and forge) another company's
+events. The backend now enables RLS on it at boot; to close it on an existing
+database immediately:
+
+Option A: `cd drinks-calculator-backend && node scripts/apply_forecast_rls.js`
+Option B (Dashboard): paste `drinks-calculator-backend/sql/rls_forecast_events.sql` into the SQL Editor → **Run**.
+
+Verify (with the anon key):
+```
+GET {SUPABASE_URL}/rest/v1/forecast_events?select=id   → [] or 401
+```
+
+### Step 1c — Optional: drop the notifications table
+
+Notifications are **device-only** now: the app keeps the history in
+SharedPreferences and never calls the backend for them, so the `notifications`
+table is no longer used (the runtime creation of it was removed from
+`server.js`). If you do not want to keep the old rows:
+
+```
+-- Supabase → SQL Editor
+\i drinks-calculator-backend/sql/drop_notifications_table.sql
+```
+(or paste the file's contents and Run). The app works either way.
+
+
 ---
 
 ## Step 2 — Hash existing plaintext passwords

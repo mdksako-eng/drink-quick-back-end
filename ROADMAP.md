@@ -148,3 +148,62 @@ Everything is computed client-side from data already in memory (`OrderProvider.o
 
 ## Suggested sequencing
 1 → 2 → 3 → 4 → 5 (each phase independently shippable).
+
+---
+
+## Phase 6 — Hardening, billing gate, alerts & reporting ✅
+
+**Value:** High · **Risk:** Medium (touches login flow, security and exports)
+
+Requested in one batch; shipped as nine independently validated changes.
+
+### Delivered
+1. **Drink batch dates actually persist** (`lib/services/supabase_service.dart`).
+   `production_date`, `expiry_date` and `unit_kind` were never sent to
+   `/api/data/drinks` and were dropped again when reading the rows back, so the
+   dates looked lost. Payload building and row mapping are now pure, unit-tested
+   helpers (`buildDrinkInsertPayload`, `buildDrinkUpdatePayload`, `mapDrinkRow`,
+   `dateOnly`); the same fix stops `image_url` from being wiped on save/edit.
+2. **`forecast_events` RLS** — created without row level security, so the anon
+   key could read/forge company events. RLS + `REVOKE ALL … FROM anon,
+   authenticated` is applied at boot and via `sql/rls_forecast_events.sql`
+   (`scripts/apply_forecast_rls.js`); the lockdown scripts cover the newer tables.
+3. **Notifications are device-only** — the `/api/data/notifications` routes, the
+   table creation and every client sync path were removed; history lives in
+   SharedPreferences. `sql/drop_notifications_table.sql` is the opt-in cleanup.
+4. **Co-managers cannot edit the owner** — `PUT /api/auth/update-staff/:id` now
+   refuses unless the caller is the owner or an Administrator, and the owner can
+   never be demoted out of the Manager role. Rules live in
+   `utils/staffPermissions.js` (backend) and `lib/utils/staff_permissions.dart`
+   (UI), both unit tested.
+5. **Subscription gate** — `PlanGate` resolves the plan right after login: an
+   active plan goes straight through, free/none/expired plans open the
+   subscription screen, and **Continue on Free** is remembered per company (a
+   lapsed paid plan re-opens the gate). `lib/utils/plan_gate_logic.dart` holds the
+   decision table.
+6. **Pro staff barcode scanning** — the drawer exposes the (Pro) scanner to
+   Staff, the scan sheet gained a quantity stepper plus *Send to calculator*
+   (via `OrderBridge`), and stock-management actions stay manager/admin only.
+7. **30-day expiry alerts joined with the demand forecast** —
+   `computeExpiryAlerts()` pairs each batch date with its expected demand and
+   suggested order; `ExpiryAlertService` raises the alert once per batch per day
+   and the forecast screen shows an *Expiring soon* banner. The AI assistant and
+   the forecast AI summary both receive the expiring-stock context and are told to
+   push those batches first.
+8. **Professional inventory export** — `lib/utils/inventory_report_files.dart`
+   builds a presentation-ready PDF (company name, period, KPI boxes, two bar
+   charts, stock/low-stock/expiry/movement tables, page numbers), a multi-sheet
+   Excel workbook and a CSV. The export dialog offers a **checkbox per section**,
+   the company name comes from `CompanyNameHelper`, and all labels are EN/FR.
+9. **MouseTracker assertion tamed** — `FlutterAssertionGuard` drops only the
+   known framework re-entrancy assertion
+   (`mouse_tracker.dart … !_debugDuringDeviceUpdate`, flutter/flutter#137938) and
+   counts it; a periodic rebuild storm in the connectivity banner was removed too.
+
+### Validation
+- `flutter analyze lib` → 0 errors
+- `flutter test` → 110 passing (drink batch dates, staff permissions, plan gate,
+  expiry alerts, inventory report builders, assertion guard)
+- `npx jest` (backend) → 6 suites / 43 tests passing (schema hardening, staff
+  permissions, orders staff-name, atomic inventory, payment mode, smoke)
+
