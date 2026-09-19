@@ -338,8 +338,10 @@ class CustomDrawer extends StatelessWidget {
                         MaterialPageRoute(
                             builder: (context) => const InventoryScreen()));
                   }, primaryColor: primaryColor),
-                // Scan barcode/QR (Admin, Manager, Customer)
-                if (canManageDrinks)
+                // Scan barcode/QR — Pro feature. Managers/admins use it to look up and
+                // manage stock; Staff use it to send a scanned item straight to
+                // the calculator as an order (both require the Pro plan).
+                if (canManageDrinks || isStaff)
                   _buildDrawerItem(context, Icons.qr_code_scanner, t('scanMenu'),
                       () {
                     Navigator.pop(context);

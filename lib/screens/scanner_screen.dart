@@ -1,6 +1,9 @@
 // screens/scanner_screen.dart
 import 'package:flutter/material.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
+import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
+import 'package:drinks_calculator_fixed/services/order_bridge.dart';
+import 'calculator_screen.dart';
 import '../widgets/upgrade_required.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
@@ -27,6 +30,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
   bool _torchOn = false;
   bool _handling = false;
 
+  /// Quantity chosen in the scan sheet's "send to calculator" stepper.
+  int _sendQuantity = 1;
+
   @override
   void dispose() {
     _controller.dispose();
@@ -52,6 +58,79 @@ class _ScannerScreenState extends State<ScannerScreen> {
       await Future.delayed(const Duration(seconds: 1));
     }
     _handling = false;
+  }
+
+  /// True when this user may manage stock from the scan sheet (managers and
+  /// administrators). Staff get the "send to calculator" flow instead.
+  bool get _canManageStock {
+    try {
+      final role = Provider.of<AuthProvider>(context, listen: false)
+          .user
+          ?.role
+          .toLowerCase();
+      return role == 'manager' ||
+          role == 'administrator' ||
+          role == 'admin';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Pro-plan flow for staff: queue the scanned drink and hand it to the
+  /// calculator, so a barcode scan becomes an order in one step.
+  void _sendToCalculator(BuildContext ctx, Drink drink, int quantity) {
+    final bridge = OrderBridge()..clearOrder();
+    bridge.setSource('scanner');
+    bridge.addDrink(drink, quantity);
+    Navigator.pop(ctx);
+    if (mounted) {
+      Navigator.pushReplacement(context,
+          MaterialPageRoute(builder: (_) => const CalculatorScreen()));
+    }
+  }
+
+  /// Quantity + "send to calculator" block (Pro feature).
+  Widget _sendToCalculatorBlock(BuildContext ctx, Drink drink, int stock) {
+    final maxQty = stock > 0 ? stock : 1;
+    return StatefulBuilder(
+      builder: (builderCtx, setSheetState) {
+        final qty = _sendQuantity.clamp(1, maxQty);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Text(t('scanSendToCalculator'),
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              IconButton(
+                icon: const Icon(Icons.remove_circle_outline),
+                onPressed: qty <= 1
+                    ? null
+                    : () => setSheetState(() => _sendQuantity = qty - 1),
+              ),
+              Text('$qty',
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline),
+                onPressed: qty >= maxQty
+                    ? null
+                    : () => setSheetState(() => _sendQuantity = qty + 1),
+              ),
+            ]),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _sendToCalculator(ctx, drink, qty),
+                icon: const Icon(Icons.point_of_sale),
+                label: Text('${t('addToOrder')} — ${CurrencyHelper.format(drink.price * qty)}'),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -171,6 +250,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
       Drink drink, InventoryItem? item, String raw) async {
     await _controller.stop();
     if (!mounted) return;
+    // Each scan starts from one unit again.
+    setState(() => _sendQuantity = 1);
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -245,38 +326,44 @@ class _ScannerScreenState extends State<ScannerScreen> {
           Text('${t('unitsPerPack')}: ${drink.unitsPerPack}',
               style: TextStyle(fontSize: 12, color: Colors.grey[600])),
           const SizedBox(height: 16),
-          Row(children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _restock(ctx, inventoryProvider, drink),
-                icon: const Icon(Icons.add),
-                label: Text(t('scanRestock')),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+          // 🛒 Turn the scan straight into an order on the calculator. This is
+          // the Pro flow staff use, so it is shown to every scanning role.
+          _sendToCalculatorBlock(ctx, drink, qty),
+          if (_canManageStock) ...[
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _restock(ctx, inventoryProvider, drink),
+                  icon: const Icon(Icons.add),
+                  label: Text(t('scanRestock')),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const InventoryScreen()));
-                },
-                icon: const Icon(Icons.inventory),
-                label: Text(t('scanManage')),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const InventoryScreen()));
+                  },
+                  icon: const Icon(Icons.inventory),
+                  label: Text(t('scanManage')),
+                ),
               ),
-            ),
-          ]),
-          if (drink.barcode != raw) ...[
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _linkBarcode(ctx, raw, drink),
-                icon: const Icon(Icons.qr_code),
-                label: Text(t('linkBarcode')),
+            ]),
+            if (drink.barcode != raw) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _linkBarcode(ctx, raw, drink),
+                  icon: const Icon(Icons.qr_code),
+                  label: Text(t('linkBarcode')),
+                ),
               ),
-            ),
+            ],
           ],
           const SizedBox(height: 8),
         ],

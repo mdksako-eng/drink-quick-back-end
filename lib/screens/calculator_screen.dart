@@ -370,7 +370,10 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         });
 
         orderBridge.clearOrder();
-        Helpers.showToast('Order loaded from AI Assistant!');
+        Helpers.showToast(
+            t(orderBridge.source == 'scanner'
+                ? 'orderLoadedFromScanner'
+                : 'orderLoadedFromAi'));
       });
     }
   }

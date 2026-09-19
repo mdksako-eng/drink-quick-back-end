@@ -884,6 +884,9 @@ const Map<String, String> _en = {
   'scanMinLevel': 'Min level',
   'scanLowStock': 'Low stock',
   'scanRestock': 'Restock +1',
+  'scanSendToCalculator': 'Send to calculator',
+  'orderLoadedFromScanner': 'Order loaded from the scanner',
+  'orderLoadedFromAi': 'Order loaded from the AI assistant',
   'scanManage': 'Manage inventory',
   'scanCameraError': 'Camera unavailable. Please enable camera access.',
 
@@ -1807,6 +1810,9 @@ const Map<String, String> _fr = {
   'scanMinLevel': 'Niveau minimum',
   'scanLowStock': 'Stock faible',
   'scanRestock': 'Réapprovisionner +1',
+  'scanSendToCalculator': 'Envoyer à la calculatrice',
+  'orderLoadedFromScanner': 'Commande chargée depuis le scanner',
+  'orderLoadedFromAi': "Commande chargée depuis l'assistant IA",
   'scanManage': 'Gérer l\'inventaire',
   'scanCameraError': 'Caméra indisponible. Veuillez autoriser l\'accès à la caméra.',
 

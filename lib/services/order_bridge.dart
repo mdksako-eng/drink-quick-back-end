@@ -11,8 +11,13 @@ class OrderBridge {
   final List<Map<String, dynamic>> _pendingDrinks = [];
   String _customerName = '';
 
+  /// Where the pending order came from: 'ai' (AI assistant) or 'scanner'
+  /// (barcode scan). The calculator uses it to show the matching message.
+  String _source = 'ai';
+
   List<Map<String, dynamic>> get pendingDrinks => _pendingDrinks;
   String get customerName => _customerName;
+  String get source => _source;
   bool get hasPendingOrder => _pendingDrinks.isNotEmpty;
 
   void addDrink(Drink drink, int quantity) {
@@ -29,6 +34,11 @@ class OrderBridge {
     _customerName = name;
   }
 
+  /// Records who queued the order ('ai' or 'scanner').
+  void setSource(String source) {
+    _source = source;
+  }
+
   double get totalAmount {
     return _pendingDrinks.fold(0.0, (sum, item) {
       final drink = item['drink'] as Drink;
@@ -40,5 +50,6 @@ class OrderBridge {
   void clearOrder() {
     _pendingDrinks.clear();
     _customerName = '';
+    _source = 'ai';
   }
 }
