@@ -24,6 +24,7 @@ import 'package:drinks_calculator_fixed/services/voice_service.dart';
 import 'package:drinks_calculator_fixed/widgets/activity_detector.dart';
 import 'package:drinks_calculator_fixed/widgets/offline_indicator.dart';
 import 'package:drinks_calculator_fixed/widgets/legal_consent_gate.dart';
+import 'package:drinks_calculator_fixed/widgets/plan_gate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 // Global navigator key for showing dialogs from anywhere
@@ -952,7 +953,12 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
           return ActivityDetector(
             child: OfflineIndicator(
-              child: LegalConsentGate(child: const CalculatorScreen()),
+              // 🧾 Consent first (legal), then the subscription gate: the user
+              // must see the plans (or explicitly continue on Free) before the
+              // rest of the app loads.
+              child: LegalConsentGate(
+                child: PlanGate(child: const CalculatorScreen()),
+              ),
             ),
           );
         } else {

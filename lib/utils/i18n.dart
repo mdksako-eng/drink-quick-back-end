@@ -949,6 +949,13 @@ const Map<String, String> _en = {
   'perMonth': 'per month',
   'mostPopular': 'Most Popular',
   'plansSubtitle': 'Simple pricing for your business.',
+  'planGateTitle': 'Choose your plan',
+  'planGateSubtitle':
+      'Pick the plan that fits your business. You can change it at any time — or keep using the Free plan.',
+  'planGateLoading': 'Loading your plan...',
+  'continueFree': 'Continue on Free',
+  'continueFreeHint':
+      'You can upgrade later from the menu (Subscription).',
   'paymentPendingVerification': 'Payment recorded. Your subscription will be activated once the payment is verified.',
 
 };
@@ -1867,6 +1874,13 @@ const Map<String, String> _fr = {
   'perMonth': 'par mois',
   'mostPopular': 'Le plus populaire',
   'plansSubtitle': 'Une tarification simple pour votre entreprise.',
+  'planGateTitle': 'Choisissez votre formule',
+  'planGateSubtitle':
+      "Choisissez la formule adaptée à votre entreprise. Vous pouvez la modifier à tout moment — ou continuer avec la formule gratuite.",
+  'planGateLoading': 'Chargement de votre formule...',
+  'continueFree': 'Continuer gratuitement',
+  'continueFreeHint':
+      "Vous pourrez passer à une formule supérieure depuis le menu (Abonnement).",
   'paymentPendingVerification': 'Paiement enregistré. Votre abonnement sera activé une fois le paiement vérifié.',
 
 };

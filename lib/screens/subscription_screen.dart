@@ -7,7 +7,19 @@ import '../providers/plan_provider.dart';
 import '../utils/i18n.dart';
 
 class SubscriptionScreen extends StatefulWidget {
-  const SubscriptionScreen({Key? key}) : super(key: key);
+  /// When true the screen is used as the mandatory post-login gate: no back
+  /// button, a short explanation, and a "Continue on Free" action so the user
+  /// is always able to reach the app.
+  final bool gate;
+
+  /// Called when the user chooses to stay on the free plan.
+  final VoidCallback? onContinueFree;
+
+  const SubscriptionScreen({
+    Key? key,
+    this.gate = false,
+    this.onContinueFree,
+  }) : super(key: key);
 
   @override
   State<SubscriptionScreen> createState() => _SubscriptionScreenState();
@@ -291,19 +303,24 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<PlanProvider>();
     final info = provider.info;
+    final title = widget.gate ? t('planGateTitle') : t('subscription');
 
-    // ⏳ The plan must be resolved before the plans/prices are shown, otherwise
+    //  The plan must be resolved before the plans/prices are shown, otherwise
     // the user could land on the subscription screen with stale or empty data.
     if (provider.loading) {
       return Scaffold(
-        appBar: AppBar(title: Text(t('subscription'))),
-        body: const Center(
+        appBar: AppBar(
+          title: Text(title),
+          automaticallyImplyLeading: !widget.gate,
+        ),
+        body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Loading your plan…', style: TextStyle(color: Colors.grey)),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(t('planGateLoading'),
+                  style: const TextStyle(color: Colors.grey)),
             ],
           ),
         ),
@@ -311,12 +328,21 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(t('subscription'))),
+      appBar: AppBar(
+        title: Text(title),
+        automaticallyImplyLeading: !widget.gate,
+      ),
       body: RefreshIndicator(
         onRefresh: provider.refresh,
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
+            if (widget.gate) ...[
+              Text(t('planGateSubtitle'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14, height: 1.4)),
+              const SizedBox(height: 20),
+            ],
             _currentPlanCard(info),
             const SizedBox(height: 32),
             Text(t('choosePlan'),
@@ -363,6 +389,26 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 return Column(children: cards);
               },
             ),
+            if (widget.gate) ...[
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                onPressed: _busy
+                    ? null
+                    : (widget.onContinueFree ?? () => Navigator.pop(context)),
+                icon: const Icon(Icons.arrow_forward),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                label: Text(t('continueFree')),
+              ),
+              const SizedBox(height: 8),
+              Text(t('continueFreeHint'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              const SizedBox(height: 12),
+            ],
           ],
         ),
       ),

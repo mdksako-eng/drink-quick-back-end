@@ -7,8 +7,14 @@ class PlanProvider extends ChangeNotifier {
   SubscriptionInfo _info = const SubscriptionInfo();
   bool _loading = false;
 
+  /// True once a plan fetch has completed (successfully or not). The
+  /// subscription gate uses this to know it is safe to decide whether to show
+  /// the plans, instead of judging on the default ('free') placeholder.
+  bool _hasLoaded = false;
+
   SubscriptionInfo get info => _info;
   bool get loading => _loading;
+  bool get hasLoaded => _hasLoaded;
   String get plan => _info.plan;
   bool get isActive => _info.isActive;
 
@@ -63,6 +69,9 @@ class PlanProvider extends ChangeNotifier {
       }
     } finally {
       _loading = false;
+      // Mark the plan as resolved even when the fetch failed: the gate then
+      // falls back to the local/default state instead of blocking the app.
+      _hasLoaded = true;
       notifyListeners();
     }
   }
