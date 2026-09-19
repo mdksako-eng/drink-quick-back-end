@@ -1,5 +1,6 @@
 // screens/ai_assistant_screen.dart
 import 'dart:convert';
+import 'dart:io';
 import '../utils/i18n.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -93,7 +94,14 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final chatForStorage = _messages
-          .map((m) => {'text': m['text'], 'isUser': m['isUser']})
+          .map((m) => {
+                'text': m['text'],
+                'isUser': m['isUser'],
+                // Keep the lightweight markers so a restored chat still shows
+                // the photo (native) and which messages were spoken.
+                if (m['kind'] != null) 'kind': m['kind'],
+                if (m['imagePath'] != null) 'imagePath': m['imagePath'],
+              })
           .toList();
       await prefs.setString('ai_chat_messages', jsonEncode(chatForStorage));
       await prefs.setString(
@@ -302,8 +310,17 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
         _isReadingImage = true;
         _loadingLabel = t('ai_readingImage');
       });
-      _messages.add({'text': '📷 ${t('ai_imageSent')}', 'isUser': true});
+      _messages.add({
+        'text': t('ai_imageSent'),
+        'isUser': true,
+        'kind': 'image',
+        // Show the actual photo in the chat (Gemini-style). Native keeps a file
+        // path that survives restarts; web keeps the bytes for the session.
+        if (!kIsWeb && picked.path.isNotEmpty) 'imagePath': picked.path,
+        if (kIsWeb) 'imageBase64': base64Image,
+      });
       _scrollToBottom();
+      _persistMemory();
 
       final response = await _groqService.analyzeImage(
         base64Image: base64Image,
@@ -374,7 +391,13 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
   void _processVoiceCommand(String text) {
     final command = VoiceService.parseCommand(text);
 
-    _messages.add({'text': '"$text"', 'isUser': true});
+    _messages.add({
+      'text': '"$text"',
+      'isUser': true,
+      // Spoken commands are real chat messages: they are shown with a mic badge
+      // and persisted, exactly like typed ones (they used to be lost on restart).
+      'kind': 'voice',
+    });
     _scrollToBottom();
 
     switch (command.type) {
@@ -405,6 +428,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     }
 
     setState(() {});
+    _persistMemory(); // 💾 spoken commands survive a restart too
     _clearVoiceStatus();
     _scrollToBottom();
   }
@@ -1021,12 +1045,7 @@ ORDER_JSON: [{"name":"<exact drink name as written above>","qty":<number>}]
                 itemCount: _messages.length,
                 itemBuilder: (context, index) {
                   final msg = _messages[index];
-                  return _buildMessageBubble(
-                    msg['text'] as String,
-                    msg['isUser'] as bool,
-                    theme,
-                    isMobile,
-                  );
+                  return _buildMessageBubble(msg, theme, isMobile);
                 },
               ),
             ),
@@ -1178,7 +1197,45 @@ ORDER_JSON: [{"name":"<exact drink name as written above>","qty":<number>}]
     );
   }
 
-  Widget _buildMessageBubble(String text, bool isUser, ThemeData theme, bool isMobile) {
+  /// Renders a chat image: native reads the saved file, web uses the in-memory
+  /// bytes. Falls back to a neutral placeholder when neither is available (or the
+  /// file was cleaned up by the OS).
+  Widget _buildChatImage(String? path, String? base64) {
+    if (path != null && path.isNotEmpty && !kIsWeb) {
+      try {
+        final file = File(path);
+        if (file.existsSync()) {
+          return Image.file(
+            file,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => _chatImagePlaceholder(),
+          );
+        }
+      } catch (_) {}
+    }
+    if (base64 != null && base64.isNotEmpty) {
+      try {
+        return Image.memory(base64Decode(base64), fit: BoxFit.contain);
+      } catch (_) {}
+    }
+    return _chatImagePlaceholder();
+  }
+
+  Widget _chatImagePlaceholder() => Container(
+        height: 80,
+        width: 130,
+        alignment: Alignment.center,
+        color: Colors.black.withValues(alpha: 0.08),
+        child: const Icon(Icons.image_outlined, color: Colors.white70),
+      );
+
+  Widget _buildMessageBubble(
+      Map<String, dynamic> msg, ThemeData theme, bool isMobile) {
+    final text = (msg['text'] as String?) ?? '';
+    final isUser = msg['isUser'] == true;
+    final imagePath = msg['imagePath'] as String?;
+    final imageBase64 = msg['imageBase64'] as String?;
+    final kind = msg['kind'] as String?;
     final isDark = theme.brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
     
@@ -1215,6 +1272,32 @@ ORDER_JSON: [{"name":"<exact drink name as written above>","qty":<number>}]
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 📷 The snapped photo, shown right in the conversation like
+                  // Gemini does (tap-through not needed — it is the reference).
+                  if (imagePath != null || imageBase64 != null) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: _buildChatImage(imagePath, imageBase64),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+                  if (kind == 'voice')
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.mic,
+                            size: 12,
+                            color: isUser ? Colors.white70 : theme.hintColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          t('ai_voiceCommand'),
+                          style: TextStyle(
+                              fontSize: 10,
+                              color:
+                                  isUser ? Colors.white70 : theme.hintColor),
+                        ),
+                      ]),
+                    ),
                   SelectableText(
                     text,
                     style: TextStyle(

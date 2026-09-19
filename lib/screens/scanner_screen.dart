@@ -334,7 +334,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
             Row(children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => _restock(ctx, inventoryProvider, drink),
+                  onPressed: () => _restock(ctx, inventoryProvider, drink, qty),
                   icon: const Icon(Icons.add),
                   label: Text(t('scanRestock')),
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
@@ -371,17 +371,137 @@ class _ScannerScreenState extends State<ScannerScreen> {
     );
   }
 
+  /// Manager flow: ask HOW MANY units to add, instead of silently adding a whole
+  /// pack (which could double the stock without the manager realising).
   Future<void> _restock(BuildContext ctx, InventoryProvider provider,
-      Drink drink) async {
-    final qty = drink.unitsPerPack > 1 ? drink.unitsPerPack : 1;
+      Drink drink, int currentStock) async {
+    final controller = TextEditingController(
+      text: '${drink.unitsPerPack > 1 ? drink.unitsPerPack : 1}',
+    );
+    String? error;
+
+    final quantity = await showDialog<int>(
+      context: ctx,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) {
+          void submit() {
+            final parsed = int.tryParse(controller.text.trim());
+            if (parsed == null || parsed <= 0) {
+              setDialogState(() => error = t('scanInvalidQuantity'));
+              return;
+            }
+            Navigator.pop(dialogCtx, parsed);
+          }
+
+          return AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(children: [
+              const Icon(Icons.add_box_outlined, color: Colors.green),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(t('scanAddStockTitle'),
+                    style: const TextStyle(fontSize: 18)),
+              ),
+            ]),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(drink.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text(
+                  '${t('scanCurrentStock')}: $currentStock'
+                  '${drink.unitsPerPack > 1 ? ' • ${t('unitsPerPack')}: ${drink.unitsPerPack}' : ''}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => submit(),
+                  onChanged: (_) {
+                    if (error != null) setDialogState(() => error = null);
+                  },
+                  decoration: InputDecoration(
+                    labelText: t('scanQuantityToAdd'),
+                    errorText: error,
+                    border: const OutlineInputBorder(),
+                    suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove),
+                        onPressed: () {
+                          final v = int.tryParse(controller.text.trim()) ?? 1;
+                          controller.text = '${v > 1 ? v - 1 : 1}';
+                          setDialogState(() => error = null);
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        onPressed: () {
+                          final v = int.tryParse(controller.text.trim()) ?? 0;
+                          controller.text = '${v + 1}';
+                          setDialogState(() => error = null);
+                        },
+                      ),
+                    ]),
+                  ),
+                ),
+                if (drink.unitsPerPack > 1) ...[
+                  const SizedBox(height: 10),
+                  Wrap(spacing: 8, children: [
+                    ActionChip(
+                      label: Text('+1'),
+                      onPressed: () => setDialogState(() {
+                        controller.text =
+                            '${(int.tryParse(controller.text.trim()) ?? 0) + 1}';
+                        error = null;
+                      }),
+                    ),
+                    ActionChip(
+                      label: Text('+${drink.unitsPerPack}'),
+                      onPressed: () => setDialogState(() {
+                        controller.text =
+                            '${(int.tryParse(controller.text.trim()) ?? 0) + drink.unitsPerPack}';
+                        error = null;
+                      }),
+                    ),
+                  ]),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: Text(t('cancel')),
+              ),
+              ElevatedButton.icon(
+                onPressed: submit,
+                icon: const Icon(Icons.check),
+                label: Text(t('addStock')),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (quantity == null) return;
+
     await provider.addStock(
       drinkId: drink.id,
       drinkName: drink.name,
-      quantity: qty,
+      quantity: quantity,
     );
     if (!ctx.mounted) return;
     Navigator.pop(ctx);
-    if (mounted) Helpers.showToast('${drink.name} +$qty');
+    if (mounted) {
+      Helpers.showToast('${drink.name} +$quantity → ${currentStock + quantity}');
+    }
   }
 
   Future<void> _linkBarcode(

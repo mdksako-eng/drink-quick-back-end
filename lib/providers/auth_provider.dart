@@ -158,6 +158,11 @@ class AuthProvider with ChangeNotifier {
     super.dispose();
   }
 
+  /// Tracks the last notified identity so the debug log stays readable: the
+  /// provider notifies on every auth step, and printing each one flooded the
+  /// console (which in turn hid real errors such as layout assertions).
+  String? _lastLoggedUserId;
+
   void _safeNotifyListeners() {
     if (_isDisposed || _isNotifying) return;
     if (!hasListeners) return;
@@ -165,7 +170,11 @@ class AuthProvider with ChangeNotifier {
     _isNotifying = true;
     try {
       notifyListeners();
-      debugPrint('🔄 AuthProvider notified listeners. User: $_user');
+      final id = _user?.id;
+      if (id != _lastLoggedUserId) {
+        _lastLoggedUserId = id;
+        debugPrint('🔄 AuthProvider notified listeners. User: $_user');
+      }
     } catch (e) {
       debugPrint('❌ Error notifying listeners: $e');
     } finally {
