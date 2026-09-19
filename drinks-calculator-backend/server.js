@@ -19,6 +19,11 @@ const { requirePlan } = require('./middleware/planAuth');
 // Legacy rows with plaintext passwords are upgraded automatically on next successful login.
 const isBcryptHash = (stored) => typeof stored === 'string' && stored.startsWith('$2');
 
+// ========== OWNER HELPERS ==========
+// Owner/authorization rules live in a pure, unit-tested module so the endpoint
+// and the tests share one implementation.
+const { getCompanyOwnerId, canEditStaff } = require('./utils/staffPermissions');
+
 // ========== RATE LIMITING (in-memory) ==========
 const rateLimitBuckets = new Map();
 const RATE_MAX_ATTEMPTS = 10;
@@ -1331,15 +1336,29 @@ app.put('/api/auth/update-staff/:id', requireSession(pool), async (req, res) => 
     if (userResult.rowCount === 0) return res.status(404).json({ status: 'error', message: 'User not found' });
     const target = userResult.rows[0];
 
-    if (target.role === 'Administrator') return res.status(403).json({ status: 'error', message: 'Cannot edit an Administrator' });
-
-    // 🔒 Non-admins may only manage users inside their own company
-    if (!isAdmin && req.user?.company_id != null && target.company_id != null && target.company_id !== req.user.company_id) {
-      return res.status(403).json({ status: 'error', message: 'You can only manage users in your own company' });
+    // 🔐 Authorization in one place (pure + unit tested):
+    //    Administrators manage anyone except other Administrators; Managers only
+    //    their own company; and the company OWNER can only be edited by
+    //    themselves or an Administrator — a co-manager may never rename, change
+    //    the email of, or demote the founder account.
+    const ownerId = await getCompanyOwnerId(pool, target.company_id);
+    const permission = canEditStaff({
+      requester: req.user,
+      target,
+      ownerId,
+      isAdmin,
+    });
+    if (!permission.ok) {
+      return res.status(403).json({ status: 'error', message: permission.reason });
     }
+    const targetIsOwner = permission.targetIsOwner === true;
 
     // 🔒 Managers can only assign Staff/Manager (never Administrator)
     const newRole = role && ['Staff', 'Manager'].includes(role) ? role : target.role;
+
+    // 🔒 The owner keeps the Manager role: their account must never be demoted
+    // (which would leave the company without anyone able to verify joins).
+    const finalRole = targetIsOwner && newRole !== 'Manager' ? 'Manager' : newRole;
 
     const result = await pool.query(
       `UPDATE users SET
@@ -1349,7 +1368,7 @@ app.put('/api/auth/update-staff/:id', requireSession(pool), async (req, res) => 
          updated_at = CURRENT_TIMESTAMP
        WHERE id = $4
        RETURNING id, username, email, role, company_id, is_active`,
-      [username || null, email || null, newRole, userId]
+      [username || null, email || null, finalRole, userId]
     );
 
     res.json({ status: 'success', message: 'Staff updated', data: { user: result.rows[0] } });

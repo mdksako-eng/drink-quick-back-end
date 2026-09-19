@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../providers/auth_provider.dart';
 import '../utils/helpers.dart';
+import '../utils/staff_permissions.dart';
 import '../config/api_config.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/secure_storage_service.dart';
@@ -264,6 +265,20 @@ class _ManagerPanelState extends State<ManagerPanel>
   }
 
   Future<void> _editStaff(Map<String, dynamic> staff) async {
+    // 🔐 Owners are protected: only the owner themselves or a platform
+    // Administrator may edit the founder account. The backend enforces the
+    // same rule, so this is a UX guard as well as a safety net.
+    final viewer = Provider.of<AuthProvider>(context, listen: false);
+    if (!StaffPermissions.canEdit(
+      staff: staff,
+      viewerId: viewer.user?.id,
+      viewerIsAdmin: viewer.isAdmin,
+      viewerIsOwner: viewer.user?.isOwner == true,
+    )) {
+      Helpers.showToast(t('staffCannotEditOwner'), isError: true);
+      return;
+    }
+
     final usernameController =
         TextEditingController(text: staff['username'] ?? '');
     final emailController = TextEditingController(text: staff['email'] ?? '');
@@ -682,6 +697,15 @@ class _ManagerPanelState extends State<ManagerPanel>
       itemCount: staff.length,
       itemBuilder: (context, index) {
         final s = staff[index];
+        // 🔐 A co-manager must not be offered the edit action for the owner.
+        // StaffPermissions mirrors the backend rule exactly.
+        final auth = Provider.of<AuthProvider>(context, listen: false);
+        final canEditRow = StaffPermissions.canEdit(
+          staff: s,
+          viewerId: auth.user?.id,
+          viewerIsAdmin: auth.isAdmin,
+          viewerIsOwner: auth.user?.isOwner == true,
+        );
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           shape:
@@ -765,9 +789,16 @@ class _ManagerPanelState extends State<ManagerPanel>
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               // ✏️ edit
               IconButton(
-                tooltip: t('edit'),
-                icon: const Icon(Icons.edit_outlined, size: 20),
-                onPressed: () => _editStaff(s),
+                tooltip: canEditRow ? t('edit') : t('staffCannotEditOwner'),
+                icon: Icon(
+                  canEditRow ? Icons.edit_outlined : Icons.edit_off_outlined,
+                  size: 20,
+                  color: canEditRow ? null : Colors.grey,
+                ),
+                onPressed: canEditRow
+                    ? () => _editStaff(s)
+                    : () => Helpers.showToast(t('staffCannotEditOwner'),
+                        isError: true),
               ),
               // 🚫 block / ✅ unblock — always visible as icons.
               if (isActive)

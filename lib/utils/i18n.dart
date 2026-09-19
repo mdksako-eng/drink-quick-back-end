@@ -900,6 +900,7 @@ const Map<String, String> _en = {
   'staffUpdateFailed': 'Update failed',
   'staffOwner': 'Owner',
   'staffCannotBlockOwner': "Can't block an owner of a company",
+  'staffCannotEditOwner': "Only the company owner can edit the owner account",
   'staffBlockFailed': 'Could not block this staff member',
   'dashSalesByStaff': 'Sales by Staff',
   'dashExport': 'Export',
@@ -1816,6 +1817,8 @@ const Map<String, String> _fr = {
   'staffOwner': 'Propriétaire',
   'staffCannotBlockOwner':
       'Impossible de bloquer le propriétaire d\'une entreprise',
+  'staffCannotEditOwner':
+      "Seul le propriétaire de l'entreprise peut modifier son compte de propriétaire",
   'staffBlockFailed': 'Impossible de bloquer ce membre du personnel',
   'dashSalesByStaff': 'Ventes par personnel',
   'dashExport': 'Exporter',
