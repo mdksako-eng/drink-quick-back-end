@@ -130,14 +130,21 @@ class _OfflineIndicatorState extends State<OfflineIndicator>
       }
 
       final quality = _calculateQuality(stopwatch.elapsedMilliseconds);
+      final slow = quality < 0.5;
 
-      setState(() {
-        _isSlowConnection = quality < 0.5;
-        _isOffline = false;
-        _isChecking = false;
-      });
+      // Only rebuild when something actually changed. This runs every 10 s; an
+      // unconditional setState() rebuilt the overlay while the user was simply
+      // moving the mouse, which is exactly the kind of rebuild that trips
+      // Flutter's mouse-tracker re-entrancy assertion on web/desktop.
+      if (slow != _isSlowConnection || _isOffline || _isChecking) {
+        setState(() {
+          _isSlowConnection = slow;
+          _isOffline = false;
+          _isChecking = false;
+        });
+      }
 
-      if (_isSlowConnection) {
+      if (slow) {
         _showSlowConnectionToast();
         _slideController.forward();
       } else {

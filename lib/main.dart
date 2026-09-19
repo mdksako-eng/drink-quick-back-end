@@ -9,6 +9,7 @@ import 'package:drinks_calculator_fixed/screens/auth_screen.dart';
 import 'package:drinks_calculator_fixed/screens/calculator_screen.dart';
 import 'package:drinks_calculator_fixed/services/storage_service.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
+import 'package:drinks_calculator_fixed/utils/flutter_assertion_guard.dart';
 import 'package:drinks_calculator_fixed/utils/i18n.dart';
 import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import 'package:drinks_calculator_fixed/services/notification_service.dart';
@@ -156,6 +157,9 @@ Future<void> _requestStoragePermission() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // 🖱️ Drop the known (and harmless) Flutter MouseTracker debug assertion so it
+  // cannot flood the console — see utils/flutter_assertion_guard.dart.
+  FlutterAssertionGuard.install();
   try {
     await Supabase.initialize(
       url: 'https://hcfhnooabhxbdfgvtqhp.supabase.co',
