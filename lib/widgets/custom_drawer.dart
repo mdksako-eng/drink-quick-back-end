@@ -19,6 +19,7 @@ import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/screens/manager_approval_screen.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
+import 'package:drinks_calculator_fixed/services/company_branding_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -96,8 +97,30 @@ class CustomDrawer extends StatelessWidget {
                   child: CircleAvatar(
                     radius: 32,
                     backgroundColor: Colors.white,
-                    child:
-                        Icon(Icons.local_drink, size: 36, color: primaryColor),
+                    // 🏢 The shop's own logo when it has one, otherwise the
+                    // app's drink icon.
+                    child: ClipOval(
+                      child: FutureBuilder<String?>(
+                        future: CompanyBrandingService.cached(),
+                        builder: (context, snapshot) {
+                          final logo = snapshot.data;
+                          if (logo == null || logo.isEmpty) {
+                            return Icon(Icons.local_drink,
+                                size: 36, color: primaryColor);
+                          }
+                          return Image.network(
+                            logo,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Icon(
+                                Icons.local_drink,
+                                size: 36,
+                                color: primaryColor),
+                          );
+                        },
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -461,13 +484,13 @@ class CustomDrawer extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     TextButton(
-                      onPressed: () => _openUrl(ApiConfig.privacyPolicy),
+                      onPressed: () => _openUrl(ApiConfig.privacyPolicyForLanguage),
                       child: const Text('Privacy Policy',
                           style: TextStyle(fontSize: 12)),
                     ),
                     Text('|', style: TextStyle(color: theme.hintColor)),
                     TextButton(
-                      onPressed: () => _openUrl(ApiConfig.termsOfService),
+                      onPressed: () => _openUrl(ApiConfig.termsOfServiceForLanguage),
                       child: const Text('Terms',
                           style: TextStyle(fontSize: 12)),
                     ),

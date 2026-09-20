@@ -374,6 +374,16 @@ const Map<String, String> _en = {
   'dm_unitKind_count': 'Items / units',
   'dm_batchDates': 'Batch dates (optional)',
   'dm_productionDate': 'Production date',
+  'branding_title': 'Company logo',
+  'branding_hint':
+      'Shown in the menu, on invoices and in exported reports. A square picture works best.',
+  'branding_upload': 'Upload logo',
+  'branding_replace': 'Replace logo',
+  'branding_removeConfirm':
+      'Remove the company logo? Invoices and reports will use the app icon again.',
+  'branding_saved': 'Company logo saved',
+  'branding_removed': 'Company logo removed',
+  'branding_managerOnly': 'Only an owner or manager can change the logo.',
   'dm_uploadImage': 'Upload a picture',
   'dm_imageUploaded': 'Picture uploaded — the URL was filled in',
   'dm_imageUploadFailed': 'Could not upload the picture',
@@ -1332,6 +1342,17 @@ const Map<String, String> _fr = {
   'dm_batchDates': 'Dates du lot (facultatif)',
   'dm_productionDate': 'Date de production',
   'dm_uploadImage': 'Téléverser une image',
+  'branding_title': "Logo de l'entreprise",
+  'branding_hint':
+      "Affiché dans le menu, sur les factures et dans les rapports exportés. Une image carrée est idéale.",
+  'branding_upload': 'Téléverser le logo',
+  'branding_replace': 'Remplacer le logo',
+  'branding_removeConfirm':
+      "Supprimer le logo de l'entreprise ? Les factures et rapports réutiliseront l'icône de l'application.",
+  'branding_saved': "Logo de l'entreprise enregistré",
+  'branding_removed': "Logo de l'entreprise supprimé",
+  'branding_managerOnly':
+      "Seul le propriétaire ou un gestionnaire peut modifier le logo.",
   'dm_imageUploaded': 'Image téléversée — l\'URL a été remplie',
   'dm_imageUploadFailed': 'Impossible de téléverser l\'image',
   'dm_imageBucketMissing':

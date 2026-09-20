@@ -161,4 +161,49 @@ class DrinkImageService {
       return ImageUploadResult.failure(message);
     }
   }
+
+  /// Uploads a company logo into the same public bucket and returns its URL.
+  ///
+  /// Stored as `<companyId>/logo-<timestamp>.png` so the bucket stays organised
+  /// (drink pictures live beside it) and a new logo never overwrites the old one.
+  static Future<ImageUploadResult> uploadLogo({
+    required Uint8List bytes,
+    int? companyId,
+    DateTime? now,
+  }) async {
+    if (bytes.isEmpty) {
+      return const ImageUploadResult.failure('empty-file');
+    }
+    if (bytes.length > maxBytes) {
+      return const ImageUploadResult.failure('file-too-large');
+    }
+
+    final stamp = (now ?? DateTime.now()).millisecondsSinceEpoch;
+    final objectPath = '${companyId ?? 'shared'}/logo-$stamp.png';
+
+    try {
+      await Supabase.instance.client.storage.from(bucket).uploadBinary(
+            objectPath,
+            bytes,
+            fileOptions: const FileOptions(
+              contentType: 'image/png',
+              upsert: false,
+            ),
+          );
+      return ImageUploadResult.success(publicUrlFor(objectPath));
+    } catch (e) {
+      debugPrint('🏢 Logo upload failed: $e');
+      final message = e.toString();
+      if (message.contains('Bucket not found') ||
+          (message.contains('bucket') && message.contains('not found'))) {
+        return const ImageUploadResult.failure('bucket-missing');
+      }
+      if (message.contains('row-level security') ||
+          message.contains('Unauthorized') ||
+          message.contains('403')) {
+        return const ImageUploadResult.failure('policy-denied');
+      }
+      return ImageUploadResult.failure(message);
+    }
+  }
 }

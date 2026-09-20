@@ -1608,7 +1608,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(horizontal: 3)),
-                    onPressed: () => _openUrl(ApiConfig.termsOfService),
+                    onPressed: () => _openUrl(ApiConfig.termsOfServiceForLanguage),
                     child: Text(t('termsOfService'),
                         style: TextStyle(
                             fontSize: 12,
@@ -1620,7 +1620,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(horizontal: 3)),
-                    onPressed: () => _openUrl(ApiConfig.privacyPolicy),
+                    onPressed: () => _openUrl(ApiConfig.privacyPolicyForLanguage),
                     child: Text(t('privacyPolicy'),
                         style: TextStyle(
                             fontSize: 12,
@@ -1676,7 +1676,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   style: TextButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 4)),
-                  onPressed: () => _openUrl(ApiConfig.termsOfService),
+                  onPressed: () => _openUrl(ApiConfig.termsOfServiceForLanguage),
                   child: Text(t('auth_termsShort'),
                       style: TextStyle(fontSize: 11)),
                 ),
@@ -1685,7 +1685,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   style: TextButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 4)),
-                  onPressed: () => _openUrl(ApiConfig.privacyPolicy),
+                  onPressed: () => _openUrl(ApiConfig.privacyPolicyForLanguage),
                   child: Text(t('privacyPolicy'),
                       style: TextStyle(fontSize: 11)),
                 ),

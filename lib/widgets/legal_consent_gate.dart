@@ -85,11 +85,11 @@ class _LegalConsentGateState extends State<LegalConsentGate> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           TextButton(
-                            onPressed: () => _open(ApiConfig.termsOfService),
+                            onPressed: () => _open(ApiConfig.termsOfServiceForLanguage),
                             child: Text(t('legal_viewTerms')),
                           ),
                           TextButton(
-                            onPressed: () => _open(ApiConfig.privacyPolicy),
+                            onPressed: () => _open(ApiConfig.privacyPolicyForLanguage),
                             child: Text(t('legal_viewPrivacy')),
                           ),
                         ],

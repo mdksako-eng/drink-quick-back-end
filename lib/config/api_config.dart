@@ -1,3 +1,4 @@
+import '../utils/i18n.dart';
 // config/api_config.dart
 class ApiConfig {
   // Production backend URL (Render)
@@ -38,6 +39,24 @@ class ApiConfig {
   // Legal pages (served as static files from the backend's public/ dir)
   static const String privacyPolicy = '$baseUrl/privacy.html';
   static const String termsOfService = '$baseUrl/terms.html';
+
+  /// 🇫🇷 French versions of the same pages (same content, same styles).
+  static const String privacyPolicyFr = '$baseUrl/privacy.fr.html';
+  static const String termsOfServiceFr = '$baseUrl/terms.fr.html';
+
+  /// Legal page in the language the app is currently showing.
+  ///
+  /// The pages are plain HTML the backend serves, so the language has to be
+  /// chosen when the link is opened — this keeps the drawer, the sign-up form
+  /// and the consent gate consistent with the app language.
+  static String legalPage(String name, {required bool french}) =>
+      '$baseUrl/$name${french ? '.fr' : ''}.html';
+
+  static String get privacyPolicyForLanguage =>
+      legalPage('privacy', french: LanguageService.instance.isFrench);
+
+  static String get termsOfServiceForLanguage =>
+      legalPage('terms', french: LanguageService.instance.isFrench);
   // ========== SUPABASE ==========
   // Replace these with your Supabase project details
   static const String supabaseUrl = 'https://hcfhnooabhxbdfgvtqhp.supabase.co';

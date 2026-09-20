@@ -455,6 +455,32 @@ class SupabaseService {
     }
   }
 
+  /// Saves (or clears, with an empty string) the company logo URL.
+  ///
+  /// Company-wide branding lives on the company record, so every user of the
+  /// company sees the same logo on every device; PATCH /api/data/company is
+  /// manager-only, which is exactly who should change branding.
+  static Future<bool> saveCompanyLogo(String url) async {
+    if (!canUseSupabase) {
+      print('⚠️ Cannot save the company logo - Supabase not available');
+      return false;
+    }
+    try {
+      final response = await http.patch(
+        Uri.parse('${ApiConfig.apiBase}/data/company'),
+        headers: await _authedHeaders(),
+        body: jsonEncode({'logo_url': url}),
+      );
+      if (response.statusCode == 200) return true;
+      print('❌ Failed to save the company logo: ${response.statusCode} '
+          '${response.body}');
+      return false;
+    } catch (e) {
+      print('❌ Supabase saveCompanyLogo error: $e');
+      return false;
+    }
+  }
+
   static Future<bool> deleteDrink(String id) async {
     if (!canUseSupabase) {
       print('⚠️ Cannot save drink - Supabase not available');

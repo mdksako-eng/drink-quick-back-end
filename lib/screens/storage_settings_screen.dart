@@ -13,6 +13,12 @@ import 'package:drinks_calculator_fixed/main.dart';
 import 'package:drinks_calculator_fixed/utils/payment_helper.dart';
 import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
+import 'package:drinks_calculator_fixed/services/company_branding_service.dart';
+import 'package:drinks_calculator_fixed/utils/image_crop_helper.dart';
+import 'package:drinks_calculator_fixed/utils/helpers.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:drinks_calculator_fixed/services/payment_service.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/secure_storage_service.dart';
@@ -42,6 +48,10 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
 
   // Company settings
   String _companyName = 'Drink Quick Cal';
+
+  /// Company branding (logo) state for the settings card.
+  String? _logoUrl;
+  bool _isUploadingLogo = false;
   String _companyEmail = '';
   String _companyPhone = '';
   String _companyAddress = '';
@@ -946,6 +956,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     _buildCurrencySettingsCard(theme, primaryColorValue),
                     const SizedBox(height: 20),
                     _buildCompanyInfoCard(theme, primaryColorValue),
+                const SizedBox(height: 16),
+                _buildCompanyLogoCard(theme, primaryColorValue),
                     const SizedBox(height: 20),
                     if (!isStaff) ...[
                       _buildBusinessPaymentSettingsCard(
@@ -1658,6 +1670,221 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
 // ============================================================
 // ✅ COMPLETE: Company Information Card with Role-Based Access
 // ============================================================
+  /// Picks a picture, crops it square and stores it as the company logo.
+  Future<void> _uploadCompanyLogo() async {
+    ImageSource? source;
+    await showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: Text(t('ai_takePhoto')),
+            onTap: () {
+              source = ImageSource.camera;
+              Navigator.pop(ctx);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: Text(t('ai_chooseImage')),
+            onTap: () {
+              source = ImageSource.gallery;
+              Navigator.pop(ctx);
+            },
+          ),
+        ]),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    try {
+      if (source == ImageSource.camera && !kIsWeb) {
+        try {
+          final status = await Permission.camera.request();
+          if (!status.isGranted) {
+            if (mounted) Helpers.showToast(t('ai_cameraDenied'), isError: true);
+            return;
+          }
+        } catch (_) {
+          // Platform without a runtime permission API - let the picker decide.
+        }
+      }
+
+      final picked = await ImagePicker().pickImage(
+        source: source!,
+        maxWidth: 1200,
+        imageQuality: 80,
+      );
+      if (picked == null) return;
+
+      setState(() => _isUploadingLogo = true);
+      final raw = await picked.readAsBytes();
+      // Square crop keeps the logo sharp in the round drawer avatar and on the
+      // square cards/reports that show it.
+      final bytes = await ImageCropHelper.cropToSquare(raw);
+      final error = await CompanyBrandingService.setLogoFromBytes(
+        bytes,
+        fileName: picked.name,
+      );
+
+      final saved = error == null ? await CompanyBrandingService.cached() : null;
+      if (!mounted) return;
+      setState(() {
+        _isUploadingLogo = false;
+        if (error == null) _logoUrl = saved;
+      });
+      Helpers.showToast(
+        error == null
+            ? t('branding_saved')
+            : '${t('dm_imageUploadFailed')}: $error',
+        isError: error != null,
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUploadingLogo = false);
+        Helpers.showToast('${t('dm_imageUploadFailed')}: $e', isError: true);
+      }
+    }
+  }
+
+  Future<void> _removeCompanyLogo() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(t('branding_title')),
+        content: Text(t('branding_removeConfirm')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(t('cancel'))),
+          ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(t('delete'))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await CompanyBrandingService.clear();
+    if (mounted) {
+      setState(() => _logoUrl = null);
+      Helpers.showToast(t('branding_removed'));
+    }
+  }
+
+  /// Loads the current logo so the card shows the real branding on open.
+  Future<void> _loadCompanyLogo() async {
+    final url = await CompanyBrandingService.load();
+    if (mounted) setState(() => _logoUrl = url);
+  }
+
+  Widget _buildCompanyLogoCard(ThemeData theme, Color primaryColor) {
+    final role = Provider.of<AuthProvider>(context, listen: false)
+            .user
+            ?.role
+            .toLowerCase() ??
+        '';
+    final canEdit =
+        role == 'manager' || role == 'administrator' || role == 'admin';
+    final isDark = theme.brightness == Brightness.dark;
+    final logo = _logoUrl;
+
+    return Card(
+      elevation: 2,
+      color: theme.cardColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.storefront,
+                  size: 20, color: isDark ? Colors.grey.shade400 : Colors.grey),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  t('branding_title'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: theme.textTheme.bodyLarge?.color,
+                  ),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            Text(t('branding_hint'),
+                style: TextStyle(fontSize: 12, color: theme.hintColor)),
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 76,
+                  height: 76,
+                  decoration: BoxDecoration(
+                    color: theme.dividerColor.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: (logo == null || logo.isEmpty)
+                      ? Icon(Icons.storefront,
+                          size: 34, color: primaryColor.withValues(alpha: 0.6))
+                      : Image.network(
+                          logo,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Icon(Icons.broken_image,
+                              size: 30, color: theme.hintColor),
+                        ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (canEdit)
+                        FilledButton.icon(
+                          onPressed:
+                              _isUploadingLogo ? null : _uploadCompanyLogo,
+                          icon: _isUploadingLogo
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.cloud_upload_outlined,
+                                  size: 18),
+                          label: Text(logo == null || logo.isEmpty
+                              ? t('branding_upload')
+                              : t('branding_replace')),
+                        ),
+                      if (canEdit && logo != null && logo.isNotEmpty)
+                        TextButton.icon(
+                          onPressed:
+                              _isUploadingLogo ? null : _removeCompanyLogo,
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          label: Text(t('delete')),
+                        ),
+                      if (!canEdit)
+                        Text(t('branding_managerOnly'),
+                            style: TextStyle(
+                                fontSize: 12, color: theme.hintColor)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCompanyInfoCard(ThemeData theme, Color primaryColorValue) {
     final authProvider = Provider.of<AuthProvider>(context);
     final role = authProvider.user?.role.toLowerCase() ?? '';
