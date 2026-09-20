@@ -12,6 +12,7 @@ import 'inventory_report_screen.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/notification_service.dart';
+import '../widgets/drink_avatar.dart';
 import 'package:drinks_calculator_fixed/utils/i18n.dart';
 
 class InventoryScreen extends StatefulWidget {
@@ -230,19 +231,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: item.isLowStock
-                    ? Colors.orange.withValues(alpha: 0.1)
-                    : Colors.green.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.local_drink,
-                color: item.isLowStock ? Colors.orange : Colors.green,
-                size: 24,
-              ),
+            DrinkAvatar(
+              drink: drink,
+              size: 44,
+              foreground: item.isLowStock ? Colors.orange : Colors.green,
+              background: item.isLowStock
+                  ? Colors.orange.withValues(alpha: 0.1)
+                  : Colors.green.withValues(alpha: 0.1),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -712,20 +707,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
           onTap: () => _showDrinkDetailsDialog(item, drinkProvider),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          leading: Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: isLowStock
-                  ? Colors.orange.withOpacity(0.1)
-                  : Colors.green.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              Icons.local_drink,
-              color: isLowStock ? Colors.orange : Colors.green,
-              size: 28,
-            ),
+          leading: DrinkAvatar(
+            drink: drink,
+            size: 50,
+            circular: false,
+            foreground: isLowStock ? Colors.orange : Colors.green,
+            background: isLowStock
+                ? Colors.orange.withOpacity(0.1)
+                : Colors.green.withOpacity(0.1),
           ),
           title: Row(
             children: [

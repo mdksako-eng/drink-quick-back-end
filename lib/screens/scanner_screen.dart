@@ -14,6 +14,7 @@ import '../providers/inventory_provider.dart';
 import '../services/barcode_service.dart';
 import '../utils/currency_helper.dart';
 import '../utils/helpers.dart';
+import '../widgets/drink_avatar.dart';
 import '../utils/i18n.dart';
 import '../utils/qr_label_helper.dart';
 import 'inventory_screen.dart';
@@ -277,7 +278,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const CircleAvatar(child: Icon(Icons.local_drink)),
+            DrinkAvatar(drink: drink, size: 44),
             const SizedBox(width: 12),
             Expanded(
                 child: Text(drink.name,

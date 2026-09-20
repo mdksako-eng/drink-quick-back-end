@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../widgets/drink_avatar.dart';
 import '../utils/i18n.dart' show t;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -2313,10 +2314,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
                           return ListTile(
                             dense: true,
-                            leading: Icon(
-                              Icons.local_drink,
-                              color: isOutOfStock ? Colors.red : primaryColor,
-                              size: 18,
+                            leading: DrinkAvatar(
+                              drink: drink,
+                              size: 30,
+                              foreground: isOutOfStock
+                                  ? Colors.red
+                                  : primaryColor,
                             ),
                             title: Text(
                               drink.name,
@@ -2600,12 +2603,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
                                 return ListTile(
                                   dense: true,
-                                  leading: Icon(
-                                    Icons.local_drink,
-                                    color: isOutOfStock
+                                  leading: DrinkAvatar(
+                                    drink: drink,
+                                    size: 30,
+                                    foreground: isOutOfStock
                                         ? Colors.red
                                         : primaryColor,
-                                    size: 18,
                                   ),
                                   title: Text(
                                     drink.name,
@@ -2922,13 +2925,16 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                           Padding(
                             padding: EdgeInsets.all(isMobile ? 12 : 16),
                             child: Row(children: [
-                              Icon(Icons.local_drink,
-                                  color: isNewlyAdded
-                                      ? Colors.green
-                                      : (isOutOfStock
-                                          ? Colors.red
-                                          : primaryColor),
-                                  size: isMobile ? 20 : 24),
+                              DrinkAvatar(
+                                drink: drink,
+                                size: isMobile ? 34 : 40,
+                                circular: false,
+                                foreground: isNewlyAdded
+                                    ? Colors.green
+                                    : (isOutOfStock
+                                        ? Colors.red
+                                        : primaryColor),
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
