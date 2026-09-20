@@ -228,6 +228,15 @@ app.use(async (req, res, next) => {
         console.log('⚠️ orders staff_name warning:', orderStaffColErr.message);
       }
 
+      // 🏢 COMPANY BRANDING — the shop logo (public Storage URL) so invoices,
+      // receipts, exports and the drawer can show it.
+      try {
+        await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS logo_url TEXT`);
+        console.log('✅ companies logo_url column ensured');
+      } catch (companyLogoErr) {
+        console.log('⚠️ companies logo_url warning:', companyLogoErr.message);
+      }
+
       // 📅 FORECAST EVENTS — company-wide events (holidays, parties, match days)
       // that boost demand forecasting. Stored online so an event added on one
       // device is never lost and is shared with the whole company.
@@ -483,7 +492,13 @@ app.use(async (req, res, next) => {
 
 // ========== MIDDLEWARE ==========
 app.use(cors());
-app.use(express.json());
+//  Large JSON bodies are REQUIRED by the AI image endpoints: a photo arrives as
+// a base64 data URL (typically 150 KB – 2 MB). Express's default limit is 100 KB,
+// which used to reject the request with a 413 HTML page — the app could not parse
+// that and showed "Could not read the image". Keep this above the client's
+// downscaling target (see DrinkImageService / ai_assistant_screen).
+app.use(express.json({ limit: '12mb' }));
+app.use(express.urlencoded({ extended: true, limit: '12mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 // ✅ Database connection middleware - MUST BE BEFORE ROUTES
 app.use(async (req, res, next) => {
@@ -1535,7 +1550,19 @@ app.get('/health', async (req, res) => {
   try {
     await pool.query('SELECT NOW()');
     const count = await pool.query('SELECT COUNT(*) FROM users');
-    res.json({ success: true, status: '✅ ONLINE', database: '✅ CONNECTED', users: parseInt(count.rows[0].count) });
+    res.json({
+      success: true,
+      status: '✅ ONLINE',
+      database: '✅ CONNECTED',
+      users: parseInt(count.rows[0].count),
+      // 🔎 Configuration readiness (never the values themselves) so the app
+      // owner can self-check why AI/payments do or do not work.
+      features: {
+        aiChat: Boolean(process.env.GROQ_API_KEY),
+        aiVision: Boolean(process.env.GROQ_API_KEY),
+        jsonBodyLimit: '12mb',
+      },
+    });
   } catch (e) {
     res.json({ success: true, status: '⚠️ ONLINE', database: '❌ DISCONNECTED', error: e.message });
   }

@@ -44,6 +44,8 @@ const WRITABLE = {
   payment_transactions: ['order_id', 'company_id', 'customer_phone', 'amount',
     'payment_method', 'transaction_id', 'status', 'reference', 'error_message', 'created_at'],
   company_payment_settings: ['name', 'email', 'phone', 'address', 'currency_symbol',
+    // Company branding: the shop logo the app uploads (public Storage URL).
+    'logo_url',
     'currency_position', 'decimal_separator', 'thousands_separator', 'decimal_places',
     'business_payments_enabled', 'mtn_enabled', 'orange_enabled', 'mtn_merchant_phone',
     'orange_merchant_phone', 'mtn_merchant_id', 'orange_merchant_id', 'mtn_sandbox_mode',

@@ -296,14 +296,20 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
         }
       }
 
+      // 📉 Keep the photo small: the AI only needs the drink names, and a smaller
+      // image is faster and never hits a server body limit. 1024px / q60 lands
+      // around 80-200 KB.
       final picked = await ImagePicker().pickImage(
         source: source,
-        maxWidth: 1400,
-        imageQuality: 70,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 60,
       );
       if (picked == null) return;
 
       final bytes = await picked.readAsBytes();
+      debugPrint('🖼️ Sending ${(bytes.length / 1024).toStringAsFixed(0)} KB '
+          'to the AI vision endpoint');
       final base64Image = base64Encode(bytes);
 
       setState(() {

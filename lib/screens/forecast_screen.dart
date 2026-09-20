@@ -35,6 +35,10 @@ class _ForecastScreenState extends State<ForecastScreen> {
   /// Batches expiring within 30 days, joined with their expected demand.
   List<ExpiryAlert> _expiring = const [];
 
+  /// True when the last refresh failed (offline / server error) so the screen can
+  /// explain that the numbers come from the last known data.
+  bool _loadFailed = false;
+
   @override
   void initState() {
     super.initState();
@@ -49,9 +53,23 @@ class _ForecastScreenState extends State<ForecastScreen> {
   }
 
   Future<void> _loadData() async {
-    final inv = Provider.of<InventoryProvider>(context, listen: false);
-    await inv.loadInventory();
-    await _loadEvents();
+    // 🛟 Never let a failed refresh leave the screen stuck on the skeleton: a
+    // thrown loadInventory()/events fetch used to abort this method before
+    // _result was computed, so the forecast looked like it never loaded.
+    try {
+      final inv = Provider.of<InventoryProvider>(context, listen: false);
+      await inv.loadInventory();
+      await _loadEvents();
+      _loadFailed = false;
+    } catch (e) {
+      debugPrint('⚠️ Forecast load failed: $e');
+      _loadFailed = true;
+    } finally {
+      if (mounted && _result == null) {
+        // Compute from whatever data is available so the screen always renders.
+        setState(() => _result = _compute());
+      }
+    }
     // ⏰ Raise the batch-expiry alerts for this session (device-side, once per
     // batch per day) now that a forecast is available.
     await _checkExpiryAlerts();
@@ -273,6 +291,21 @@ class _ForecastScreenState extends State<ForecastScreen> {
               children: [
                 _buildRangeSelector(),
                 const SizedBox(height: 12),
+                if (_loadFailed) ...[
+                  Card(
+                    color: Colors.orange.withValues(alpha: 0.12),
+                    child: ListTile(
+                      leading: const Icon(Icons.cloud_off, color: Colors.orange),
+                      title: Text(t('forecastOfflineNotice'),
+                          style: const TextStyle(fontSize: 12.5)),
+                      trailing: TextButton(
+                        onPressed: _refresh,
+                        child: Text(t('retry')),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 if (_expiring.isNotEmpty) ...[
                   _buildExpiryBanner(primary),
                   const SizedBox(height: 16),

@@ -37,6 +37,16 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _registerAsManager = false;
 
   bool _isCheckingConnectivity = false;
+
+  /// True while any auth request is in flight. The language switch is disabled
+  /// then so the UI cannot change while "please wait" is showing.
+  bool get _isBusy =>
+      _isLoggingIn ||
+      _isSigningUp ||
+      _isSendingCode ||
+      _isVerifyingCode ||
+      _isResettingPassword ||
+      _isResettingWithSecurity;
   bool _hasInternetConnection = true;
   StreamSubscription? _connectivitySubscription;
 
@@ -881,6 +891,8 @@ class _AuthScreenState extends State<AuthScreen> {
                     activeTextColor: const Color(0xFF667EEA),
                     inactiveTextColor: Colors.white,
                     backgroundColor: Colors.white.withAlpha(30),
+                    // Greyed out and inert while a login / sign-up is running.
+                    enabled: !_isBusy,
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -1550,27 +1562,44 @@ class _AuthScreenState extends State<AuthScreen> {
           ],
 
           // ✅ Mandatory consent checkbox before account creation
-          Container(
-            margin: const EdgeInsets.only(top: 4, bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-                color: _agreeToTerms
-                    ? const Color(0xFFF0FDF4)
-                    : const Color(0xFFFFFBEB),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: _agreeToTerms
-                        ? const Color(0xFF86EFAC)
-                        : const Color(0xFFFDE68A))),
-            child: CheckboxListTile(
-              value: _agreeToTerms,
-              onChanged: _isSigningUp
-                  ? null
-                  : (v) => setState(() => _agreeToTerms = v ?? false),
-              controlAffinity: ListTileControlAffinity.leading,
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              title: Wrap(
+          // Theme-aware colours: the previous hard-coded light greens/ambers made
+          // the checkbox almost invisible on a dark background.
+          Builder(builder: (context) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final radius = BorderRadius.circular(8);
+            return Container(
+              margin: const EdgeInsets.only(top: 4, bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                  color: isDark
+                      ? (_agreeToTerms
+                          ? const Color(0xFF10301C)
+                          : const Color(0xFF33280C))
+                      : (_agreeToTerms
+                          ? const Color(0xFFF0FDF4)
+                          : const Color(0xFFFFFBEB)),
+                  borderRadius: radius,
+                  border: Border.all(
+                      color: isDark
+                          ? (_agreeToTerms
+                              ? const Color(0xFF34D399)
+                              : const Color(0xFFFBBF24))
+                          : (_agreeToTerms
+                              ? const Color(0xFF86EFAC)
+                              : const Color(0xFFFDE68A)))),
+              child: CheckboxListTile(
+                value: _agreeToTerms,
+                onChanged: _isSigningUp
+                    ? null
+                    : (v) => setState(() => _agreeToTerms = v ?? false),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                // Explicit colours so the tick is visible in both themes.
+                activeColor:
+                    isDark ? const Color(0xFF34D399) : const Color(0xFF16A34A),
+                checkColor: isDark ? Colors.black : Colors.white,
+                title: Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(t('auth_iAgree'),
@@ -1600,7 +1629,8 @@ class _AuthScreenState extends State<AuthScreen> {
                 ],
               ),
             ),
-          ),
+          );
+          }),
           ElevatedButton(
               onPressed:
                   (_isSigningUp || !_agreeToTerms) ? null : _handleSignup,

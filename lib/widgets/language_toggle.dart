@@ -9,12 +9,17 @@ class LanguageToggle extends StatelessWidget {
   final Color? inactiveTextColor;
   final Color? backgroundColor;
 
+  /// When false the switch is greyed out and taps are ignored — used while a
+  /// login / sign-up is in flight so the UI cannot change mid-request.
+  final bool enabled;
+
   const LanguageToggle({
     super.key,
     this.activeColor,
     this.activeTextColor,
     this.inactiveTextColor,
     this.backgroundColor,
+    this.enabled = true,
   });
 
   @override
@@ -28,18 +33,25 @@ class LanguageToggle extends StatelessWidget {
       valueListenable: LanguageService.instance.language,
       builder: (context, lang, _) {
         final isFr = lang == LanguageService.fr;
-        return Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: backgroundColor ?? theme.dividerColor.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _segment('EN', !isFr, active, onActive, inactive),
-              _segment('FR', isFr, active, onActive, inactive),
-            ],
+        return Opacity(
+          opacity: enabled ? 1 : 0.45,
+          child: IgnorePointer(
+            ignoring: !enabled,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color:
+                    backgroundColor ?? theme.dividerColor.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _segment('EN', !isFr, active, onActive, inactive),
+                  _segment('FR', isFr, active, onActive, inactive),
+                ],
+              ),
+            ),
           ),
         );
       },

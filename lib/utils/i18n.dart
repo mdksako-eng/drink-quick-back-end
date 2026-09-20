@@ -394,6 +394,8 @@ const Map<String, String> _en = {
   'dm_stockEditFailed': 'Stock could not be updated',
   'dm_expiredBadge': 'EXPIRED',
   'dm_expiringSoon': 'Expires soon',
+  'forecastOfflineNotice':
+      'Could not refresh from the server - showing the last known figures. Pull down or tap Retry.',
   'expiryAlreadyExpired': 'already expired',
   'expiryDaysLeft': 'day(s) left',
   'expiryExpectedDemand': 'expected demand',
@@ -1349,6 +1351,8 @@ const Map<String, String> _fr = {
   'dm_stockEditFailed': "Le stock n'a pas pu être mis à jour",
   'dm_expiredBadge': 'EXPIRÉ',
   'dm_expiringSoon': 'Expire bientôt',
+  'forecastOfflineNotice':
+      'Impossible d\'actualiser depuis le serveur — affichage des dernières données connues. Tirez vers le bas ou appuyez sur Réessayer.',
   'expiryAlreadyExpired': 'déjà expiré',
   'expiryDaysLeft': 'jour(s) restant(s)',
   'expiryExpectedDemand': 'demande prévue',

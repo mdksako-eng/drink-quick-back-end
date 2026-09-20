@@ -49,11 +49,19 @@ class GroqService {
       if (response.statusCode == 403) {
         return 'Image reading is available on the Pro plan.';
       }
+      // 413 = the photo was too big for the server to accept. Say so instead of
+      // the useless "could not read the image" we used to show for every failure.
+      if (response.statusCode == 413) {
+        return 'That picture is too large to send. Please take a smaller photo '
+            'or pick one from the gallery.';
+      }
       try {
         final data = jsonDecode(response.body);
-        return data['error']?.toString() ?? 'Could not read the image.';
+        final message = data['error']?.toString();
+        if (message != null && message.isNotEmpty) return message;
+        return 'Could not read the image (server ${response.statusCode}).';
       } catch (_) {
-        return 'Could not read the image.';
+        return 'Could not read the image (server ${response.statusCode}).';
       }
     } catch (e) {
       if (e.toString().contains('Timeout')) {

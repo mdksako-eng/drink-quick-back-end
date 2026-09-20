@@ -641,6 +641,67 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     }
   }
 
+  /// Lets the user type the quantity with the keyboard instead of tapping the
+  /// + / − buttons repeatedly.
+  Future<void> _promptQuantity() async {
+    final controller = TextEditingController(text: '$_selectedQuantity');
+    String? error;
+
+    final value = await showDialog<int>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          void submit() {
+            final parsed = int.tryParse(controller.text.trim());
+            if (parsed == null || parsed < 1) {
+              setDialogState(() => error = t('scanInvalidQuantity'));
+              return;
+            }
+            Navigator.pop(ctx, parsed > 99 ? 99 : parsed);
+          }
+
+          return AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(children: [
+              const Icon(Icons.numbers),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: Text(t('calcSelectQuantity'),
+                      style: const TextStyle(fontSize: 18))),
+            ]),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => submit(),
+              onChanged: (_) {
+                if (error != null) setDialogState(() => error = null);
+              },
+              decoration: InputDecoration(
+                labelText: t('quantity'),
+                errorText: error,
+                helperText: '1 - 99',
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(t('cancel'))),
+              FilledButton(onPressed: submit, child: Text(t('save'))),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (value != null && mounted) {
+      setState(() => _selectedQuantity = value);
+    }
+  }
+
   void _decreaseDrinkQuantity(String drinkName) {
     setState(() {
       int lastIndex =
@@ -2415,14 +2476,20 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                         });
                       },
                       color: theme.hintColor),
-                  Container(
-                      width: 40,
-                      alignment: Alignment.center,
-                      child: Text('$_selectedQuantity',
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: theme.textTheme.bodyLarge?.color))),
+                  // Tap the number to type the quantity with the keyboard.
+                  InkWell(
+                    onTap: _promptQuantity,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                        width: 44,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text('$_selectedQuantity',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: theme.textTheme.bodyLarge?.color))),
+                  ),
                   IconButton(
                       icon: const Icon(Icons.add, size: 18),
                       onPressed: () {
@@ -2711,15 +2778,22 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                     });
                                   },
                                   color: theme.hintColor),
-                              Container(
-                                  width: isTablet ? 50 : 60,
-                                  alignment: Alignment.center,
-                                  child: Text('$_selectedQuantity',
-                                      style: TextStyle(
-                                          fontSize: isTablet ? 16 : 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: theme
-                                              .textTheme.bodyLarge?.color))),
+                              // Tap the number to type the quantity.
+                              InkWell(
+                                onTap: _promptQuantity,
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                    width: isTablet ? 52 : 62,
+                                    alignment: Alignment.center,
+                                    padding:
+                                        const EdgeInsets.symmetric(vertical: 8),
+                                    child: Text('$_selectedQuantity',
+                                        style: TextStyle(
+                                            fontSize: isTablet ? 16 : 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: theme
+                                                .textTheme.bodyLarge?.color))),
+                              ),
                               IconButton(
                                   icon:
                                       Icon(Icons.add, size: isTablet ? 20 : 24),
