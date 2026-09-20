@@ -18,6 +18,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:drinks_calculator_fixed/services/drink_image_service.dart';
+import 'package:drinks_calculator_fixed/utils/image_crop_helper.dart';
 import '../utils/i18n.dart';
 import 'barcode_scan_page.dart';
 
@@ -1651,12 +1652,17 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
       if (picked == null) return;
 
       setState(() => _isUploadingImage = true);
-      final bytes = await picked.readAsBytes();
+      final raw = await picked.readAsBytes();
+      // ✂️ Crop to a square and scale down before uploading: every place the
+      // picture is shown (list icons, cards, scan sheet) uses BoxFit.cover, so a
+      // square source stays sharp and predictable instead of being cropped
+      // differently in each widget.
+      final bytes = await ImageCropHelper.cropToSquare(raw);
       final result = await DrinkImageService.upload(
         bytes: bytes,
         fileName: picked.name.isNotEmpty
-            ? picked.name
-            : 'drink-${DateTime.now().millisecondsSinceEpoch}.jpg',
+            ? '${picked.name}.png'
+            : 'drink-${DateTime.now().millisecondsSinceEpoch}.png',
         companyId: SupabaseService.currentCompanyId,
       );
       if (!mounted) return;

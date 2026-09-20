@@ -43,6 +43,9 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
   bool _isListening = false;
   bool _isLoading = false;
   bool _isReadingImage = false;
+
+  /// True while the mic should reopen after each spoken sentence.
+  bool _voiceContinuous = false;
   String _loadingLabel = '';
   String _voiceStatus = '';
   bool _voiceFeedbackEnabled = true;
@@ -113,6 +116,8 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
 
   @override
   void dispose() {
+    // Never leave the mic open behind a closed screen.
+    _voiceContinuous = false;
     _messageController.dispose();
     _scrollController.dispose();
     _voiceService.dispose();
@@ -243,6 +248,8 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
 
   Future<void> _toggleVoiceCommand() async {
     if (_isListening) {
+      // Tapping the mic while it listens ends the conversation.
+      _voiceContinuous = false;
       await _voiceService.stopListening();
       setState(() { _isListening = false; _voiceStatus = ''; });
       return;
@@ -260,18 +267,70 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
       return;
     }
 
+    // Continuous mode: after each sentence the mic reopens by itself, so the user
+    // can order several drinks in a row without tapping again. It stops when they
+    // tap the mic, say "stop", or leave the screen.
+    _voiceContinuous = true;
+    await _startVoiceListening();
+  }
+
+  /// Opens the mic once (used both for the first tap and for auto-restart).
+  Future<void> _startVoiceListening() async {
+    if (!mounted || !_voiceContinuous) return;
     setState(() { _isListening = true; _voiceStatus = t('ai_listening'); });
     _scrollToBottom();
 
     await _voiceService.startListening(
-      onResult: (text) {
-        setState(() { _isListening = false; _voiceStatus = t('ai_heard').replaceAll('@text', text); });
-        _processVoiceCommand(text);
+      // Live feedback: the words appear while the sentence is being spoken.
+      onPartial: (partial) {
+        if (!mounted) return;
+        setState(() => _voiceStatus =
+            '${t('ai_listening')} "…$partial"');
+      },
+      onResult: (text) async {
+        final heard = text.trim();
+        setState(() {
+          _isListening = false;
+          // Show the transcript in quotes so it is clearly what the assistant
+          // heard, matching the copy used in the chat bubble.
+          _voiceStatus = t('ai_heard').replaceAll('@text', '"$heard"');
+        });
+        _processVoiceCommand(heard);
+
+        // Keep the conversation going unless the user asked to stop.
+        if (_voiceContinuous && !_isStopPhrase(heard)) {
+          await Future.delayed(const Duration(milliseconds: 700));
+          await _startVoiceListening();
+        } else {
+          _voiceContinuous = false;
+        }
       },
       onError: (error) {
-        setState(() { _isListening = false; _voiceStatus = 'Error: $error'; });
+        setState(() {
+          _isListening = false;
+          _voiceContinuous = false;
+          _voiceStatus = 'Error: $error';
+        });
       },
     );
+  }
+
+  /// True when the spoken sentence asks to stop listening (EN or FR).
+  bool _isStopPhrase(String text) {
+    final lower = text.toLowerCase().trim();
+    const stops = [
+      'stop listening',
+      'stop',
+      'cancel',
+      'pause',
+      'arrête',
+      'arrete',
+      'stop écoute',
+      'annuler',
+      'terminé',
+      'termine',
+    ];
+    return stops.any((s) => lower == s || lower.endsWith(' $s'));
   }
 
   /// 📷 Reads a photo of an order (handwritten note, receipt, screenshot, menu)

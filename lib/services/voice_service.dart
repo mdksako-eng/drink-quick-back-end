@@ -98,9 +98,12 @@ class VoiceService {
     return _isInitialized || _ttsInitialized;
   }
 
+  /// [onPartial] (optional) streams the words recognised so far so the UI can
+  /// show the sentence being built instead of only revealing it at the end.
   Future<void> startListening({
     required Function(String) onResult,
     required Function(String) onError,
+    Function(String)? onPartial,
   }) async {
     // If speech recognition is not available, show error
     if (!_isInitialized) {
@@ -118,14 +121,18 @@ class VoiceService {
     try {
       await _speech.listen(
         onResult: (result) {
-          if (result.finalResult) {
-            onResult(result.recognizedWords);
-            _isListening = false;
+          if (!result.finalResult) {
+            final partial = result.recognizedWords.trim();
+            if (partial.isNotEmpty) onPartial?.call(partial);
+            return;
           }
+          onResult(result.recognizedWords);
+          _isListening = false;
         },
-        listenFor: const Duration(seconds: 10),
-        pauseFor: const Duration(seconds: 3),
-        partialResults: false,
+        // Generous timeouts: people pause while reading the drink list.
+        listenFor: const Duration(seconds: 30),
+        pauseFor: const Duration(seconds: 5),
+        partialResults: true,
         cancelOnError: true,
         listenMode: stt.ListenMode.dictation,
         localeId: _speechLocale,
