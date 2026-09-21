@@ -15,6 +15,9 @@ import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/company_branding_service.dart';
 import 'package:drinks_calculator_fixed/utils/image_crop_helper.dart';
+import 'package:drinks_calculator_fixed/utils/phone_helper.dart';
+import 'package:drinks_calculator_fixed/utils/owner_permissions.dart';
+import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
 import 'package:drinks_calculator_fixed/utils/helpers.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
@@ -33,6 +36,8 @@ class StorageSettingsScreen extends StatefulWidget {
 class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
   // ✅ Loading state
   bool _isLoading = false;
+  /// Separate from [_isLoading]: saving must not blank the screen.
+  bool _isSaving = false;
 
   // ✅ Theme settings (User-specific)
   String _primaryColor = '#667EEA';
@@ -308,7 +313,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
           _themeProvider.setCompactMode(_compactMode);
 
           _showNotifications = userSettings['show_notifications'] ?? true;
-          _autoSync = userSettings['auto_sync'] ?? false;
+          _autoSync = userSettings['auto_sync'] ?? true;
 
           debugPrint(
               '✅ User settings loaded: Theme=${themeModeIndex == 1 ? "Dark" : "Light"}');
@@ -380,7 +385,9 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     _compactMode = prefs.getBool('compact_mode') ?? false;
     _themeProvider.setCompactMode(_compactMode);
     _showNotifications = prefs.getBool('show_notifications') ?? true;
-    _autoSync = prefs.getBool('auto_sync') ?? false;
+    // Default on: this is what the SyncProvider background timer does until the
+    // user turns Auto Sync off (the switch now really stops it).
+    _autoSync = prefs.getBool('auto_sync') ?? true;
   }
 
   // ✅ Helper: Load local settings (fallback)
@@ -420,7 +427,10 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
   // ✅ SAVE SETTINGS - Company-Wide + User-Specific
   // ============================================================
   Future<void> _saveAllSettings() async {
-    if (mounted) setState(() => _isLoading = true);
+    // Saving is NOT loading: keep the screen visible and show progress on the
+    // save button instead of replacing everything with a "Loading settings..."
+    // spinner (which is what used to happen).
+    if (mounted) setState(() => _isSaving = true);
 
     final prefs = await SharedPreferences.getInstance();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -605,7 +615,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
       _hasUnsavedChanges = false;
     });
 
-    if (mounted) setState(() => _isLoading = false);
+    if (mounted) setState(() => _isSaving = false);
 
     if (mounted) {
       appKey.currentState?.refreshTheme();
@@ -820,15 +830,15 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
           foregroundColor: Colors.white,
           elevation: 0,
         ),
-        body: const Center(
+        body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
               Text(
-                'Loading settings...',
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+                t('st_loadingSettings'),
+                style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
             ],
           ),
@@ -851,7 +861,13 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         final isManager = role == 'manager';
         final isCustomer = role == 'customer';
         final canSeePaymentSettings = !isStaff;
-        final canSeeDataManagement = !isStaff;
+        // 🔒 Data management and branding belong to the company OWNER only: a
+        // co-manager (a Manager without the owner flag) must not be able to clear
+        // company data or re-brand the shop.
+        final canSeeDataManagement = OwnerPermissions.canManageCompanyData(
+          role: role,
+          isOwner: authProvider.user?.isOwner,
+        );
 
         return GestureDetector(
           onTap: () => LockService().resetTimer(),
@@ -910,13 +926,26 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     Expanded(
                       flex: _hasUnsavedChanges ? 2 : 1,
                       child: ElevatedButton.icon(
-                        onPressed: _saveAllSettings,
-                        icon: Icon(
-                          _hasUnsavedChanges ? Icons.save : Icons.check_circle,
-                          size: 20,
-                        ),
+                        onPressed: _isSaving ? null : _saveAllSettings,
+                        icon: _isSaving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white),
+                              )
+                            : Icon(
+                                _hasUnsavedChanges
+                                    ? Icons.save
+                                    : Icons.check_circle,
+                                size: 20,
+                              ),
                         label: Text(
-                          _hasUnsavedChanges ? 'Save All Changes' : 'Saved',
+                          _isSaving
+                              ? t('st_saving')
+                              : (_hasUnsavedChanges
+                                  ? t('st_saveAll')
+                                  : t('st_savedShort')),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor:
@@ -1783,13 +1812,14 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
   }
 
   Widget _buildCompanyLogoCard(ThemeData theme, Color primaryColor) {
-    final role = Provider.of<AuthProvider>(context, listen: false)
-            .user
-            ?.role
-            .toLowerCase() ??
-        '';
-    final canEdit =
-        role == 'manager' || role == 'administrator' || role == 'admin';
+    final authUser = Provider.of<AuthProvider>(context, listen: false).user;
+    final role = authUser?.role.toLowerCase() ?? '';
+    // Only the owner manager (or a platform admin) may change the branding —
+    // a co-manager must not be able to re-brand the shop.
+    final canEdit = OwnerPermissions.canManageBranding(
+      role: role,
+      isOwner: authUser?.isOwner,
+    );
     final isDark = theme.brightness == Brightness.dark;
     final logo = _logoUrl;
 
@@ -1871,7 +1901,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                           label: Text(t('delete')),
                         ),
                       if (!canEdit)
-                        Text(t('branding_managerOnly'),
+                        Text(t('branding_ownerOnly'),
                             style: TextStyle(
                                 fontSize: 12, color: theme.hintColor)),
                     ],
@@ -2115,21 +2145,15 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               ),
               style: TextStyle(color: theme.textTheme.bodyLarge?.color),
               keyboardType: TextInputType.phone,
+              inputFormatters: PhoneHelper.formattersFor(_selectedCountry),
               onChanged: (value) {
                 setState(() {
                   _companyPhone = _getFullPhoneNumber();
                   _markUnsaved();
 
-                  final digits = value.replaceAll(RegExp(r'[^\d]'), '');
-                  if (_selectedCountry == 'CM' &&
-                      digits.length == 9 &&
-                      digits.startsWith('6')) {
-                    _showValidMessage = true;
-                    _validMessageTimer?.cancel();
-                    _validMessageTimer = Timer(const Duration(seconds: 3), () {
-                      if (mounted) setState(() => _showValidMessage = false);
-                    });
-                  } else if (_selectedCountry == 'NG' && digits.length == 10) {
+                  // Live "valid" hint driven by the shared phone rules, so the
+                  // field and the validator can never disagree.
+                  if (PhoneHelper.isComplete(_selectedCountry, value)) {
                     _showValidMessage = true;
                     _validMessageTimer?.cancel();
                     _validMessageTimer = Timer(const Duration(seconds: 3), () {
@@ -2147,6 +2171,13 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                   _companyPhoneController.selection =
                       TextSelection.collapsed(offset: formatted.length);
                 }
+              },
+              validator: (value) {
+                // Company phone is optional, but if given it must be complete
+                // for the selected country.
+                final key =
+                    PhoneHelper.validateErrorKey(_selectedCountry, value);
+                return key.isEmpty ? null : t(key);
               },
             ),
             const SizedBox(height: 12),
@@ -2502,6 +2533,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                           ),
                         ),
                         keyboardType: TextInputType.phone,
+                        inputFormatters:
+                            PhoneHelper.internationalFormatters(),
                         onChanged: isManager
                             ? (value) {
                                 setState(() {
@@ -2770,6 +2803,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                           ),
                         ),
                         keyboardType: TextInputType.phone,
+                        inputFormatters:
+                            PhoneHelper.internationalFormatters(),
                         onChanged: isManager
                             ? (value) {
                                 setState(() {
@@ -3088,6 +3123,9 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                   _autoSync = value;
                   _markUnsaved();
                 });
+                // Take effect immediately: the SyncProvider owns the background
+                // timer, so toggling here must actually stop/start it.
+                context.read<SyncProvider>().setAutoSync(value);
               },
               activeTrackColor: primaryColorValue.withValues(alpha: 0.5),
               inactiveThumbColor: theme.hintColor,

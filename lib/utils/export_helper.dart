@@ -15,7 +15,9 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/drink_model.dart';
 import '../models/inventory_model.dart';
+import '../services/company_branding_service.dart';
 import '../widgets/export_options_dialog.dart';
+import 'company_logo_bytes.dart';
 import 'company_name_helper.dart';
 import 'i18n.dart';
 import 'inventory_report_files.dart';
@@ -52,6 +54,10 @@ class ExportHelper {
 
     try {
       final companyName = await CompanyNameHelper.resolve();
+      // The logo is embedded in the PDF (and referenced in Excel/CSV). A missing
+      // or offline logo must never break the export — it is simply omitted.
+      final logoUrl = await CompanyBrandingService.load();
+      final logoBytes = await CompanyLogoBytes.fromUrl(logoUrl);
       final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       final dir = await _outputDirectory();
 
@@ -61,6 +67,7 @@ class ExportHelper {
             report: report,
             t: t,
             companyName: companyName,
+            logoBytes: logoBytes,
             drinks: drinks,
             options: options,
           );
@@ -76,6 +83,7 @@ class ExportHelper {
             report: report,
             t: t,
             companyName: companyName,
+            logoUrl: logoUrl,
             drinks: drinks,
             options: options,
           );
@@ -92,6 +100,7 @@ class ExportHelper {
             report: report,
             t: t,
             companyName: companyName,
+            logoUrl: logoUrl,
             drinks: drinks,
             options: options,
           );

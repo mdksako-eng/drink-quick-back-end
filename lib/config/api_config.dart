@@ -44,6 +44,12 @@ class ApiConfig {
   static const String privacyPolicyFr = '$baseUrl/privacy.fr.html';
   static const String termsOfServiceFr = '$baseUrl/terms.fr.html';
 
+  /// Live/Test status of the platform payment rails (Notch Pay + direct MoMo).
+  /// Reports `mode` / `liveReady` so the app can warn that payments are still in
+  /// test mode instead of silently pretending money was collected.
+  static const String subscriptionPaymentsHealth =
+      '$apiBase/subscriptions/notchpay/health';
+
   /// Legal page in the language the app is currently showing.
   ///
   /// The pages are plain HTML the backend serves, so the language has to be

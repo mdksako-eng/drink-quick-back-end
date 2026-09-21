@@ -9,6 +9,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import '../services/backend_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/secure_storage_service.dart';
+import '../services/session_data_cleaner.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../utils/helpers.dart';
 import '../utils/i18n.dart';
@@ -1673,6 +1674,12 @@ class AuthProvider with ChangeNotifier {
       await prefs.remove('refresh_token');
       await prefs.remove('needs_sync_register');
       await prefs.remove('pending_registration');
+
+      // 🧹 Drop every company-scoped cache (name, logo, address, currency,
+      // payment switches). Without this, whoever signs in next on this device —
+      // a customer, or staff of another shop — would still see the previous
+      // company's branding and currency.
+      await SessionDataCleaner.clearCompanyData();
 
       SupabaseService.clearContext();
       await SecureStorageService.clearSession();

@@ -1,6 +1,8 @@
 // utils/analytics_report_files.dart
 // Professional PDF / Excel builders for the manager dashboard report.
 // Reuses AnalyticsExport for labels/formatting so EN + FR both work.
+import 'dart:typed_data';
+
 import 'package:excel/excel.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -18,6 +20,7 @@ class AnalyticsReportFiles {
     required DateTime endDate,
     required String Function(String key) t,
     String? companyName,
+    Uint8List? logoBytes,
     AnalyticsExportOptions options = AnalyticsExportOptions.all,
     ProfitSummary? profit,
     DateTime? generatedAt,
@@ -30,7 +33,7 @@ class AnalyticsReportFiles {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
         build: (context) => [
-          _pdfHeader(t, companyName, startDate, endDate),
+          _pdfHeader(t, companyName, startDate, endDate, logoBytes),
           if (options.summary) ...[
             pw.SizedBox(height: 12),
             _pdfSectionTitle(t('dashSummary')),
@@ -120,11 +123,13 @@ class AnalyticsReportFiles {
       String Function(String) t,
       String? companyName,
       DateTime startDate,
-      DateTime endDate) {
-    return pw.Column(
+      DateTime endDate,
+      [Uint8List? logoBytes]) {
+    final hasName = companyName != null && companyName.trim().isNotEmpty;
+    final nameBlock = pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        if (companyName != null && companyName.trim().isNotEmpty)
+        if (hasName)
           pw.Text(companyName.trim(),
               style:
                   pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
@@ -134,6 +139,33 @@ class AnalyticsReportFiles {
           '${t('exp_period')}: ${_date(startDate)} - ${_date(endDate)}',
           style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
         ),
+      ],
+    );
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (logoBytes != null)
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Container(
+                width: 52,
+                height: 52,
+                padding: const pw.EdgeInsets.all(2),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+                  borderRadius: pw.BorderRadius.circular(6),
+                ),
+                child:
+                    pw.Image(pw.MemoryImage(logoBytes), fit: pw.BoxFit.contain),
+              ),
+              pw.SizedBox(width: 12),
+              pw.Expanded(child: nameBlock),
+            ],
+          )
+        else
+          nameBlock,
         pw.SizedBox(height: 6),
         pw.Divider(color: PdfColors.grey400),
       ],
@@ -267,6 +299,7 @@ class AnalyticsReportFiles {
     required DateTime endDate,
     required String Function(String key) t,
     String? companyName,
+    String? logoUrl,
     AnalyticsExportOptions options = AnalyticsExportOptions.all,
     ProfitSummary? profit,
     DateTime? generatedAt,
@@ -278,6 +311,9 @@ class AnalyticsReportFiles {
       sheet.appendRow([title]);
       if (companyName != null && companyName.trim().isNotEmpty) {
         sheet.appendRow([companyName.trim()]);
+      }
+      if (logoUrl != null && logoUrl.trim().isNotEmpty) {
+        sheet.appendRow(['${t('branding_title')}: ${logoUrl.trim()}']);
       }
       sheet.appendRow([
         t('exp_period'),

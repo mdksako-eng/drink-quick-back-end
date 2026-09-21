@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/subscription_model.dart';
 import '../providers/plan_provider.dart';
+import '../services/payments_status_service.dart';
 import '../utils/i18n.dart';
 
 class SubscriptionScreen extends StatefulWidget {
@@ -27,6 +28,7 @@ class SubscriptionScreen extends StatefulWidget {
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
   bool _busy = false;
+  PaymentsStatus _payments = PaymentsStatus.unknown;
 
   @override
   void initState() {
@@ -34,6 +36,15 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PlanProvider>().refresh();
     });
+    _loadPaymentsStatus();
+  }
+
+  /// Tells the user whether money can actually be collected right now. While the
+  /// platform keys are still test keys, a paid plan activates but no real money
+  /// moves — hiding that would be misleading.
+  Future<void> _loadPaymentsStatus() async {
+    final status = await PaymentsStatusService.load();
+    if (mounted) setState(() => _payments = status);
   }
 
   Future<void> _upgrade(String plan) async {
@@ -342,6 +353,44 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 14, height: 1.4)),
               const SizedBox(height: 20),
+            ],
+            // Honest mode indicator: paid plans activated while the platform is
+            // in TEST mode do not charge real money.
+            if (!_payments.isLive) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber, width: 0.8),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.science_outlined,
+                        size: 18, color: Colors.amber),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${t('paymentTestMode')} (${_payments.shortLabel})',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            t('paymentTestModeHint'),
+                            style: const TextStyle(fontSize: 11.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
             ],
             _currentPlanCard(info),
             const SizedBox(height: 32),

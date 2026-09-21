@@ -64,6 +64,7 @@ class AnalyticsExport {
     required DateTime endDate,
     required String Function(String key) t,
     String? companyName,
+    String? logoUrl,
     DateTime? generatedAt,
     AnalyticsExportOptions options = AnalyticsExportOptions.all,
     ProfitSummary? profit,
@@ -74,6 +75,9 @@ class AnalyticsExport {
     buf.writeln(_csv(t('dashTitle')));
     if (companyName != null && companyName.trim().isNotEmpty) {
       buf.writeln('${_csv(t('companyName'))},${_csv(companyName.trim())}');
+    }
+    if (logoUrl != null && logoUrl.trim().isNotEmpty) {
+      buf.writeln('${_csv(t('branding_title'))},${_csv(logoUrl.trim())}');
     }
     buf.writeln('${_csv(t('exp_period'))},'
         '${_csv('${dateStamp(startDate)} - ${dateStamp(endDate)}')}');

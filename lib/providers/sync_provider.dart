@@ -24,6 +24,14 @@ class SyncProvider with ChangeNotifier {
   /// the drawer can honestly say "not synced yet".
   bool _hasSynced = false;
 
+  /// Whether the background timer may sync on its own. This is the real switch
+  /// behind Storage Settings → Auto Sync: when it is off only a manual sync (or
+  /// the sync button in the drawer) talks to the server, so a metered connection
+  /// is not drained behind the user's back.
+  bool _autoSync = true;
+
+  static const String _autoSyncKey = 'auto_sync';
+
   /// Real data reloaders wired from main.dart. Without them a "sync" only
   /// proves the server is reachable — it must never claim data was synced.
   Future<void> Function()? _reloadOrders;
@@ -38,6 +46,9 @@ class SyncProvider with ChangeNotifier {
   int get pendingSyncCount => _pendingSyncCount;
   bool get isSyncing => _status == SyncStatus.syncing;
   bool get isOnline => SupabaseService.canUseSupabase;
+
+  /// Whether the background timer is allowed to sync by itself.
+  bool get autoSync => _autoSync;
 
   /// Whether anything has ever been synchronised with the server.
   bool get hasSynced => _hasSynced;
@@ -73,13 +84,39 @@ class SyncProvider with ChangeNotifier {
   }
 
   SyncProvider() {
-    _startPeriodicSync();
     _restoreSyncState();
+    _loadAutoSync();
+    _startPeriodicSync();
+  }
+
+  /// Restores the user's Auto Sync choice (default on, which is how the app
+  /// behaved before the switch existed).
+  Future<void> _loadAutoSync() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _autoSync = prefs.getBool(_autoSyncKey) ?? true;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Turns background syncing on/off and persists the choice. Called by the
+  /// Storage Settings switch so the setting actually changes behaviour.
+  Future<void> setAutoSync(bool value) async {
+    if (_autoSync == value) return;
+    _autoSync = value;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_autoSyncKey, value);
+    } catch (_) {}
+    debugPrint('🔄 Auto sync: ${value ? 'enabled' : 'disabled'}');
   }
 
   void _startPeriodicSync() {
     _periodicTimer?.cancel();
     _periodicTimer = Timer.periodic(const Duration(seconds: 45), (timer) {
+      // Honour the Auto Sync setting: no silent syncing when it is off.
+      if (!_autoSync) return;
       if (!isSyncing && isOnline) {
         syncAllData();
       }

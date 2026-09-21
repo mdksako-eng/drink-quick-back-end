@@ -5,6 +5,8 @@
 // dependency-free bar charts (units sold per category + top movers) and the
 // tables the user ticked in the export dialog. Everything is localized through
 // the app's `t` function, so EN and FR both work.
+import 'dart:typed_data';
+
 import 'package:excel/excel.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -124,6 +126,7 @@ class InventoryReportFiles {
     required InventoryReport report,
     required String Function(String key) t,
     String? companyName,
+    Uint8List? logoBytes,
     List<Drink> drinks = const [],
     InventoryExportOptions options = InventoryExportOptions.all,
     DateTime? generatedAt,
@@ -137,7 +140,7 @@ class InventoryReportFiles {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
         build: (context) => [
-          _pdfHeader(t, companyName, report),
+          _pdfHeader(t, companyName, report, logoBytes),
           if (options.summary) ...[
             pw.SizedBox(height: 12),
             _pdfSectionTitle(t('exp_summary')),
@@ -263,12 +266,19 @@ if (options.expiry && expiry.isNotEmpty) ...[
 // ------------------------------------------------------------
   // PDF building blocks
   // ------------------------------------------------------------
+  /// Header with the company logo (when available), the company name, the report
+  /// title and the period.
   static pw.Widget _pdfHeader(
-      String Function(String) t, String? companyName, InventoryReport report) {
-    return pw.Column(
+    String Function(String) t,
+    String? companyName,
+    InventoryReport report,
+    Uint8List? logoBytes,
+  ) {
+    final hasName = companyName != null && companyName.trim().isNotEmpty;
+    final nameBlock = pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        if (companyName != null && companyName.trim().isNotEmpty)
+        if (hasName)
           pw.Text(companyName.trim(),
               style:
                   pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
@@ -279,6 +289,32 @@ if (options.expiry && expiry.isNotEmpty) ...[
           '${t('exp_period')}: ${_date(report.startDate)} - ${_date(report.endDate)}',
           style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
         ),
+      ],
+    );
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        if (logoBytes != null)
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Container(
+                width: 52,
+                height: 52,
+                padding: const pw.EdgeInsets.all(2),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+                  borderRadius: pw.BorderRadius.circular(6),
+                ),
+                child: pw.Image(pw.MemoryImage(logoBytes), fit: pw.BoxFit.contain),
+              ),
+              pw.SizedBox(width: 12),
+              pw.Expanded(child: nameBlock),
+            ],
+          )
+        else
+          nameBlock,
         pw.SizedBox(height: 6),
         pw.Divider(color: PdfColors.grey400),
       ],
@@ -437,6 +473,7 @@ if (options.expiry && expiry.isNotEmpty) ...[
     required InventoryReport report,
     required String Function(String key) t,
     String? companyName,
+    String? logoUrl,
     List<Drink> drinks = const [],
     InventoryExportOptions options = InventoryExportOptions.all,
     DateTime? generatedAt,
@@ -452,6 +489,11 @@ if (options.expiry && expiry.isNotEmpty) ...[
           sheet.appendRow([
             '${t('companyName')}: ${companyName.trim()}',
           ]);
+        }
+        if (logoUrl != null && logoUrl.trim().isNotEmpty) {
+          // Excel cannot embed the image itself, so the branding is recorded as
+          // a link the reader can open (and it keeps the sheet exportable).
+          sheet.appendRow(['${t('branding_title')}: ${logoUrl.trim()}']);
         }
         sheet.appendRow([
           
@@ -611,6 +653,7 @@ if (options.currentStock && report.currentStock.isNotEmpty) {
     required InventoryReport report,
     required String Function(String key) t,
     String? companyName,
+    String? logoUrl,
     List<Drink> drinks = const [],
     InventoryExportOptions options = InventoryExportOptions.all,
     DateTime? generatedAt,
@@ -622,6 +665,9 @@ if (options.currentStock && report.currentStock.isNotEmpty) {
     buffer.writeln(_csv(companyName == null || companyName.trim().isEmpty
         ? t('exp_inventoryReport')
         : companyName.trim()));
+    if (logoUrl != null && logoUrl.trim().isNotEmpty) {
+      buffer.writeln('${_csv(t('branding_title'))},${_csv(logoUrl.trim())}');
+    }
     buffer.writeln(_csv(t('exp_inventoryReport')));
     buffer.writeln('${_csv(t('exp_period'))},'
         '${_csv('${_date(report.startDate)} - ${_date(report.endDate)}')}');

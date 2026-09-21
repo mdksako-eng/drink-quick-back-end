@@ -1,6 +1,7 @@
 
 // screens/responsive_invoice.dart
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
@@ -16,6 +17,7 @@ import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/screens/receipt_print_screen.dart';
 import '../utils/i18n.dart';
+import '../utils/company_logo_bytes.dart';
 class ResponsiveInvoice extends StatefulWidget {
   final List<Drink> drinks;
   final double totalAmount;
@@ -47,6 +49,9 @@ class _ResponsiveInvoiceState extends State<ResponsiveInvoice> {
   String _companyPhone = '';
   String _companyAddress = '';
   bool _isGeneratingPDF = false;
+  /// Company logo for the invoice (PDF and on-screen). Null when the company has
+  /// no logo or the device is offline.
+  Uint8List? _logoBytes;
   final TextEditingController _companyNameController = TextEditingController();
 
   static const Color primaryColor = Color(0xFF4361EE);
@@ -75,11 +80,15 @@ class _ResponsiveInvoiceState extends State<ResponsiveInvoice> {
 
   Future<void> _loadCompanyInfo() async {
     final prefs = await SharedPreferences.getInstance();
+    // Logo bytes come from the shared branding cache so the invoice and the
+    // exports always show the same picture.
+    final logoBytes = await CompanyLogoBytes.load();
     if (mounted) setState(() {
       _companyName = prefs.getString('company_name') ?? 'Drink Quick Cal';
       _companyEmail = prefs.getString('company_email') ?? '';
       _companyPhone = prefs.getString('company_phone') ?? '';
       _companyAddress = prefs.getString('company_address') ?? '';
+      _logoBytes = logoBytes;
     });
   }
 
@@ -144,6 +153,24 @@ class _ResponsiveInvoiceState extends State<ResponsiveInvoice> {
     final right = half < items.length ? items.sublist(half).cast<MapEntry<String, Map<String, dynamic>>>() : <MapEntry<String, Map<String, dynamic>>>[];
 
     return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+      if (_logoBytes != null)
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.center,
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          children: [
+            pw.Container(
+              width: 46,
+              height: 46,
+              child: pw.Image(pw.MemoryImage(_logoBytes!),
+                  fit: pw.BoxFit.contain),
+            ),
+            pw.SizedBox(width: 10),
+            pw.Text(_companyName,
+                style: pw.TextStyle(
+                    fontSize: 14, fontWeight: pw.FontWeight.bold)),
+          ],
+        ),
+      if (_logoBytes != null) pw.SizedBox(height: 8),
       pw.Center(child: pw.Column(children: [
         pw.Text(t('inv_pdfTitle'), style: pw.TextStyle(fontSize: titleSize, fontWeight: pw.FontWeight.bold, color: PdfColors.blue)),
         pw.SizedBox(height: 4),

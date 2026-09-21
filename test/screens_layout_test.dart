@@ -21,6 +21,8 @@ import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
+import 'package:drinks_calculator_fixed/providers/order_provider.dart';
+import 'package:drinks_calculator_fixed/screens/profile_screen.dart';
 import 'package:drinks_calculator_fixed/screens/forecast_screen.dart';
 import 'package:drinks_calculator_fixed/screens/drink_management_screen.dart';
 import 'package:drinks_calculator_fixed/screens/inventory_report_screen.dart';
@@ -81,6 +83,7 @@ void main() {
           ChangeNotifierProvider(create: (_) => AuthProvider()),
           ChangeNotifierProvider(create: (_) => DrinkProvider()),
           ChangeNotifierProvider(create: (_) => InventoryProvider()),
+          ChangeNotifierProvider(create: (_) => OrderProvider()),
         ],
         child: MaterialApp(home: screen),
       ),
@@ -106,6 +109,16 @@ void main() {
     await pumpScreen(tester, const UpgradeRequiredView(), size: phone);
     expectNoLayoutError();
     await pumpScreen(tester, const UpgradeRequiredView(), size: tablet);
+    expectNoLayoutError();
+  });
+
+  testWidgets('ProfileScreen lays out on phone and tablet (no signed-in user)',
+      (tester) async {
+    // With no user the screen renders its safe empty state — the point is that it
+    // must not throw or overflow while the session is being restored.
+    await pumpScreen(tester, const ProfileScreen(), size: phone);
+    expectNoLayoutError();
+    await pumpScreen(tester, const ProfileScreen(), size: tablet);
     expectNoLayoutError();
   });
 

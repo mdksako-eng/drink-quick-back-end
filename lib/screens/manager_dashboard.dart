@@ -12,10 +12,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/analytics_model.dart';
 import '../providers/drink_provider.dart';
 import '../providers/order_provider.dart';
+import '../services/company_branding_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/analytics_export.dart';
 import '../utils/analytics_helper.dart';
 import '../utils/analytics_report_files.dart';
+import '../utils/company_logo_bytes.dart';
 import '../utils/currency_helper.dart';
 import '../utils/helpers.dart';
 import '../utils/i18n.dart';
@@ -584,6 +586,10 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
     final end = _endDate;
     final profit = _profitSummary(s);
     final baseName = AnalyticsExport.fileName(startDate: start, endDate: end);
+    // Company branding travels with every export (PDF embeds the image; Excel
+    // and CSV record the link). Missing/offline logo simply omits it.
+    final logoUrl = await CompanyBrandingService.load();
+    final logoBytes = await CompanyLogoBytes.fromUrl(logoUrl);
 
     try {
       switch (format) {
@@ -594,6 +600,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             endDate: end,
             t: t,
             companyName: companyName,
+            logoUrl: logoUrl,
             options: options,
             profit: profit,
           );
@@ -606,6 +613,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             endDate: end,
             t: t,
             companyName: companyName,
+            logoUrl: logoUrl,
             options: options,
             profit: profit,
           );
@@ -619,6 +627,7 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
             endDate: end,
             t: t,
             companyName: companyName,
+            logoBytes: logoBytes,
             options: options,
             profit: profit,
           );

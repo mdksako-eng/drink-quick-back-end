@@ -1,5 +1,6 @@
 // screens/auth_screen.dart
 import '../utils/i18n.dart';
+import '../utils/phone_helper.dart';
 import '../widgets/language_toggle.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -164,44 +165,19 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
-  String _formatPhoneNumber(String phone, String countryCode) {
-    if (phone.isEmpty) return '';
-    String digits = phone.replaceAll(RegExp(r'[^\d]'), '');
-    final dialCode = _selectedCountryCode.replaceAll('+', '');
-    if (digits.startsWith(dialCode)) {
-      digits = digits.substring(dialCode.length);
+  /// Localised validation message for the phone field ('' = valid).
+  String? _phoneValidator(String? value) {
+    final key = PhoneHelper.validateErrorKey(
+      _selectedCountry,
+      value,
+      required: true,
+    );
+    if (key.isEmpty) return null;
+    final country = PhoneHelper.forCode(_selectedCountry);
+    if (key == 'phoneWrongLength') {
+      return '${t(key)} (${country.mask})';
     }
-    switch (countryCode) {
-      case 'CM':
-        if (digits.length >= 9)
-          return '${digits.substring(0, 3)} ${digits.substring(3, 6)} ${digits.substring(6, 9)}';
-        if (digits.length >= 6)
-          return '${digits.substring(0, 3)} ${digits.substring(3)}';
-        if (digits.length >= 3) return digits.substring(0, 3);
-        break;
-      case 'NG':
-        if (digits.length >= 10)
-          return '${digits.substring(0, 3)} ${digits.substring(3, 6)} ${digits.substring(6)}';
-        if (digits.length >= 6)
-          return '${digits.substring(0, 3)} ${digits.substring(3)}';
-        if (digits.length >= 3) return digits.substring(0, 3);
-        break;
-      case 'US':
-        if (digits.length >= 10)
-          return '${digits.substring(0, 3)}-${digits.substring(3, 6)}-${digits.substring(6)}';
-        if (digits.length >= 6)
-          return '${digits.substring(0, 3)}-${digits.substring(3)}';
-        if (digits.length >= 3) return digits.substring(0, 3);
-        break;
-      default:
-        final buffer = StringBuffer();
-        for (int i = 0; i < digits.length; i++) {
-          if (i > 0 && i % 3 == 0) buffer.write(' ');
-          buffer.write(digits[i]);
-        }
-        return buffer.toString();
-    }
-    return digits;
+    return t(key);
   }
 
   Future<void> _checkConnectivity() async {
@@ -1221,25 +1197,11 @@ class _AuthScreenState extends State<AuthScreen> {
               border: const OutlineInputBorder(),
             ),
             keyboardType: TextInputType.phone,
+            inputFormatters: PhoneHelper.formattersFor(_selectedCountry),
             onChanged: (value) {
-              // Don't format while typing - only store
+              // Formatted live by the input formatter above.
             },
-            validator: (v) {
-              if (v == null || v!.isEmpty) return 'Phone number required';
-              final digits = v.replaceAll(RegExp(r'[^\d]'), '');
-              if (_selectedCountry == 'CM') {
-                if (digits.isNotEmpty && !digits.startsWith('6')) {
-                  return 'Cameroon numbers must start with 6';
-                }
-                if (digits.length != 9) {
-                  return 'Cameroon numbers must be 9 digits';
-                }
-              }
-              if (_selectedCountry == 'NG' && digits.length != 10) {
-                return 'Nigeria numbers must be 10 digits';
-              }
-              return null;
-            },
+            validator: _phoneValidator,
           ),
           const SizedBox(height: 4),
           Text(

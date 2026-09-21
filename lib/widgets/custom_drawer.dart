@@ -15,6 +15,7 @@ import 'package:drinks_calculator_fixed/screens/ai_assistant_screen.dart';
 import 'package:drinks_calculator_fixed/screens/subscription_screen.dart';
 import 'package:drinks_calculator_fixed/screens/auth_screen.dart';
 import 'package:drinks_calculator_fixed/screens/inventory_screen.dart';
+import 'package:drinks_calculator_fixed/screens/profile_screen.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/screens/manager_approval_screen.dart';
@@ -286,6 +287,14 @@ class CustomDrawer extends StatelessWidget {
                       MaterialPageRoute(
                           builder: (context) => const CalculatorScreen()));
                 }, isActive: true, primaryColor: primaryColor),
+
+                _buildDrawerItem(context, Icons.person_outline, t('profile'), () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const ProfileScreen()));
+                }, primaryColor: primaryColor),
 
                 _buildDrawerItem(context, Icons.history, t('invoiceHistoryDrawer'), () {
                   Navigator.pop(context);

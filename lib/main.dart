@@ -18,6 +18,7 @@ import 'package:drinks_calculator_fixed/utils/forecast_helper.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
+import 'package:drinks_calculator_fixed/services/session_data_cleaner.dart';
 import 'package:drinks_calculator_fixed/utils/payment_helper.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
@@ -262,8 +263,10 @@ class MyAppState extends State<MyApp> {
               navigatorKey: navigatorKey,
               title: 'Drinks Ordering and Management',
               debugShowCheckedModeBanner: false,
-              theme: _buildLightTheme(primaryColor),
-              darkTheme: _buildDarkTheme(primaryColor),
+              theme: _buildLightTheme(primaryColor,
+                  compact: themeProvider.compactMode),
+              darkTheme: _buildDarkTheme(primaryColor,
+                  compact: themeProvider.compactMode),
               themeMode: themeMode,
               builder: (context, child) =>
                   LockScreenOverlay(child: child ?? const SizedBox.shrink()),
@@ -279,10 +282,20 @@ class MyAppState extends State<MyApp> {
   // 🎨 THEME BUILDERS
   // ============================================================
 
-  ThemeData _buildLightTheme(Color primaryColor) {
+  ThemeData _buildLightTheme(Color primaryColor, {bool compact = false}) {
     return ThemeData(
       brightness: Brightness.light,
       primaryColor: primaryColor,
+      visualDensity:
+          compact ? VisualDensity.compact : VisualDensity.standard,
+      materialTapTargetSize: compact
+          ? MaterialTapTargetSize.shrinkWrap
+          : MaterialTapTargetSize.padded,
+      listTileTheme: ListTileThemeData(
+        dense: compact,
+        visualDensity:
+            compact ? VisualDensity.compact : VisualDensity.standard,
+      ),
       colorScheme: ColorScheme.light(
         primary: primaryColor,
         secondary: primaryColor,
@@ -315,6 +328,10 @@ class MyAppState extends State<MyApp> {
         foregroundColor: Colors.white,
       ),
       inputDecorationTheme: InputDecorationTheme(
+        isDense: compact,
+        contentPadding: compact
+            ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+            : null,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -325,6 +342,9 @@ class MyAppState extends State<MyApp> {
       ),
       cardTheme: CardThemeData(
         elevation: 4,
+        margin: compact
+            ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
+            : null,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -332,14 +352,24 @@ class MyAppState extends State<MyApp> {
       textTheme: const TextTheme(
         bodyLarge: TextStyle(color: Colors.black87),
         bodyMedium: TextStyle(color: Colors.black54),
-      ),
+      ).apply(fontSizeFactor: compact ? 0.92 : 1.0),
     );
   }
 
-  ThemeData _buildDarkTheme(Color primaryColor) {
+  ThemeData _buildDarkTheme(Color primaryColor, {bool compact = false}) {
     return ThemeData(
       brightness: Brightness.dark,
       primaryColor: primaryColor,
+      visualDensity:
+          compact ? VisualDensity.compact : VisualDensity.standard,
+      materialTapTargetSize: compact
+          ? MaterialTapTargetSize.shrinkWrap
+          : MaterialTapTargetSize.padded,
+      listTileTheme: ListTileThemeData(
+        dense: compact,
+        visualDensity:
+            compact ? VisualDensity.compact : VisualDensity.standard,
+      ),
       colorScheme: ColorScheme.dark(
         primary: primaryColor,
         secondary: primaryColor,
@@ -372,6 +402,10 @@ class MyAppState extends State<MyApp> {
         foregroundColor: Colors.white,
       ),
       inputDecorationTheme: InputDecorationTheme(
+        isDense: compact,
+        contentPadding: compact
+            ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+            : null,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -382,6 +416,9 @@ class MyAppState extends State<MyApp> {
       ),
       cardTheme: CardThemeData(
         elevation: 4,
+        margin: compact
+            ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
+            : null,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -389,7 +426,7 @@ class MyAppState extends State<MyApp> {
       textTheme: const TextTheme(
         bodyLarge: TextStyle(color: Colors.white),
         bodyMedium: TextStyle(color: Colors.white70),
-      ),
+      ).apply(fontSizeFactor: compact ? 0.92 : 1.0),
     );
   }
 }
@@ -665,7 +702,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       await orderProvider.clearAllOrders();
       await inventoryProvider.clearAllInventory();
 
-      await prefs.remove('last_company_id');
+      await SessionDataCleaner.clearCompanyData();
       SupabaseService.disableForCustomer();
 
       debugPrint('✅ Data cleared - no company');
@@ -678,6 +715,9 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         await drinkProvider.clearAllDrinks();
         await orderProvider.clearAllOrders();
         await inventoryProvider.clearAllInventory();
+
+        // Drop the previous shop's name/logo/currency caches as well.
+        await SessionDataCleaner.clearCompanyData(companyId: lastCompanyId);
         debugPrint('🧹 Old data cleared');
       } else if (lastCompanyId == null) {
         debugPrint('🔄 First login for Manager/Staff - no data to clear');
@@ -854,9 +894,13 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         await orderProvider.clearAllOrders();
         await inventoryProvider.clearAllInventory();
 
-        await prefs.remove('last_company_id');
         debugPrint('🧹 Old company data cleared');
       }
+
+      // Always wipe the company-scoped caches (name, logo, address, currency,
+      // payment switches) — a customer must never see a shop's branding, even
+      // when the previous session ended without a clean logout.
+      await SessionDataCleaner.clearCompanyData();
 
       SupabaseService.disableForCustomer();
       debugPrint('✅ Customer mode - Supabase disabled');
