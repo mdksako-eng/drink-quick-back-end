@@ -862,7 +862,28 @@ app.post('/api/auth/login', async (req, res) => {
     if (user.company_id) {
       try {
         const ownRow = await pool.query('SELECT owner_id FROM companies WHERE id = $1', [user.company_id]);
-        isOwner = ownRow.rows.length > 0 && ownRow.rows[0].owner_id === user.id;
+        const ownerId = ownRow.rows.length > 0 ? ownRow.rows[0].owner_id : null;
+        isOwner = ownerId === user.id;
+
+        // 🩹 Self-heal: companies created before the owner column was populated
+        // have no owner, which would hide every owner-only screen (data
+        // management, branding) from the shop's real manager. The first Manager
+        // to sign in claims it — once, and never over an existing owner.
+        if (!isOwner && ownerId === null && user.role === 'Manager') {
+          try {
+            await pool.query(
+              'UPDATE companies SET owner_id = $1 WHERE id = $2 AND owner_id IS NULL',
+              [user.id, user.company_id]
+            );
+            const claimed = await pool.query('SELECT owner_id FROM companies WHERE id = $1', [user.company_id]);
+            isOwner = claimed.rows.length > 0 && claimed.rows[0].owner_id === user.id;
+            if (isOwner) {
+              console.log(`👑 Company ${user.company_id}: owner claimed by ${user.username}`);
+            }
+          } catch (e) {
+            console.log('⚠️ Owner self-heal failed:', e.message);
+          }
+        }
       } catch (e) {
         console.log('⚠️ Owner lookup failed:', e.message);
       }

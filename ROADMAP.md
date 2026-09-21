@@ -215,6 +215,47 @@ Requested in one batch; shipped as nine independently validated changes.
     field with ±, +1/+pack shortcuts, validation, resulting total) instead of
     silently adding a whole pack.
 
+## Phase 8 — Shared-device privacy, branding everywhere, role-aware profile
+
+1. **Company data no longer leaks between sessions** — logout, a forced logout and
+   a customer sign-in now wipe every company-scoped cache (name, email, phone,
+   address, currency, payment switches, logo) via
+   `lib/services/session_data_cleaner.dart`. The logo cache is keyed **per
+   company** (`company_logo_url_<id>`), so a customer or another shop's staff can
+   never see the previous company's branding or currency.
+2. **Logo reaches every manager and staff member** — `CompanyBrandingService.load`
+   falls back to the company record on the server (not just the local cache), so
+   the logo appears on any device the moment it is uploaded.
+3. **Logo on invoices and exports** — the inventory PDF, the profit/analytics PDF
+   and the invoice PDF embed the real image (`lib/utils/company_logo_bytes.dart`
+   downloads + caches it, and simply omits it when offline); Excel and CSV carry
+   the company name and logo link. A missing logo never breaks an export.
+4. **Smart phone entry** — `lib/utils/phone_helper.dart` caps the field to the
+   country's real digit count (Cameroon 9 starting with 6/2/3/8, Nigeria 10),
+   groups digits as you type and returns localized errors. Used by the sign-up form
+   and by the company/merchant phone fields in Settings.
+5. **Role-aware profile screen** — `lib/screens/profile_screen.dart`, reachable from
+   the drawer for every role: branding header with the company logo, an access
+   summary that differs per role (customer / staff / manager / owner manager /
+   admin), account details, activity stats (drinks, stock, low stock, today's
+   orders) that are hidden for customers, PIN management and logout.
+6. **Compact mode is real** — it was stored and notified but never applied;
+   `ThemeProvider.compactMode` now drives `visualDensity`, tap-target size, list
+   tile density, input padding, card margins and a 0.92 text scale in both themes.
+7. **Saving no longer looks like loading** — Storage Settings used `_isLoading` for
+   both, so pressing *Save* replaced the screen with a "Loading settings…" spinner.
+   Saving now has its own `_isSaving` state (button spinner, disabled while
+   running) and the loading text is localized.
+8. **Owner-only administration** — `lib/utils/owner_permissions.dart` (unit tested)
+   gates **Data management** and the **company logo** to the owner manager or a
+   platform admin: a co-manager cannot clear company data or re-brand the shop. The
+   backend self-heals companies whose `owner_id` was never set by letting the first
+   Manager who signs in claim it.
+9. **Payments honesty** — `scripts/check_payments.js` reports whether real money can
+   be collected, and the subscription screen shows a **Test mode** banner while the
+   platform keys are still sandbox keys.
+10. **`.gitignore`** — the IDE-generated `devtools_options.yaml` is ignored.
+
 ### Validation
 - `flutter analyze lib` → 0 errors
 - `flutter test` → 110 passing (drink batch dates, staff permissions, plan gate,

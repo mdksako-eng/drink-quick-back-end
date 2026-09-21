@@ -69,6 +69,46 @@ remove a picture. Until it is applied the app shows
 *"Storage bucket 'drink-images' is missing"* when you tap upload; you can always
 paste any external image URL manually instead.
 
+The same bucket also stores the **company logo** (Settings → Company logo, owner
+manager only). That logo is used in the drawer, the invoice PDF and every export.
+
+---
+
+### Step 1e — Are we taking REAL money yet?
+
+Subscription payments run through Notch Pay (and optionally Flutterwave / direct
+MoMo). The code supports both modes; what decides is the keys you set. Check the
+live service any time:
+
+```
+cd drinks-calculator-backend
+node scripts/check_payments.js                      # checks the deployed backend
+node scripts/check_payments.js http://localhost:5000
+```
+
+It prints a ✅/⚠️  checklist and exits non-zero while the platform is still in
+**test mode**. The app also shows a *"Test mode"* banner on the subscription
+screen so nobody believes a real payment was taken.
+
+To go live (Render → your service → **Environment**):
+
+| Variable | Value |
+|---|---|
+| `NOTCHPAY_PUBLIC_KEY` | `pk_live_…` |
+| `NOTCHPAY_PRIVATE_KEY` | `sk_live_…` |
+| `NOTCHPAY_WEBHOOK_SECRET` | your live webhook secret |
+| `FLUTTERWAVE_PUBLIC_KEY` / `FLUTTERWAVE_SECRET_KEY` | optional card rail |
+| `PLATFORM_MTN_SANDBOX` | `false` (only for direct MTN MoMo credentials) |
+
+Webhook URL to register in the Notch Pay dashboard:
+
+```
+https://<your-service>/api/subscriptions/notchpay-webhook
+```
+
+Then redeploy and re-run `node scripts/check_payments.js` — it must report
+`mode: live` and `Everything ready for real money ✅`.
+
 ---
 
 ## Step 2 — Hash existing plaintext passwords
