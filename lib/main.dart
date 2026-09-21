@@ -716,7 +716,9 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         await orderProvider.clearAllOrders();
         await inventoryProvider.clearAllInventory();
 
-        // Drop the previous shop's name/logo/currency caches as well.
+        // Drop the previous shop's name/logo/currency caches and its encrypted
+        // blobs too: this device has moved to another company.
+        await SessionDataCleaner.clearEncryptedBlobs(lastCompanyId);
         await SessionDataCleaner.clearCompanyData(companyId: lastCompanyId);
         debugPrint('🧹 Old data cleared');
       } else if (lastCompanyId == null) {
@@ -898,8 +900,11 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       }
 
       // Always wipe the company-scoped caches (name, logo, address, currency,
-      // payment switches) — a customer must never see a shop's branding, even
-      // when the previous session ended without a clean logout.
+      // payment switches) AND the previous company's encrypted blobs — this
+      // device is now in customer mode and must show no shop data at all.
+      if (lastCompanyId != null) {
+        await SessionDataCleaner.clearEncryptedBlobs(lastCompanyId);
+      }
       await SessionDataCleaner.clearCompanyData();
 
       SupabaseService.disableForCustomer();
