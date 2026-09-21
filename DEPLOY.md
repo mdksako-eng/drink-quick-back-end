@@ -123,6 +123,21 @@ Reminder: anyone who captured the anon key can no longer read the hasheds anyway
 
 ## Step 3 — Deploy to Render
 
+### Did my push actually deploy?
+
+`GET /health` now reports the running build, so this is verifiable from outside:
+
+```
+curl https://<your-service>/health
+{ "release": "2026-09-20-phase8", "startedAt": "…", "uptimeSeconds": 117,
+  "features": { "aiChat": true, "aiVision": true, "jsonBodyLimit": "12mb",
+                "ownerSelfHeal": true } }
+```
+
+* `uptimeSeconds` **resets on every restart** — a small number right after a push
+  means the new code is live; a large number means the deploy has not happened yet.
+* Bump `const RELEASE` in `server.js` when you want a new, unmistakable marker.
+
 The backend you have on Render (`drink-quic-cal-kj1.onrender.com`) is still running the OLD code (plaintext, open /users). Two ways to update it:
 
 **Option A — existing Render service (simplest, no new repo):**
