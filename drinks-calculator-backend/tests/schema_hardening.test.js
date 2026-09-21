@@ -41,6 +41,38 @@ describe('forecast_events hardening', () => {
   });
 });
 
+describe('deploy identity', () => {
+  test('/health reports a release marker and the process uptime', () => {
+    const server = read('server.js');
+    expect(server).toContain('const RELEASE =');
+    expect(server).toContain('const SERVER_STARTED_AT = new Date()');
+    expect(server).toContain('release: RELEASE');
+    expect(server).toContain('uptimeSeconds:');
+  });
+
+  test('the release marker is a dated, non-empty string', () => {
+    const match = read('server.js').match(/const RELEASE = '([^']+)'/);
+    expect(match).not.toBeNull();
+    expect(match[1].trim().length).toBeGreaterThan(0);
+  });
+
+  test('/health advertises the owner self-heal so the app can rely on it', () => {
+    expect(read('server.js')).toContain('ownerSelfHeal: true');
+  });
+});
+
+describe('company ownership self-heal', () => {
+  test('login claims ownership only when the company has no owner yet', () => {
+    const server = read('server.js');
+    // Guarded update: never overwrite an existing owner.
+    expect(server).toContain(
+      'UPDATE companies SET owner_id = $1 WHERE id = $2 AND owner_id IS NULL'
+    );
+    // …and only for a Manager.
+    expect(server).toContain("ownerId === null && user.role === 'Manager'");
+  });
+});
+
 describe('notifications are device-only', () => {
   test('the backend exposes no notification routes', () => {
     const routes = read('routes/data.routes.js');

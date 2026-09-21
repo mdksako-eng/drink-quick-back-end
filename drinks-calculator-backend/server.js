@@ -43,6 +43,12 @@ function checkRateLimit(key) {
 // ========== POSTGRESQL SETUP ==========
 console.log('🔌 Connecting to PostgreSQL (Supabase)...');
 
+// 🏷️ Build identity, reported by GET /health. Bump RELEASE when you want to
+// confirm from the outside that a deploy actually went through; SERVER_STARTED_AT
+// resets on every restart (uptimeSeconds in the health payload).
+const RELEASE = '2026-09-20-phase8';
+const SERVER_STARTED_AT = new Date();
+
 const databaseUrl = process.env.DATABASE_URL;
 console.log('🔍 DATABASE_URL is set:', databaseUrl ? 'YES' : 'NO');
 
@@ -1576,12 +1582,18 @@ app.get('/health', async (req, res) => {
       status: '✅ ONLINE',
       database: '✅ CONNECTED',
       users: parseInt(count.rows[0].count),
+      // 🏷️ Which build is running and how long ago it started. `uptimeSeconds`
+      // resets on every deploy, so "did my push actually deploy?" is answerable.
+      release: RELEASE,
+      startedAt: SERVER_STARTED_AT.toISOString(),
+      uptimeSeconds: Math.round((Date.now() - SERVER_STARTED_AT.getTime()) / 1000),
       // 🔎 Configuration readiness (never the values themselves) so the app
       // owner can self-check why AI/payments do or do not work.
       features: {
         aiChat: Boolean(process.env.GROQ_API_KEY),
         aiVision: Boolean(process.env.GROQ_API_KEY),
         jsonBodyLimit: '12mb',
+        ownerSelfHeal: true,
       },
     });
   } catch (e) {
