@@ -1,4 +1,5 @@
 // main.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,6 +20,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/session_data_cleaner.dart';
+import 'package:drinks_calculator_fixed/services/company_branding_service.dart';
 import 'package:drinks_calculator_fixed/utils/payment_helper.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
@@ -732,6 +734,11 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       SupabaseService.setCompanyContext(
           currentCompanyId, int.tryParse(user.id));
       debugPrint('✅ Supabase context set: company=$currentCompanyId');
+
+      // 🏢 Load the shop branding in the background with the rest of the company
+      // data, so a restored session shows the logo in the drawer/profile right
+      // away. Never awaited: a slow/unreachable server must not delay startup.
+      unawaited(CompanyBrandingService.load());
 
       await _loadUserSettings(user.id);
       await CurrencyHelper.refresh();

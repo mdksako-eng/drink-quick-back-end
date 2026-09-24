@@ -272,7 +272,13 @@ router.get('/events', async (req, res) => {
        ORDER BY event_date ASC`,
       [companyId]
     );
-    res.json(result.rows);
+    // `multiplier` is NUMERIC, which the Postgres driver returns as a string
+    // ("1.25"). Serialise it as a real number so every client does not have to
+    // guess (the Flutter app used to crash on it and drop the whole list).
+    res.json(result.rows.map((row) => ({
+      ...row,
+      multiplier: row.multiplier == null ? 1.25 : Number(row.multiplier),
+    })));
   } catch (error) {
     console.error('GET /events error:', error.message);
     res.status(500).json({ message: 'Failed to load forecast events' });

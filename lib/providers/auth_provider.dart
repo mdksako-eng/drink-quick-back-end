@@ -9,6 +9,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import '../services/backend_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/secure_storage_service.dart';
+import '../services/company_branding_service.dart';
 import '../services/session_data_cleaner.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../utils/helpers.dart';
@@ -719,6 +720,10 @@ class AuthProvider with ChangeNotifier {
     final companyId = _user?.companyId;
     final userIdInt = _user?.id != null ? int.tryParse(_user!.id) : null;
     SupabaseService.setCompanyContext(companyId, userIdInt);
+    // 🏢 Warm the shop branding as part of the login, so the drawer and the
+    // profile header show the logo right away instead of only after the profile
+    // screen has been opened once.
+    unawaited(CompanyBrandingService.load());
     debugPrint(
         '✅ Supabase context set - companyId: $companyId, userId: $userIdInt');
 
@@ -1457,6 +1462,10 @@ class AuthProvider with ChangeNotifier {
         final companyId = _user?.companyId;
         final userIdInt = _user?.id != null ? int.tryParse(_user!.id) : null;
         SupabaseService.setCompanyContext(companyId, userIdInt);
+        // 🏢 Warm the shop branding as part of the login, so the drawer and the
+        // profile header show the logo right away instead of only after the
+        // profile screen has been opened once.
+        unawaited(CompanyBrandingService.load());
         debugPrint(
             '✅ Supabase context set - companyId: $companyId, userId: $userIdInt');
 

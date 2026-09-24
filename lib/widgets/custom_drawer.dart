@@ -102,7 +102,10 @@ class CustomDrawer extends StatelessWidget {
                     // app's drink icon.
                     child: ClipOval(
                       child: FutureBuilder<String?>(
-                        future: CompanyBrandingService.cached(),
+                        // load() reads the cache the login flow warmed and only
+                        // goes to the server when nothing is cached yet, so the
+                        // logo is there on the first drawer open.
+                        future: CompanyBrandingService.load(),
                         builder: (context, snapshot) {
                           final logo = snapshot.data;
                           if (logo == null || logo.isEmpty) {

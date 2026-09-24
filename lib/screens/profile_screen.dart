@@ -87,7 +87,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return (parts[0].substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
   }
 
+  /// 🔒 Asks for the password used to sign in on this device and returns true
+  /// only when it verifies against the account currently logged in.
+  Future<bool> _confirmDevicePassword() async {
+    final auth = context.read<AuthProvider>();
+    final passwordController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final verified = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t('profilePin')),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(t('enterLoginPassword'),
+                  style: const TextStyle(fontSize: 13)),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: passwordController,
+                obscureText: true,
+                autofocus: true,
+                decoration: InputDecoration(labelText: t('password')),
+                validator: (v) =>
+                    (v ?? '').isEmpty ? t('passwordRequired') : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                Navigator.pop(ctx, auth.verifyPassword(passwordController.text));
+              }
+            },
+            child: Text(t('verify')),
+          ),
+        ],
+      ),
+    );
+
+    passwordController.dispose();
+    if (verified == false && mounted) {
+      Helpers.showToast(t('incorrectPassword'), isError: true);
+    }
+    return verified == true;
+  }
+
   Future<void> _changePin(String userId) async {
+    // 🔒 A new PIN takes over the lock screen, so prove it is the account owner
+    // first: the device login password is required before the PIN can change.
+    if (!await _confirmDevicePassword()) return;
+    if (!mounted) return;
+
     final pinController = TextEditingController();
     final confirmController = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -218,7 +277,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             roleLabel: _roleLabel(role, isOwner),
             emailVerified: user.emailVerified,
             showCompany: !isCustomer,
-            companyId: user.companyId,
+            userId: user.id,
           ),
           const SizedBox(height: 14),
           _activityCard(
@@ -491,7 +550,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String roleLabel,
     required bool emailVerified,
     required bool showCompany,
-    required int? companyId,
+    required String userId,
   }) {
     return Card(
       elevation: 1,
@@ -512,14 +571,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   color: emailVerified ? Colors.green : Colors.orange,
                 )),
             _infoRow(theme, t('profileRole'), roleLabel),
-            if (showCompany) ...[
+            // The ID shown here is the signed-in user's account id (the one
+            // support, approvals and the backend use) — not the company id.
+            _infoRow(theme, t('profileUserId'), userId.isEmpty ? '-' : userId),
+            if (showCompany)
               _infoRow(theme, t('profileCompany'),
                   (_companyName == null || _companyName!.isEmpty)
                       ? '-'
                       : _companyName!),
-              if (companyId != null)
-                _infoRow(theme, 'ID', companyId.toString()),
-            ],
             const SizedBox(height: 4),
             Text(
               emailVerified

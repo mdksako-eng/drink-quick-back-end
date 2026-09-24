@@ -94,6 +94,10 @@ class _ForecastScreenState extends State<ForecastScreen> {
 
     if (online != null) {
       _applyRows(online, includeIds: true);
+      // An event created offline that the server still refuses must stay
+      // visible (badged "pending sync") instead of silently disappearing from
+      // the list as soon as the online copy is authoritative.
+      _mergePendingEvents(prefs.getString(_pendingKey));
       await prefs.setString(
           _cacheKey, jsonEncode(_customEvents.map((e) => e.toJson()).toList()));
       if (mounted) {
@@ -114,30 +118,67 @@ class _ForecastScreenState extends State<ForecastScreen> {
     }
   }
 
+  /// Reads a numeric field that may arrive either as a JSON number or as a
+  /// string. Postgres NUMERIC columns (`forecast_events.multiplier`) are handed
+  /// back by the driver as strings ("1.25"), and calling `.toDouble()` on one
+  /// used to throw — which aborted the whole events list, so a deployment that
+  /// had events online showed "no events" and fell back to the local cache.
+  static double? _asDouble(Object? value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString().trim());
+  }
+
   /// Parses backend rows (`event_date`) or cached events (`date`).
   void _applyRows(List<dynamic> rows, {required bool includeIds}) {
     final events = <EventDay>[];
     final ids = <String, int>{};
     for (final raw in rows) {
-      if (raw is! Map) continue;
-      final row = Map<String, dynamic>.from(raw);
-      final parsed = DateTime.tryParse('${row['event_date'] ?? row['date']}');
-      if (parsed == null) continue;
-      final day = DateTime(parsed.year, parsed.month, parsed.day);
-      final name = row['name']?.toString().trim() ?? '';
-      if (name.isEmpty) continue;
-      events.add(EventDay(
-        date: day,
-        name: name,
-        multiplier: (row['multiplier'] ?? 1.25).toDouble(),
-      ));
-      final id = int.tryParse('${row['id']}');
-      if (includeIds && id != null) ids[_keyFor(day, name)] = id;
+      // One unreadable row must never hide the events that did parse.
+      try {
+        if (raw is! Map) continue;
+        final row = Map<String, dynamic>.from(raw);
+        final parsed = DateTime.tryParse('${row['event_date'] ?? row['date']}');
+        if (parsed == null) continue;
+        final day = DateTime(parsed.year, parsed.month, parsed.day);
+        final name = row['name']?.toString().trim() ?? '';
+        if (name.isEmpty) continue;
+        events.add(EventDay(
+          date: day,
+          name: name,
+          multiplier: _asDouble(row['multiplier']) ?? 1.25,
+        ));
+        final id = int.tryParse('${row['id']}');
+        if (includeIds && id != null) ids[_keyFor(day, name)] = id;
+      } catch (e) {
+        debugPrint('⚠️ Skipped unreadable forecast event row: $e');
+      }
     }
     _customEvents = events;
     _eventIds
       ..clear()
       ..addAll(ids);
+  }
+
+  /// Appends the events that are still queued for upload, so they remain on
+  /// screen (as "pending sync") until the server accepts them.
+  void _mergePendingEvents(String? raw) {
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final pending = jsonDecode(raw);
+      if (pending is! List) return;
+      final known = _customEvents.map((e) => _keyFor(e.date, e.name)).toSet();
+      for (final item in pending) {
+        if (item is! Map) continue;
+        final event = EventDay.fromJson(Map<String, dynamic>.from(item));
+        if (event.name.isEmpty) continue;
+        if (known.add(_keyFor(event.date, event.name))) {
+          _customEvents.add(event);
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Could not read the queued forecast events: $e');
+    }
   }
 
   /// Queues an event locally and uploads it as soon as the backend is reachable.
