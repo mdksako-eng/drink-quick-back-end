@@ -6,6 +6,7 @@ const { getSessionUser } = require('../middleware/sessionAuth');
 const momo = require('../utils/momo');
 const orangeMoney = require('../utils/orange_money');
 const notchpay = require('../utils/notchpay');
+const { rawBodyOf } = require('../utils/requestBody');
 // Shared secret for verifying /api/payment/webhook calls (set in env).
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
 
@@ -838,7 +839,8 @@ router.get('/payment/stats', async (req, res) => {
 router.post('/payment/webhook', async (req, res) => {
   try {
     const signature = req.headers['x-webhook-signature'] || req.headers['verif-hash'];
-    if (!verifyWebhookSignature(JSON.stringify(req.body), signature)) {
+    // Verify the HMAC against the bytes that were sent, not a re-serialisation.
+    if (!verifyWebhookSignature(rawBodyOf(req), signature)) {
       console.warn('⚠️ /api/payment/webhook: invalid signature');
       return res.status(401).json({ error: 'Invalid signature' });
     }
@@ -1033,7 +1035,8 @@ router.post('/payment/orange-webhook', async (req, res) => {
 router.post('/payment/notchpay-webhook', async (req, res) => {
   try {
     const signature = req.headers['x-notch-signature'];
-    const rawBody = JSON.stringify(req.body);
+    // Verify the HMAC against the bytes that were sent, not a re-serialisation.
+    const rawBody = rawBodyOf(req);
 
     const body = req.body || {};
     const data = body.data || body.transaction || {};

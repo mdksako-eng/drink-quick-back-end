@@ -174,6 +174,24 @@ GET /api/subscriptions/notchpay-channels       # session token required
 `known: false` means the backend could not ask (provider unreachable) — the app
 then leaves every rail enabled, so a working rail is never hidden.
 
+### Webhook hardening (money in)
+
+- Webhook signatures are HMACs over the **raw** request bytes. `server.js` keeps
+  them (`express.json({ verify })`) and every webhook route verifies against them
+  — verifying a re-serialised body would reject genuine webhooks in live mode.
+  Covered: `/api/subscriptions/notchpay-webhook`, `/api/subscriptions/webhook`
+  (Flutterwave), `/api/payment/webhook`, `/api/payment/notchpay-webhook`.
+- A subscription is **not** activated when a webhook reports **less** than the plan
+  price (`paidAmountMatches` in `utils/paymentGuard.js`; overpayment is accepted,
+  an amount the provider did not repeat is accepted and logged). A refusal is
+  logged with both amounts. If Notch Pay ever reports a net (fee-deducted) amount,
+  set `NOTCHPAY_ALLOW_UNDERPAYMENT=true` on Render — otherwise honest payments
+  would be refused.
+- Replays are harmless: only a row still in `pending` can activate, so a repeated
+  webhook is a no-op after the first success.
+- The company behind a payment is always resolved from the session or the database
+  row, never from the payload.
+
 Webhook URL to register in the Notch Pay dashboard:
 
 ```

@@ -611,7 +611,16 @@ app.use(cors());
 // which used to reject the request with a 413 HTML page — the app could not parse
 // that and showed "Could not read the image". Keep this above the client's
 // downscaling target (see DrinkImageService / ai_assistant_screen).
-app.use(express.json({ limit: '12mb' }));
+// Keep the RAW body of every JSON request: webhook signatures are HMACs over the
+// exact bytes that were sent, and re-serialising the parsed object changes them
+// (whitespace, escaping, number formatting) — which would reject every genuine
+// webhook. `verify` is the only place Express hands over those bytes.
+app.use(express.json({
+  limit: '12mb',
+  verify: (req, _res, buf) => {
+    req.rawBody = buf && buf.length ? buf.toString('utf8') : '';
+  },
+}));
 app.use(express.urlencoded({ extended: true, limit: '12mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 // ✅ Database connection middleware - MUST BE BEFORE ROUTES

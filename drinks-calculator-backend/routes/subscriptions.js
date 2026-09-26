@@ -9,6 +9,8 @@ const momo = require('../utils/momo');
 const orangeMoney = require('../utils/orange_money');
 const notchpay = require('../utils/notchpay');
 const paymentChannels = require('../utils/paymentChannels');
+const paymentGuard = require('../utils/paymentGuard');
+const { rawBodyOf } = require('../utils/requestBody');
 
 // Plan prices (XAF — Central African CFA franc). Overridable via env.
 const PLAN_PRICES = {
@@ -256,7 +258,8 @@ router.get('/subscriptions/verify', async (req, res) => {
 router.post('/subscriptions/webhook', async (req, res) => {
   try {
     const signature = req.headers['verif-hash'];
-    if (!flutterwave.verifyWebhookSignature(JSON.stringify(req.body), signature)) {
+    // Verify the HMAC against the bytes that were sent, not a re-serialisation.
+    if (!flutterwave.verifyWebhookSignature(rawBodyOf(req), signature)) {
       console.warn('⚠️ Subscription webhook: invalid signature');
       return res.status(401).json({ success: false, error: 'Invalid signature' });
     }
@@ -641,14 +644,45 @@ async function cardSlugFromAccount() {
   return paymentChannels.findCardSlug(await loadChannels());
 }
 
-async function activatePendingSubscription(db, reference, companyId) {
+/**
+ * Activate the pending subscription behind a reference.
+ *
+ * `payment` carries what the provider says was paid (from the webhook). It is
+ * checked against the amount we asked for before a month is handed over — see
+ * utils/paymentGuard.js. The polling path calls Notch Pay's own API with the
+ * platform key, so it has no amount to check and passes none.
+ *
+ * @returns {Promise<{activated: boolean, plan?: string, expiresAt?: Date, reason?: string}>}
+ */
+async function activatePendingSubscription(db, reference, companyId, payment = {}) {
   const pending = await db.query(
-    `SELECT id, plan, company_id FROM subscriptions WHERE reference = $1 AND status = 'pending'`,
+    `SELECT id, plan, company_id, amount, currency FROM subscriptions WHERE reference = $1 AND status = 'pending'`,
     [reference]
   );
-  if (pending.rows.length === 0) return null;
+  if (pending.rows.length === 0) return { activated: false, reason: 'no pending subscription' };
   const sub = pending.rows[0];
-  if (companyId && sub.company_id !== companyId) return null;
+  if (companyId && sub.company_id !== companyId) {
+    return { activated: false, reason: 'no pending subscription' };
+  }
+
+  const guard = paymentGuard.paidAmountMatches({
+    paidAmount: payment.amount,
+    paidCurrency: payment.currency,
+    expectedAmount: sub.amount,
+    expectedCurrency: sub.currency,
+  });
+  if (!guard.ok) {
+    if (paymentGuard.shouldEnforce()) {
+      console.warn(
+        `⚠️ Notch Pay ${reference}: ${guard.reason} (paid ${guard.paid} / expected ${guard.expected}) — subscription NOT activated`
+      );
+      return { activated: false, reason: guard.reason };
+    }
+    console.warn(
+      `⚠️ Notch Pay ${reference}: ${guard.reason} (paid ${guard.paid} / expected ${guard.expected}) — allowed because NOTCHPAY_ALLOW_UNDERPAYMENT=true`
+    );
+  }
+
   const now = new Date();
   const endsAt = new Date(now.getTime() + SUBSCRIPTION_MONTHS * 30 * 24 * 60 * 60 * 1000);
   await db.query(
@@ -659,7 +693,7 @@ async function activatePendingSubscription(db, reference, companyId) {
     `UPDATE companies SET plan = $1, plan_expires_at = $2, subscription_status = 'active' WHERE id = $3`,
     [sub.plan, endsAt, sub.company_id]
   );
-  return { plan: sub.plan, expiresAt: endsAt };
+  return { activated: true, plan: sub.plan, expiresAt: endsAt };
 }
 
 router.post('/subscriptions/notchpay-initiate', async (req, res) => {
@@ -743,7 +777,12 @@ router.get('/subscriptions/notchpay-status', async (req, res) => {
     const status = await notchpay.getPaymentStatus(reference);
     if (status === 'completed') {
       const result = await activatePendingSubscription(req.db, reference, user.company_id);
-      if (result) return res.json({ success: true, data: { active: true, ...result } });
+      if (result.activated) {
+        return res.json({
+          success: true,
+          data: { active: true, plan: result.plan, expiresAt: result.expiresAt },
+        });
+      }
     }
     if (status === 'failed' || status === 'expired' || status === 'cancelled') {
       await req.db.query(
@@ -762,7 +801,10 @@ router.get('/subscriptions/notchpay-status', async (req, res) => {
 router.post('/subscriptions/notchpay-webhook', async (req, res) => {
   try {
     const signature = req.headers['x-notch-signature'];
-    if (!notchpay.verifyWebhookSignature(JSON.stringify(req.body), signature)) {
+    // The HMAC covers the exact bytes Notch Pay sent, so verify against the raw
+    // body Express captured (falling back to a re-serialisation).
+    const rawBody = rawBodyOf(req);
+    if (!notchpay.verifyWebhookSignature(rawBody, signature)) {
       console.warn('⚠️ Subscription Notch Pay webhook: invalid signature');
       return res.status(401).json({ success: false, error: 'Invalid signature' });
     }
@@ -784,12 +826,15 @@ router.post('/subscriptions/notchpay-webhook', async (req, res) => {
     );
 
     if (status === 'completed') {
-      const result = await activatePendingSubscription(req.db, reference);
-      if (result) {
+      const result = await activatePendingSubscription(req.db, reference, null, {
+        amount: body.amount ?? (data && data.amount),
+        currency: body.currency ?? (data && data.currency),
+      });
+      if (result.activated) {
         console.log(`✅ Notch Pay subscription activated (${result.plan})`);
         return res.json({ success: true });
       }
-      return res.json({ success: true, ignored: true, reason: 'no pending subscription' });
+      return res.json({ success: true, ignored: true, reason: result.reason || 'no pending subscription' });
     }
     if (status === 'failed' || status === 'expired' || status === 'cancelled') {
       await req.db.query(

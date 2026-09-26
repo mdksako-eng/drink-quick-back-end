@@ -492,11 +492,34 @@ checkout was opened, so a customer is never charged twice.
 - 4 new EN/FR keys; `DEPLOY.md` documents the dashboard steps, the rail table and
   the verification commands.
 
+### Webhook hardening (security review of the money path)
+A review of the payment code found one defect class repeated across four webhook
+routes (five verification sites), plus one missing check:
+
+- **Signatures were verified against `JSON.stringify(req.body)`** — the HMAC covers
+  the bytes the provider actually sent, and re-serialising changes them
+  (whitespace, escaping, number formatting). In live mode this rejects genuine
+  webhooks: the subscription would never activate from the webhook, only from the
+  app's polling path. Fixed by keeping the raw body in `server.js`
+  (`express.json({ verify })`), a small `utils/requestBody.js` (`rawBodyOf`) and
+  using it in `/subscriptions/notchpay-webhook`, `/subscriptions/webhook`
+  (Flutterwave), `/payment/webhook` and `/payment/notchpay-webhook` (the last one
+  checks two secrets, so it had two verification sites).
+- **The amount was never checked before activating a subscription** — a leaked
+  webhook secret could buy a month for 1 XAF. `utils/paymentGuard.js` now compares
+  what was paid with the pending row: overpayment accepted, shortfall refused
+  (logged with both amounts), an amount the provider did not repeat accepted.
+  `NOTCHPAY_ALLOW_UNDERPAYMENT=true` is the documented escape hatch.
+  `activatePendingSubscription` now returns `{ activated, plan, expiresAt, reason }`
+  instead of a truthy object, so a refusal can never be mistaken for an activation.
+- Replay is a no-op by construction (only a `pending` row activates) and the
+  company is resolved from the DB row / session, never from the payload.
+
 ### Validation
 - `flutter analyze lib` → 0 errors
 - `flutter test` → 276 passing (12 new)
-- `npm --prefix drinks-calculator-backend test` → 9 suites / 121 tests passing
+- `npm --prefix drinks-calculator-backend test` → 11 suites / 142 tests passing
+  (21 new: payment guard 15, request body 6)
 - i18n parity → EN=1075 FR=1075
-- `node --check` clean on `routes/subscriptions.js`, `utils/notchpay.js`,
-  `utils/paymentChannels.js`
+- `node --check` clean on every touched backend file
 
