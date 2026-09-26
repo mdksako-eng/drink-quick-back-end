@@ -72,6 +72,28 @@ Who can do what (enforced by `utils/customerApproval.js`):
   manager's own enrolment is approved immediately.
 - Credit is only ever written against an `approved` account.
 
+### Step 1e — `shifts` (added later)
+
+The shift / cash-up table (the Z-report) is created by the backend at boot **with
+RLS enabled and the client roles revoked** — a shift holds the float, the counted
+cash and the variance, so the anon key must never read it. To apply the lockdown
+to an existing database straight away:
+
+Option A (Dashboard): paste `drinks-calculator-backend/sql/rls_shifts.sql` into the SQL Editor → **Run**.
+Option B (psql): `psql "$DATABASE_URL" -f drinks-calculator-backend/sql/rls_shifts.sql`
+
+Verify (with the anon key):
+```
+GET {SUPABASE_URL}/rest/v1/shifts?select=id → [] or 401
+```
+
+Rules enforced by `utils/shiftMath.js`:
+- One **open** shift per person (a partial unique index also enforces it in the DB).
+- A staff member closes **their own** shift; a Manager / Administrator (or the
+  company owner) may close anyone's.
+- Cash expected = opening float + collected − cash paid out; the variance is
+  counted − expected. The report is frozen when the shift closes.
+
 
 ---
 

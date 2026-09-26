@@ -926,6 +926,122 @@ class SupabaseService {
   }
 
   // ============================================================
+  // 🕒 SHIFTS — open a till, close it with a cash count (Z-report)
+  // ============================================================
+
+  /// The caller's own open shift, or null when the till is not open.
+  static Future<Map<String, dynamic>?> getCurrentShift() async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.get(
+        Uri.parse(ApiConfig.dataShiftCurrent),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode != 200) return null;
+      if (response.body.trim().isEmpty || response.body.trim() == 'null') {
+        return null;
+      }
+      return Map<String, dynamic>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase getCurrentShift error: $e');
+      return null;
+    }
+  }
+
+  /// Past shifts (newest first), optionally only the open ones.
+  static Future<List<Map<String, dynamic>>?> getShifts({String? status}) async {
+    if (!canUseSupabase) return null;
+    try {
+      final url = (status == null || status.isEmpty)
+          ? ApiConfig.dataShifts
+          : '${ApiConfig.dataShifts}?status=$status';
+      final response = await http.get(
+        Uri.parse(url),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode != 200) {
+        print('❌ Failed to load shifts: ${response.statusCode}');
+        return null;
+      }
+      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase getShifts error: $e');
+      return null;
+    }
+  }
+
+  /// Opens a shift with the float that is in the drawer. Returns the created
+  /// row, or null (e.g. when a shift is already open for this user).
+  static Future<Map<String, dynamic>?> openShift({
+    required double openingFloat,
+  }) async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataShifts),
+        headers: await _authedHeaders(),
+        body: jsonEncode({'opening_float': openingFloat}),
+      );
+      if (response.statusCode != 201) {
+        print('❌ Failed to open the shift: ${response.body}');
+        return null;
+      }
+      return Map<String, dynamic>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase openShift error: $e');
+      return null;
+    }
+  }
+
+  /// The live Z-report of a shift, or the frozen one once it is closed.
+  static Future<Map<String, dynamic>?> getShiftSummary(dynamic id) async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.get(
+        Uri.parse(ApiConfig.dataShiftSummary(id)),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode != 200) {
+        print('❌ Failed to build the Z-report: ${response.body}');
+        return null;
+      }
+      return Map<String, dynamic>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase getShiftSummary error: $e');
+      return null;
+    }
+  }
+
+  /// Closes a shift with the counted cash. Returns `{ shift, summary }`, or null.
+  static Future<Map<String, dynamic>?> closeShift(
+    dynamic id, {
+    required double cashCounted,
+    double? cashPayouts,
+    String? notes,
+  }) async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.patch(
+        Uri.parse(ApiConfig.dataShift(id)),
+        headers: await _authedHeaders(),
+        body: jsonEncode({
+          'cash_counted': cashCounted,
+          if (cashPayouts != null) 'cash_payouts': cashPayouts,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+        }),
+      );
+      if (response.statusCode != 200) {
+        print('❌ Failed to close the shift: ${response.body}');
+        return null;
+      }
+      return Map<String, dynamic>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase closeShift error: $e');
+      return null;
+    }
+  }
+
+  // ============================================================
   // 🔒 ATOMIC STOCK MOVEMENTS
   // ============================================================
 

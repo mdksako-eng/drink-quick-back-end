@@ -309,3 +309,55 @@ Requested in one batch; shipped as nine independently validated changes.
 - `npm --prefix drinks-calculator-backend test` → 7 suites / 77 tests passing
 - i18n parity → EN=999 FR=999
 
+---
+
+## Phase 10 — Shift handover, cash-up & Z-report ✅
+
+### Delivered
+- **A shift is a till session** — `shifts` table, one OPEN shift per person (a
+  partial unique index prevents two tills from being merged by accident). RLS is
+  enabled at boot and the client roles are revoked (`sql/rls_shifts.sql`).
+- **Open / close** — a staff member opens a shift with the float that is in the
+  drawer and closes it with the cash they counted. The staff member who opened a
+  shift may close it; a MANAGER (or the platform Administrator / company owner)
+  may close anyone's — mirrored in `utils/shiftMath.js` and
+  `lib/utils/shift_helper.dart`. One open shift per person.
+- **The Z-report is frozen** — it is computed from the orders inside the shift
+  window and stored on the row when the shift closes (`cash_expected`,
+  `variance`, `order_count`, `total_sales`, `collected`, `on_credit`,
+  `payment_breakdown`), so a report that was printed once never changes.
+  Cash expected = **opening float + money collected − cash paid out**; the
+  variance is counted − expected (negative = the till is short).
+- **Money-honest wording** — a tab is not cash: only collected money counts in
+  the drawer, and the screen says so.
+- **History** — every past shift with its sales and variance (green balanced,
+  red short, orange over).
+- **UI** — `lib/screens/shift_screen.dart` (open/close dialogs, live Z-report,
+  the frozen report after closing, history), `lib/providers/shift_provider.dart`,
+  drawer entry **Shift / Cash-up** for every non-customer role, `shift*` EN/FR
+  keys.
+
+### Files
+- `drinks-calculator-backend/utils/shiftMath.js` + `tests/shift_math.test.js`
+- `drinks-calculator-backend/sql/rls_shifts.sql`, boot DDL + RLS in `server.js`
+- `drinks-calculator-backend/routes/data.routes.js` — 5 routes
+  (`GET /shifts`, `GET /shifts/current`, `POST /shifts`,
+  `GET /shifts/:id/summary`, `PATCH /shifts/:id`)
+- `lib/models/shift_model.dart`, `lib/utils/shift_helper.dart`
+  + `test/shift_helper_test.dart`, `lib/providers/shift_provider.dart`,
+  `lib/screens/shift_screen.dart`, `lib/config/api_config.dart`,
+  `lib/services/supabase_service.dart`, `lib/widgets/custom_drawer.dart`,
+  `lib/main.dart`, `lib/utils/i18n.dart`
+
+### Validation
+- `flutter analyze lib` → 0 errors
+- `flutter test` → 227 passing (17 new shift / cash-up tests)
+- `npm --prefix drinks-calculator-backend test` → 8 suites / 104 tests passing
+- i18n parity → EN=1034 FR=1034
+
+### Also in this stretch
+- **Six-digit customer numbers** (`000001`): `nextCustomerNumber` pads to six
+  digits with no prefix, and compares numbers by their digits, so an older
+  `C-0001` row still blocks `000001`. `{prefix: 'C', width: 4}` restores the old
+  style.
+

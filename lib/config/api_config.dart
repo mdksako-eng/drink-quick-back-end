@@ -98,6 +98,13 @@ class ApiConfig {
   static const String dataCustomerTransactions =
       '$apiBase/data/customers/transactions';
   static String dataCustomer(dynamic id) => '$apiBase/data/customers/$id';
+  // 🕒 Shifts (cash-up / Z-report). One open shift per person; a staff member
+  // closes their own shift, a manager closes anyone's.
+  static const String dataShifts = '$apiBase/data/shifts';
+  static const String dataShiftCurrent = '$apiBase/data/shifts/current';
+  static String dataShift(dynamic id) => '$apiBase/data/shifts/$id';
+  static String dataShiftSummary(dynamic id) =>
+      '$apiBase/data/shifts/$id/summary';
   static const String dataPaymentTransactions =
       '$apiBase/data/payment-transactions';
   static String dataCompany(dynamic id) => '$apiBase/data/company/$id';

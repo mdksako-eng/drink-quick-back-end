@@ -336,6 +336,51 @@ app.use(async (req, res, next) => {
         console.log('⚠️ customers table warning:', customerTableErr.message);
       }
 
+      // 🕒 SHIFTS — the cash-up / Z-report. A staff member opens a shift with
+      // the float that is in the drawer; the report is computed from the orders
+      // inside that window and FROZEN onto the row when the shift closes, so a
+      // report that was printed once never changes afterwards. One open shift
+      // per person (partial unique index) keeps two tills from being merged.
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS shifts (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            staff_user_id INTEGER,
+            staff_name VARCHAR(120),
+            status VARCHAR(20) NOT NULL DEFAULT 'open',
+            opening_float NUMERIC(12,2) DEFAULT 0,
+            cash_payouts NUMERIC(12,2) DEFAULT 0,
+            cash_counted NUMERIC(12,2),
+            cash_expected NUMERIC(12,2),
+            variance NUMERIC(12,2),
+            order_count INTEGER DEFAULT 0,
+            total_sales NUMERIC(12,2) DEFAULT 0,
+            collected NUMERIC(12,2) DEFAULT 0,
+            on_credit NUMERIC(12,2) DEFAULT 0,
+            payment_breakdown JSONB,
+            notes TEXT,
+            opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            closed_at TIMESTAMP,
+            closed_by INTEGER,
+            closed_by_name VARCHAR(120)
+          )
+        `);
+        await pool.query(
+          `CREATE INDEX IF NOT EXISTS idx_shifts_company ON shifts(company_id, opened_at DESC)`
+        );
+        await pool.query(
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_shifts_one_open ON shifts(company_id, staff_user_id) WHERE status = 'open'`
+        );
+        // SECURITY: same rule as every other money table — the app only reaches
+        // shifts through the session-authenticated backend.
+        await pool.query(`ALTER TABLE shifts ENABLE ROW LEVEL SECURITY`);
+        await pool.query(`REVOKE ALL ON shifts FROM anon, authenticated`);
+        console.log('✅ shifts table ensured');
+      } catch (shiftTableErr) {
+        console.log('⚠️ shifts table warning:', shiftTableErr.message);
+      }
+
       // 🎁 One-time: grandfather all existing companies into Pro (except id 1).
       // Guarded by an app_flags marker so it runs exactly once.
       try {

@@ -17,6 +17,7 @@ import 'package:drinks_calculator_fixed/screens/auth_screen.dart';
 import 'package:drinks_calculator_fixed/screens/inventory_screen.dart';
 import 'package:drinks_calculator_fixed/screens/profile_screen.dart';
 import 'package:drinks_calculator_fixed/screens/customer_ledger_screen.dart';
+import 'package:drinks_calculator_fixed/screens/shift_screen.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/screens/manager_approval_screen.dart';
@@ -311,6 +312,16 @@ class CustomDrawer extends StatelessWidget {
                         MaterialPageRoute(
                             builder: (context) =>
                                 const CustomerLedgerScreen()));
+                  }, primaryColor: primaryColor),
+
+                // 🕒 Shift / cash-up: the Z-report of this till.
+                if (!isCustomer)
+                  _buildDrawerItem(context, Icons.schedule, t('shiftMenu'), () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const ShiftScreen()));
                   }, primaryColor: primaryColor),
 
                 _buildDrawerItem(context, Icons.history, t('invoiceHistoryDrawer'), () {

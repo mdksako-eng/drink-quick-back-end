@@ -154,3 +154,36 @@ describe('customer accounts hardening', () => {
     expect(routes).toContain("code: 'CREDIT_LIMIT'");
   });
 });
+
+describe('shift / cash-up hardening', () => {
+  test('server.js creates shifts with RLS on and one open shift per person', () => {
+    const server = read('server.js');
+    expect(server).toContain('CREATE TABLE IF NOT EXISTS shifts');
+    expect(server).toContain('ALTER TABLE shifts ENABLE ROW LEVEL SECURITY');
+    expect(server).toContain('REVOKE ALL ON shifts FROM anon, authenticated');
+    expect(server).toContain('idx_shifts_one_open');
+  });
+
+  test('a runnable RLS script exists for shifts', () => {
+    const sql = read('sql/rls_shifts.sql');
+    expect(sql).toContain('ALTER TABLE public.shifts ENABLE ROW LEVEL SECURITY');
+    expect(sql).toContain('REVOKE ALL ON public.shifts FROM anon, authenticated');
+  });
+
+  test('a staff member can only close their own shift', () => {
+    const routes = read('routes/data.routes.js');
+    expect(routes).toContain('canCloseShift({ user: req.user, shift })');
+    expect(routes).toContain('validateOpeningFloat(req.body.opening_float)');
+    expect(routes).toContain(
+      'validateClose({ shift, cashCounted: req.body.cash_counted })'
+    );
+    expect(routes).toContain('openShiftProblem(openShifts.rows)');
+  });
+
+  test('the Z-report is frozen onto the row when the shift closes', () => {
+    const routes = read('routes/data.routes.js');
+    expect(routes).toContain('cash_expected = $2');
+    expect(routes).toContain('payment_breakdown = $9');
+    expect(routes).toContain("status = 'closed', cash_counted = $1");
+  });
+});

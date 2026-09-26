@@ -18,6 +18,13 @@ const {
   exceedsCreditLimit,
   sumLedger,
 } = require('../utils/customerApproval');
+const {
+  summariseShift,
+  canCloseShift,
+  openShiftProblem,
+  validateOpeningFloat,
+  validateClose,
+} = require('../utils/shiftMath');
 
 const MANAGER_ROLES = ['Manager', 'Administrator', 'Admin'];
 
@@ -589,6 +596,198 @@ router.post('/customers/transactions', async (req, res) => {
   } catch (error) {
     console.error('POST /customers/transactions error:', error.message);
     res.status(500).json({ message: 'Failed to record this ledger entry' });
+  }
+});
+
+// ============================================================
+// 🕒 SHIFTS — open a till, close it with a cash count (Z-report)
+// ============================================================
+// One open shift per person. A staff member closes their own shift; a manager
+// closes anyone's. The rules live in utils/shiftMath.js.
+router.get('/shifts', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const params = [companyId];
+    let sql = 'SELECT * FROM shifts WHERE company_id = $1';
+    if (req.query.status) {
+      params.push(String(req.query.status).toLowerCase());
+      sql += ` AND status = $${params.length}`;
+    }
+    sql += ' ORDER BY opened_at DESC LIMIT 200';
+    const result = await req.db.query(sql, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('GET /shifts error:', error.message);
+    res.status(500).json({ message: 'Failed to load shifts' });
+  }
+});
+
+// The caller's own open shift. Declared before '/shifts/:id' routes so
+// "current" is never read as an id.
+router.get('/shifts/current', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const result = await req.db.query(
+      `SELECT * FROM shifts
+        WHERE company_id = $1 AND staff_user_id = $2 AND status = 'open'
+        ORDER BY opened_at DESC LIMIT 1`,
+      [companyId, req.user.id]
+    );
+    res.json(result.rows[0] || null);
+  } catch (error) {
+    console.error('GET /shifts/current error:', error.message);
+    res.status(500).json({ message: 'Failed to load the current shift' });
+  }
+});
+
+// Open a shift with the float that is in the drawer.
+router.post('/shifts', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const float = validateOpeningFloat(req.body.opening_float);
+    if (!float.ok) return res.status(400).json({ message: float.reason });
+
+    const openShifts = await req.db.query(
+      `SELECT id FROM shifts
+        WHERE company_id = $1 AND staff_user_id = $2 AND status = 'open'`,
+      [companyId, req.user.id]
+    );
+    const problem = openShiftProblem(openShifts.rows);
+    if (!problem.ok) return res.status(409).json({ message: problem.reason });
+
+    const result = await req.db.query(
+      `INSERT INTO shifts (company_id, staff_user_id, staff_name, status, opening_float)
+       VALUES ($1,$2,$3,'open',$4) RETURNING *`,
+      [companyId, req.user.id, req.user.username || null, float.amount]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('POST /shifts error:', error.message);
+    res.status(500).json({ message: 'Failed to open this shift' });
+  }
+});
+
+// The live Z-report of a shift (nothing is stored until it closes).
+router.get('/shifts/:id/summary', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const found = await req.db.query(
+      'SELECT * FROM shifts WHERE id = $1 AND company_id = $2',
+      [req.params.id, companyId]
+    );
+    if (found.rows.length === 0) {
+      return res.status(404).json({ message: 'Shift not found' });
+    }
+    const shift = found.rows[0];
+
+    // The sales of this shift: the orders taken inside its window.
+    const orders = await req.db.query(
+      `SELECT total_amount, amount_paid FROM orders
+        WHERE company_id = $1 AND created_at >= $2
+          AND created_at <= COALESCE($3, CURRENT_TIMESTAMP)`,
+      [companyId, shift.opened_at, shift.closed_at]
+    );
+    res.json(summariseShift({ shift, orders: orders.rows }));
+  } catch (error) {
+    console.error('GET /shifts/:id/summary error:', error.message);
+    res.status(500).json({ message: 'Failed to build the Z-report' });
+  }
+});
+
+// Close the shift: the Z-report is computed from the shift window and FROZEN
+// onto the row, so a report that was printed once never changes afterwards.
+router.patch('/shifts/:id', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const found = await req.db.query(
+      'SELECT * FROM shifts WHERE id = $1 AND company_id = $2',
+      [req.params.id, companyId]
+    );
+    if (found.rows.length === 0) {
+      return res.status(404).json({ message: 'Shift not found' });
+    }
+    const shift = found.rows[0];
+
+    const allowed = canCloseShift({ user: req.user, shift });
+    if (!allowed.ok) return res.status(403).json({ message: allowed.reason });
+
+    const valid = validateClose({ shift, cashCounted: req.body.cash_counted });
+    if (!valid.ok) return res.status(409).json({ message: valid.reason });
+
+    const payout = req.body.cash_payouts !== undefined
+      ? Math.max(0, Number(req.body.cash_payouts) || 0)
+      : Number(shift.cash_payouts) || 0;
+
+    const orders = await req.db.query(
+      `SELECT total_amount, amount_paid FROM orders
+        WHERE company_id = $1 AND created_at >= $2
+          AND created_at <= CURRENT_TIMESTAMP`,
+      [companyId, shift.opened_at]
+    );
+
+    // The money-method split is a bonus: a database without the payment
+    // columns still produces a correct cash-up.
+    let payments = { rows: [] };
+    try {
+      payments = await req.db.query(
+        `SELECT payment_method, amount, status FROM payment_transactions
+          WHERE company_id = $1 AND created_at >= $2
+            AND created_at <= CURRENT_TIMESTAMP`,
+        [companyId, shift.opened_at]
+      );
+    } catch (payErr) {
+      console.log('⚠️ Shift payment breakdown skipped:', payErr.message);
+    }
+
+    const summary = summariseShift({
+      shift: {
+        ...shift,
+        status: 'closed',
+        cash_payouts: payout,
+        cash_counted: valid.counted,
+      },
+      orders: orders.rows,
+      payments: payments.rows,
+    });
+
+    const result = await req.db.query(
+      `UPDATE shifts
+          SET status = 'closed', cash_counted = $1, cash_expected = $2,
+              variance = $3, cash_payouts = $4, order_count = $5,
+              total_sales = $6, collected = $7, on_credit = $8,
+              payment_breakdown = $9, notes = $10, closed_at = CURRENT_TIMESTAMP,
+              closed_by = $11, closed_by_name = $12
+        WHERE id = $13 AND company_id = $14
+        RETURNING *`,
+      [
+        valid.counted,
+        summary.expectedCash,
+        summary.variance,
+        payout,
+        summary.orderCount,
+        summary.sales,
+        summary.collected,
+        summary.onCredit,
+        JSON.stringify(summary.byMethod || {}),
+        req.body.notes ? String(req.body.notes) : shift.notes,
+        req.user.id,
+        req.user.username || null,
+        req.params.id,
+        companyId,
+      ]
+    );
+    res.json({ shift: result.rows[0], summary });
+  } catch (error) {
+    console.error('PATCH /shifts/:id error:', error.message);
+    res.status(500).json({ message: 'Failed to close this shift' });
   }
 });
 
