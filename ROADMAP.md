@@ -361,3 +361,54 @@ Requested in one batch; shipped as nine independently validated changes.
   `C-0001` row still blocks `000001`. `{prefix: 'C', width: 4}` restores the old
   style.
 
+---
+
+## Phase 11 — WhatsApp-native sharing (statements, Z-report, receipts) ✅
+
+### Delivered
+- **`lib/utils/whatsapp_helper.dart`** (pure, 16 tests):
+  - `link(phone, message)` → `https://wa.me/<number>?text=…`;
+    `shareLink(message)` → the contact picker, for when there is no recipient.
+  - `normalizeNumber()` — `6 99 12 34 56`, `0699123456` and `+237 699 123 456`
+    all become `237699123456`; a number that already carries another country
+    code is left alone.
+  - `message()` — bold title, optional subtitle, label/value rows, a total
+    block, notes and an italic footer. Optional rows with an empty value drop
+    out, so a report never shows a dangling label.
+  - `receiptBlock()` — a receipt goes inside a code block so WhatsApp keeps the
+    columns of the thermal layout.
+  - `clamp()` — WhatsApp refuses very long links, so an oversized message is cut
+    on a **line boundary** and marked with an ellipsis (the full report is always
+    in the app / PDF).
+- **`lib/services/whatsapp_service.dart`** — the I/O boundary (`url_launcher`),
+  so screens never launch URLs themselves: `send(phone:, message:)`,
+  `share(message:)`, `hasNumber()` (a button is disabled instead of failing after
+  the tap).
+- **Where it is wired**
+  - **Customer ledger sheet → Send the statement** (charges, payments, balance,
+    to the customer's number; disabled when no number is on file).
+  - **Shift screen** — the Z-report dialog has **Send the Z-report**, and the open
+    shift has a chat button that sends the live numbers *before* cashing up. It
+    goes to the shop's own number (`company_phone`) when set, otherwise WhatsApp
+    asks which contact to send it to.
+- No new dependency (`url_launcher` was already in `pubspec.yaml`), and the
+  message text is built from `t('…')` labels, so the helper stays pure and the
+  wording stays bilingual (`wa*` keys).
+
+### Files
+- `lib/utils/whatsapp_helper.dart` + `test/whatsapp_helper_test.dart`
+- `lib/services/whatsapp_service.dart`
+- `lib/screens/customer_ledger_screen.dart`, `lib/screens/shift_screen.dart`,
+  `lib/utils/i18n.dart`
+
+### Validation
+- `flutter analyze lib` → 0 errors
+- `flutter test` → 243 passing (16 new WhatsApp tests)
+- i18n parity → EN=1042 FR=1042
+
+### Next (agreed order)
+The shrinkage / variance detector: expected stock depletion (from
+`inventory_transactions`) vs the counted stock, ranked by value and attributed
+per staff member / shift — the data is already logged, so this is computation,
+not new data entry.
+

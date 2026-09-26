@@ -7,13 +7,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/shift_model.dart';
 import '../providers/shift_provider.dart';
+import '../services/whatsapp_service.dart';
+import '../utils/company_name_helper.dart';
 import '../utils/helpers.dart';
 import '../utils/i18n.dart';
 import '../utils/price_extension.dart';
 import '../utils/shift_helper.dart';
+import '../utils/whatsapp_helper.dart';
 
 class ShiftScreen extends StatefulWidget {
   const ShiftScreen({super.key});
@@ -244,21 +248,33 @@ class _ShiftScreenState extends State<ShiftScreen> {
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: provider.loading
-                    ? null
-                    : () => _closeDialog(provider, summary),
-                icon: const Icon(Icons.lock_outline, size: 20),
-                label: Text(t('shiftClose')),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade600,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+            Row(children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: provider.loading
+                      ? null
+                      : () => _closeDialog(provider, summary),
+                  icon: const Icon(Icons.lock_outline, size: 20),
+                  label: Text(t('shiftClose')),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 10),
+              // The owner's copy: send the current numbers before cashing up.
+              OutlinedButton(
+                onPressed:
+                    summary == null ? null : () => _sendReport(summary),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 14, horizontal: 14),
+                ),
+                child: const Icon(Icons.chat_outlined, size: 20),
+              ),
+            ]),
           ],
         ),
       ),
@@ -386,10 +402,54 @@ class _ShiftScreenState extends State<ShiftScreen> {
           ],
         ),
         actions: [
+          TextButton.icon(
+            onPressed: () => _sendReport(s),
+            icon: const Icon(Icons.chat_outlined, size: 18),
+            label: Text(t('waSendZReport')),
+          ),
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text(t('ok'))),
         ],
       ),
     );
+  }
+
+  /// Sends the Z-report on WhatsApp: to the shop's own number when it is on
+  /// file, otherwise WhatsApp asks which contact to send it to.
+  Future<void> _sendReport(ShiftSummary summary) async {
+    final shift = context.read<ShiftProvider>().current;
+    final company = await CompanyNameHelper.resolve();
+    final prefs = await SharedPreferences.getInstance();
+    final shopPhone = prefs.getString('company_phone');
+
+    final message = WhatsAppHelper.message(
+      title: t('waTitleZReport'),
+      subtitle: shift == null
+          ? company
+          : '${company == null ? '' : '$company · '}'
+              '${shift.staffName} · ${_time(shift.openedAt)} → '
+              '${_time(shift.closedAt)}',
+      rows: WhatsAppHelper.rows([
+        WhatsAppHelper.row(t('shiftSales'), summary.sales.formatted),
+        WhatsAppHelper.row(t('shiftCollected'), summary.collected.formatted),
+        WhatsAppHelper.row(t('shiftOnCredit'), summary.onCredit.formatted),
+        WhatsAppHelper.row(t('shiftPayouts'), summary.payouts.formatted),
+        WhatsAppHelper.row(t('shiftOrders'), '${summary.orderCount}'),
+        WhatsAppHelper.row(t('shiftCounted'), (summary.counted ?? 0).formatted),
+      ]),
+      totalLabel: t('shiftExpectedCash'),
+      totalValue: summary.expectedCash.formatted,
+      notes: [
+        '${t('shiftVariance')}: ${(summary.variance ?? 0).formatted}'
+            ' (${t(ShiftHelper.varianceKey(summary.variance))})',
+      ],
+      footer: '${t('waSentBy')} ${company ?? 'Drink Quick Cal'}',
+    );
+
+    final ok = WhatsAppService.hasNumber(shopPhone)
+        ? await WhatsAppService.send(phone: shopPhone, message: message)
+        : await WhatsAppService.share(message: message);
+    if (!mounted || ok) return;
+    Helpers.showToast(t('waUnavailable'), isError: true);
   }
 
   Widget _row(String label, String value, {Color? color}) => Padding(

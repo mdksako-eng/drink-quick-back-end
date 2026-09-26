@@ -13,10 +13,13 @@ import 'package:provider/provider.dart';
 import '../models/customer_model.dart';
 import '../providers/auth_provider.dart';
 import '../providers/customer_provider.dart';
+import '../services/whatsapp_service.dart';
+import '../utils/company_name_helper.dart';
 import '../utils/customer_ledger_helper.dart';
 import '../utils/helpers.dart';
 import '../utils/i18n.dart';
 import '../utils/price_extension.dart';
+import '../utils/whatsapp_helper.dart';
 
 class CustomerLedgerScreen extends StatefulWidget {
   const CustomerLedgerScreen({super.key});
@@ -542,6 +545,17 @@ class _CustomerLedgerScreenState extends State<CustomerLedgerScreen>
             t('custNoCredit'),
             style: TextStyle(fontSize: 12, color: Colors.grey[600]),
           ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: WhatsAppService.hasNumber(customer.phone)
+                ? () => _sendStatement(provider, customer)
+                : null,
+            icon: const Icon(Icons.chat_outlined, size: 18),
+            label: Text(t('waSendStatement')),
+          ),
+        ),
         const SizedBox(height: 16),
         Text(t('custLedgerTitle'),
             style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -698,6 +712,49 @@ class _CustomerLedgerScreenState extends State<CustomerLedgerScreen>
     }
 
     Helpers.showToast(result.message ?? t('custSaveFailed'), isError: true);
+  }
+
+  /// Sends the customer's statement on WhatsApp (disabled without a number).
+  Future<void> _sendStatement(
+    CustomerProvider provider,
+    Customer customer,
+  ) async {
+    final totals = provider.totalsFor(customer.id);
+    final entries = provider.entriesFor(customer.id).take(20).toList();
+    final company = await CompanyNameHelper.resolve();
+
+    final message = WhatsAppHelper.message(
+      title: t('waTitleStatement'),
+      subtitle:
+          '${t('custNumber')} ${customer.customerNumber} · ${customer.name}',
+      rows: WhatsAppHelper.rows([
+        WhatsAppHelper.row(t('custCharged'), totals.charged.formatted),
+        WhatsAppHelper.row(t('custPaid'), totals.paid.formatted),
+        ...entries.map(
+          (e) => WhatsAppHelper.row(
+            e.createdAt == null
+                ? (e.isPayment ? t('custAddPayment') : t('custAddCharge'))
+                : DateFormat('MM/dd').format(e.createdAt!),
+            '${e.amount.formatted}${e.reason.isEmpty ? '' : ' · ${e.reason}'}',
+          ),
+        ),
+      ]),
+      totalLabel: t('custBalance'),
+      totalValue: totals.balance.formatted,
+      footer: '${t('waSentBy')} ${company ?? 'Drink Quick Cal'}',
+    );
+
+    final ok = await WhatsAppService.send(
+      phone: customer.phone,
+      message: message,
+    );
+    if (!mounted || ok) return;
+    Helpers.showToast(
+      t(WhatsAppService.hasNumber(customer.phone)
+          ? 'waUnavailable'
+          : 'waNoPhone'),
+      isError: true,
+    );
   }
 
   /// Confirms a charge that goes past the credit limit — manager only.
