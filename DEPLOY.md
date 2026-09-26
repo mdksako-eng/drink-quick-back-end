@@ -146,6 +146,34 @@ To go live (Render → your service → **Environment**):
 | `FLUTTERWAVE_PUBLIC_KEY` / `FLUTTERWAVE_SECRET_KEY` | optional card rail |
 | `PLATFORM_MTN_SANDBOX` | `false` (only for direct MTN MoMo credentials) |
 
+**Before the live keys exist** (Notch Pay → [business.notchpay.co](https://business.notchpay.co)):
+1. Switch the environment selector (top bar) from **Sandbox** to **Production Mode**.
+2. Complete business verification — it may take 1–2 business days — and set the
+   settlement account the money is paid out to.
+3. Settings → **API Keys**: copy the **live** keys (`pk_live_…` / `sk_live_…`) and
+   the webhook **hash key**. Test keys simply do not exist in production mode, so
+   the live keys are what prove the switch went through.
+
+The three rails the app sells on all run through Notch Pay:
+
+| Rail | What the app sends | What Notch Pay gets |
+|---|---|---|
+| Card | `channel: "card"` | the account's card channel when it has one, otherwise the (unlocked) checkout page where card is one of the choices |
+| MTN MoMo | `channel: "mtn"` | `locked_channel: cm.mtn` + `locked_country: CM` |
+| Orange Money | `channel: "orange"` | `locked_channel: cm.orange` + `locked_country: CM` |
+
+Rail availability is read from the provider's own channel list, so the app
+**disables** a Mobile Money rail the account cannot charge and says why, instead
+of failing after the customer has typed their number:
+
+```
+GET /api/subscriptions/notchpay-channels       # session token required
+→ { data: { mode, known, supported: { card, mtn, orange }, cardChannel } }
+```
+
+`known: false` means the backend could not ask (provider unreachable) — the app
+then leaves every rail enabled, so a working rail is never hidden.
+
 Webhook URL to register in the Notch Pay dashboard:
 
 ```
@@ -153,7 +181,17 @@ https://<your-service>/api/subscriptions/notchpay-webhook
 ```
 
 Then redeploy and re-run `node scripts/check_payments.js` — it must report
-`mode: live` and `Everything ready for real money ✅`.
+`mode: live` and `Everything ready for real money ✅`. Confirm the rails too:
+
+```
+curl https://<your-service>/api/subscriptions/notchpay/health
+# → "notchpayMode": "live", "liveReady": true, "rails": ["card","mtn","orange"]
+```
+
+Last check, with the app: upgrade the **cheapest plan** first and pay a real
+amount. `/health` must already read `live` *before* you do — while it says `test`
+the payment would activate the plan without moving money (the app shows a
+*"Test mode"* banner on the subscription screen for exactly that reason).
 
 ---
 

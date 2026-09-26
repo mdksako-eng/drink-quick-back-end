@@ -164,6 +164,36 @@ function normalizeStatus(status) {
 }
 
 /**
+ * List the payment channels the account can currently charge (GET /channels).
+ * Card rails do not appear in the public docs, so this is the only reliable way
+ * to know whether the account has one.
+ * @param {object} [opts] { country, amount, currency, publicKey }
+ * @returns {Promise<Array|null>} items, or null when the call failed/parsed badly
+ */
+async function listChannels({ country, amount, currency, publicKey } = {}) {
+  const params = new URLSearchParams();
+  if (country) params.set('country', country);
+  if (amount) params.set('amount', String(amount));
+  if (currency) params.set('currency', currency);
+  const query = params.toString();
+
+  const response = await fetch(
+    `${NOTCHPAY_BASE_URL}/channels${query ? `?${query}` : ''}`,
+    {
+      method: 'GET',
+      headers: { Authorization: publicKey || PUBLIC_KEY },
+    }
+  );
+  if (!response.ok) return null;
+
+  const data = await response.json().catch(() => ({}));
+  if (Array.isArray(data.items)) return data.items;
+  if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.channels)) return data.channels;
+  return null;
+}
+
+/**
  * Verify a Notch Pay webhook signature (HMAC-SHA256 of the raw JSON body,
  * signed with the dashboard's webhook hash key; sent in `x-notch-signature`).
  */
@@ -191,6 +221,7 @@ module.exports = {
   status,
   initiatePayment,
   getPaymentStatus,
+  listChannels,
   normalizeStatus,
   verifyWebhookSignature,
 };

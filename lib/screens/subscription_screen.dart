@@ -6,6 +6,7 @@ import '../models/subscription_model.dart';
 import '../providers/plan_provider.dart';
 import '../services/payments_status_service.dart';
 import '../utils/i18n.dart';
+import '../utils/payment_channel_helper.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   /// When true the screen is used as the mandatory post-login gate: no back
@@ -659,7 +660,75 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  void _showUpgradeSheet(String plan, String title) {
+  /// Charge a subscription on one rail.
+  ///
+  /// Mobile Money keeps its existing flow (Notch Pay first, direct operator as
+  /// fallback). Card is not a lockable Notch Pay channel, so the backend opens
+  /// the checkout page for it — where card is one of the choices; if Notch Pay
+  /// cannot take it at all, the app's card provider is used instead. The fallback
+  /// only runs when no checkout was opened, so a customer is never charged twice.
+  Future<void> _railPay(String plan, PayRail rail) async {
+    switch (rail) {
+      case PayRail.mtn:
+        await _momoPay(plan, 'mtn');
+        break;
+      case PayRail.orange:
+        await _momoPay(plan, 'orange');
+        break;
+      case PayRail.card:
+        final opened = await _notchpayPay(plan, rail);
+        if (!opened) await _upgrade(plan);
+        break;
+    }
+  }
+
+  /// Open the Notch Pay checkout for [rail]. Returns true when the checkout page
+  /// was opened, so the caller knows not to start a second payment.
+  Future<bool> _notchpayPay(String plan, PayRail rail) async {
+    final provider = context.read<PlanProvider>();
+    setState(() => _busy = true);
+    try {
+      final notch =
+          await provider.notchpayInitiate(plan: plan, channel: rail.channel);
+      if (!mounted) return false;
+
+      final checkoutUrl = notch?['checkoutUrl']?.toString() ?? '';
+      if (checkoutUrl.isEmpty) return false;
+
+      final reference = notch?['reference']?.toString() ?? '';
+      final uri = Uri.parse(checkoutUrl);
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) await launchUrl(uri);
+
+      if (!mounted) return true;
+      if (reference.isNotEmpty) {
+        await _autoVerifyNotchpay(provider, reference);
+      } else {
+        await _autoVerifyPlan(provider);
+      }
+      return true;
+    } catch (e) {
+      debugPrint('Notch Pay ${rail.channel} failed: $e');
+      return false;
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Ask the server which rails the platform can actually charge, then offer
+  /// them. A rail the payment account cannot charge is shown disabled with the
+  /// reason — instead of failing after the customer has typed their number.
+  Future<void> _showUpgradeSheet(String plan, String title) async {
+    final provider = context.read<PlanProvider>();
+    var availability = PayChannelAvailability.unknown;
+    try {
+      final data = await provider.notchpayChannels();
+      if (data != null) availability = PayChannelAvailability.fromJson(data);
+    } catch (_) {
+      // No opinion from the server: every rail stays offered.
+    }
+    if (!mounted) return;
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -675,34 +744,41 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              ListTile(
-                leading: const Icon(Icons.credit_card),
-                title: Text(t('payByCard')),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _upgrade(plan);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.phone_android),
-                title: Text(t('payWithMomo')),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _momoPay(plan, 'mtn');
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.phone_android),
-                title: Text(t('payWithOrange')),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _momoPay(plan, 'orange');
-                },
-              ),
+              for (final rail in kPayRails)
+                ListTile(
+                  enabled: !_busy && availability.allows(rail),
+                  leading: Icon(rail.icon),
+                  title: Text(t(rail.labelKey)),
+                  subtitle: _railSubtitle(rail, availability),
+                  onTap: !_busy && availability.allows(rail)
+                      ? () {
+                          Navigator.pop(ctx);
+                          _railPay(plan, rail);
+                        }
+                      : null,
+                ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// One short line under a payment option: why it is disabled, or what tapping
+  /// it will do. Null when there is nothing useful to say.
+  Widget? _railSubtitle(PayRail rail, PayChannelAvailability availability) {
+    if (!availability.allows(rail)) {
+      return Text(t('payChannelUnavailable'),
+          style: TextStyle(fontSize: 12, color: Colors.orange[800]));
+    }
+    if (rail == PayRail.card) {
+      return Text(t('payChannelCardHint'),
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]));
+    }
+    if (availability.known) {
+      return Text(t('payChannelReady'),
+          style: TextStyle(fontSize: 12, color: Colors.green[700]));
+    }
+    return null;
   }
 }

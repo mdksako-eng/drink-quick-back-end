@@ -125,6 +125,11 @@ class PlanProvider extends ChangeNotifier {
     return SubscriptionService.notchpayInitiate(plan: plan, channel: channel);
   }
 
+  /// Which rails can be charged right now (card / MTN / Orange), as reported by
+  /// the server from the payment provider's own channel list.
+  Future<Map<String, dynamic>?> notchpayChannels() =>
+      SubscriptionService.notchpayChannels();
+
   /// Poll Notch Pay payment status; refreshes state when it becomes active.
   Future<Map<String, dynamic>?> notchpayStatus({required String reference}) async {
     final result = await SubscriptionService.notchpayStatus(reference: reference);

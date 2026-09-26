@@ -455,3 +455,48 @@ The shrinkage / variance detector — shipped as Phase 12 below.
 - No schema change and no ops step: the report is computed from movements the app
   already logs.
 
+---
+
+## Phase 13 — live subscriptions: card / MTN / Orange through Notch Pay ✅ (2026-09-26)
+
+**Where the money actually stands:** the deployed backend reports
+`mode: "test"` / `liveReady: false` — the platform Notch Pay account still holds
+test keys, so a paid plan can activate without real money moving. The code side is
+finished; going live is a Notch Pay dashboard + Render environment action
+(`DEPLOY.md` → *Are we taking REAL money yet?*).
+
+### Why card needed its own treatment
+Notch Pay's `locked_channel` takes provider slugs (`cm.mtn`, `cm.orange`); card is
+not in the published channel list — it appears on their Collect page among the
+methods the account is enabled for. So `channel: 'card'` locks to the account's
+card channel **when it has one** and otherwise opens the unlocked checkout page.
+The app's existing card provider stays as a fallback, and only runs when no
+checkout was opened, so a customer is never charged twice.
+
+### What shipped
+- `drinks-calculator-backend/utils/paymentChannels.js` (pure, 17 Jest tests):
+  `resolveChannel()` (short aliases and raw slugs, junk rejected), `lockCountryFor()`,
+  `summarizeChannels()`, `findCardSlug()`, `isCardProvider()`.
+- `utils/notchpay.js` → `listChannels()` (`GET /channels`); the route caches it for
+  5 minutes. `routes/subscriptions.js`:
+  - `notchpay-initiate` resolves the channel server-side, locks the country only
+    when it locks a channel, answers **400** for an unknown channel instead of
+    forwarding it, and returns `rail` + `channel`;
+  - new `GET /subscriptions/notchpay-channels` → `{ known, supported: { card, mtn,
+    orange }, cardChannel }`;
+  - `/health` now also reports `rails`.
+- `lib/utils/payment_channel_helper.dart` (pure, 12 tests) + `subscription_screen.dart`:
+  the upgrade sheet is built from `PayRail.card|mtn|orange`, a Mobile Money rail the
+  account cannot charge is disabled with the reason, and `known: false` (provider
+  unreachable) leaves every rail enabled.
+- 4 new EN/FR keys; `DEPLOY.md` documents the dashboard steps, the rail table and
+  the verification commands.
+
+### Validation
+- `flutter analyze lib` → 0 errors
+- `flutter test` → 276 passing (12 new)
+- `npm --prefix drinks-calculator-backend test` → 9 suites / 121 tests passing
+- i18n parity → EN=1075 FR=1075
+- `node --check` clean on `routes/subscriptions.js`, `utils/notchpay.js`,
+  `utils/paymentChannels.js`
+

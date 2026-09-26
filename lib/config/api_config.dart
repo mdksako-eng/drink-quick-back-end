@@ -125,6 +125,8 @@ class ApiConfig {
       '$apiBase/subscriptions/notchpay-initiate';
   static const String subscriptionNotchpayStatus =
       '$apiBase/subscriptions/notchpay-status';
+  static const String subscriptionNotchpayChannels =
+      '$apiBase/subscriptions/notchpay-channels';
 
   // Supabase headers (anon key) — legacy direct access only.
   static Map<String, String> get supabaseHeaders => {

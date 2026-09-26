@@ -199,6 +199,30 @@ class SubscriptionService {
     }
   }
 
+  /// Which rails the platform can actually charge (card / MTN / Orange).
+  /// Returns null when unauthenticated or when the server cannot say.
+  static Future<Map<String, dynamic>?> notchpayChannels() async {
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      if (token == null) return null;
+
+      final response = await http.get(
+        Uri.parse(ApiConfig.subscriptionNotchpayChannels),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return Map<String, dynamic>.from(data['data'] ?? {});
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('SubscriptionService.notchpayChannels error: $e');
+      return null;
+    }
+  }
+
   /// Poll Notch Pay payment status. Returns { active, status, ... }.
   static Future<Map<String, dynamic>?> notchpayStatus({
     required String reference,

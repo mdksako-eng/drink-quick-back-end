@@ -8,6 +8,7 @@ const flutterwave = require('../utils/flutterwave');
 const momo = require('../utils/momo');
 const orangeMoney = require('../utils/orange_money');
 const notchpay = require('../utils/notchpay');
+const paymentChannels = require('../utils/paymentChannels');
 
 // Plan prices (XAF — Central African CFA franc). Overridable via env.
 const PLAN_PRICES = {
@@ -609,6 +610,37 @@ router.post('/subscriptions/orange-webhook', async (req, res) => {
 // Money is paid to YOU (platform). Configured via NOTCHPAY_* env vars.
 // ============================================================
 
+// Which rails the account can charge changes only when Notch Pay is
+// reconfigured, yet the app asks on every upgrade tap — so cache it briefly.
+const CHANNELS_TTL_MS = 5 * 60 * 1000;
+let channelsCache = { at: 0, channels: [] };
+
+/**
+ * The Notch Pay channels this account can charge right now.
+ * Never throws: a failed lookup means "we don't know", which callers treat as
+ * "leave every rail enabled" rather than hiding a rail that may well work.
+ * @returns {Promise<Array>} [] when unknown
+ */
+async function loadChannels({ force = false } = {}) {
+  const fresh = channelsCache.channels.length > 0
+    && Date.now() - channelsCache.at < CHANNELS_TTL_MS;
+  if (!force && fresh) return channelsCache.channels;
+  if (!notchpay.isConfigured()) return channelsCache.channels;
+
+  try {
+    const items = await notchpay.listChannels({ country: 'CM' });
+    if (Array.isArray(items)) channelsCache = { at: Date.now(), channels: items };
+  } catch (error) {
+    console.warn('⚠️ Notch Pay channels lookup failed:', error.message);
+  }
+  return channelsCache.channels;
+}
+
+/** The account's card channel slug, or '' when it has none / we cannot tell. */
+async function cardSlugFromAccount() {
+  return paymentChannels.findCardSlug(await loadChannels());
+}
+
 async function activatePendingSubscription(db, reference, companyId) {
   const pending = await db.query(
     `SELECT id, plan, company_id FROM subscriptions WHERE reference = $1 AND status = 'pending'`,
@@ -636,9 +668,22 @@ router.post('/subscriptions/notchpay-initiate', async (req, res) => {
     if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired session' });
     if (!user.company_id) return res.status(400).json({ success: false, error: 'No company' });
 
-    const { plan, channel } = req.body || {}; // channel: 'cm.mtn' | 'cm.orange'
+    // channel: 'card' | 'mtn' | 'orange' (or a raw slug such as 'cm.mtn').
+    // 'card' locks to the account's card channel when it has one, and otherwise
+    // opens the checkout page where card is one of the choices.
+    const { plan, channel } = req.body || {};
     if (!VALID_PLANS.includes(plan)) return res.status(400).json({ success: false, error: 'Invalid plan' });
     if (!notchpay.isConfigured()) return res.status(503).json({ success: false, error: 'Notch Pay not configured' });
+
+    const resolved = paymentChannels.resolveChannel(channel, {
+      cardSlug: await cardSlugFromAccount(),
+    });
+    if (!resolved) {
+      return res.status(400).json({
+        success: false,
+        error: `Unsupported payment channel. Use one of: ${paymentChannels.PROVIDERS.join(', ')}.`,
+      });
+    }
 
     const price = PLAN_PRICES[plan];
     const reference = generateReference(user.company_id);
@@ -649,8 +694,9 @@ router.post('/subscriptions/notchpay-initiate', async (req, res) => {
       currency: price.currency,
       email: user.email || undefined,
       reference,
-      channel: channel || undefined,
-      country: channel ? 'CM' : undefined,
+      channel: resolved.slug || undefined,
+      // A locked channel must lock its country too, or Notch Pay rejects it.
+      country: resolved.lockCountry || undefined,
       description: `Drink Quick Cal ${plan} subscription`,
       callback: `${baseUrl}/api/subscriptions/notchpay-return`,
     });
@@ -671,6 +717,8 @@ router.post('/subscriptions/notchpay-initiate', async (req, res) => {
         amount: price.amount,
         currency: price.currency,
         provider: 'notchpay',
+        rail: resolved.provider,
+        channel: resolved.slug || null,
       },
     });
   } catch (error) {
@@ -771,6 +819,8 @@ router.get('/subscriptions/notchpay/health', (req, res) => {
     ...notch,
     //  'live' means real money will be collected from customers.
     notchpayMode: notch.mode,
+    // The rails the platform sells on: card, MTN MoMo, Orange Money.
+    rails: paymentChannels.PROVIDERS,
     platformMomo: {
       mtnConfigured: momo.isConfigured(platformMomo),
       orangeConfigured: orangeMoney.isConfigured(platformMomo),
@@ -785,6 +835,39 @@ router.get('/subscriptions/notchpay/health', (req, res) => {
       ? 'Live Notch Pay keys detected — subscription payments are real.'
       : 'Set NOTCHPAY_PUBLIC_KEY/PRIVATE_KEY to your pk_live_/sk_live_ keys (and PLATFORM_MTN_SANDBOX=false for direct MoMo) to take live payments.',
   });
+});
+
+// 🔎 Which rails can be charged right now (card / MTN / Orange). The app reads
+// this before showing the upgrade options, so a rail the account cannot charge
+// is never presented as if it works. `known:false` means we could not ask (the
+// app then leaves every rail enabled instead of hiding a working one).
+router.get('/subscriptions/notchpay-channels', async (req, res) => {
+  try {
+    const user = await requireSessionUser(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+
+    const channels = await loadChannels({ force: req.query.refresh === '1' });
+    const supported = paymentChannels.summarizeChannels(channels);
+    const known = channels.length > 0;
+
+    res.json({
+      success: true,
+      data: {
+        notchpayConfigured: notchpay.isConfigured(),
+        mode: notchpay.status().mode,
+        known,
+        rails: paymentChannels.PROVIDERS,
+        supported: known
+          ? { card: supported.card, mtn: supported.mtn, orange: supported.orange }
+          : null,
+        channels: known ? supported.slugs : [],
+        cardChannel: paymentChannels.findCardSlug(channels) || null,
+      },
+    });
+  } catch (error) {
+    console.error('GET /subscriptions/notchpay-channels error:', error.message);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
 });
 
 module.exports = router;
