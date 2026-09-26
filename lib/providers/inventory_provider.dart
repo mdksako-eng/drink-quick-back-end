@@ -254,22 +254,67 @@ class InventoryProvider with ChangeNotifier {
     }
   }
 
-  // Update item quantity
-  Future<void> updateQuantity(String drinkId, int newQuantity) async {
+  /// Sets the counted quantity of an item — a stock take.
+  ///
+  /// A stock take used to change the number silently, which is exactly where
+  /// shrinkage hides: the books moved, nobody said why. The difference is now
+  /// recorded as a movement (reason `stocktake`, valued at cost) so the variance
+  /// report can show who recounted and how much left the shelf.
+  Future<void> updateQuantity(
+    String drinkId,
+    int newQuantity, {
+    String? performedBy,
+  }) async {
     final index = _inventoryItems.indexWhere((item) => item.drinkId == drinkId);
-    if (index != -1) {
-      _inventoryItems[index].quantity = newQuantity;
-      _inventoryItems[index].lastRestocked = DateTime.now();
-      await _saveToLocalStorage();
-      notifyListeners();
-      // Sync to Supabase
+    if (index == -1) return;
+
+    final item = _inventoryItems[index];
+    final previous = item.quantity;
+    final delta = newQuantity - previous;
+
+    item.quantity = newQuantity;
+    item.lastRestocked = DateTime.now();
+    await _saveToLocalStorage();
+    notifyListeners();
+    // Sync to Supabase
+    try {
+      await SupabaseService.updateInventory(drinkId, {
+        'quantity': newQuantity,
+        'last_restocked': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('Supabase update error: $e');
+    }
+
+    // Nothing changed (or the number was merely corrected to the same value):
+    // there is nothing to explain.
+    if (delta == 0) return;
+
+    final transaction = InventoryTransaction(
+      id: 'txn_${DateTime.now().millisecondsSinceEpoch}',
+      drinkId: drinkId,
+      drinkName: item.drinkName,
+      quantity: delta.abs(),
+      type: delta < 0 ? 'out' : 'in',
+      date: DateTime.now(),
+      reason: 'stocktake',
+      performedBy: performedBy,
+      companyId: SupabaseService.currentCompanyId,
+      purchasePriceAtSale: item.purchasePrice,
+    );
+    _transactions.add(transaction);
+    await _saveToLocalStorage();
+    notifyListeners();
+
+    if (SupabaseService.canUseSupabase) {
       try {
-        await SupabaseService.updateInventory(drinkId, {
-          'quantity': newQuantity,
-          'last_restocked': DateTime.now().toIso8601String(),
-        });
+        final ok = await SupabaseService.saveTransaction(transaction.toJson());
+        if (!ok) {
+          NotificationService()
+              .showSyncFailed(action: 'Stock take', detail: item.drinkName);
+        }
       } catch (e) {
-        debugPrint('Supabase update error: $e');
+        debugPrint('⚠️ Could not sync the stock-take movement: $e');
       }
     }
   }

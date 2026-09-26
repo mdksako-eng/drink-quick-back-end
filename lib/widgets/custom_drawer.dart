@@ -18,6 +18,7 @@ import 'package:drinks_calculator_fixed/screens/inventory_screen.dart';
 import 'package:drinks_calculator_fixed/screens/profile_screen.dart';
 import 'package:drinks_calculator_fixed/screens/customer_ledger_screen.dart';
 import 'package:drinks_calculator_fixed/screens/shift_screen.dart';
+import 'package:drinks_calculator_fixed/screens/variance_screen.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/screens/manager_approval_screen.dart';
@@ -360,6 +361,18 @@ class CustomDrawer extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                               builder: (context) => const ForecastScreen()));
+                    });
+                  }, primaryColor: primaryColor),
+
+                if (isManager || isAdmin)
+                  _buildDrawerItem(context, Icons.trending_down, t('varMenu'),
+                      () {
+                    Navigator.pop(context);
+                    _requireFeature(context, 'reports', () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const VarianceScreen()));
                     });
                   }, primaryColor: primaryColor),
 

@@ -1,4 +1,15 @@
 // models/inventory_model.dart
+
+/// Tolerant number read: Postgres NUMERIC columns reach the app as strings
+/// ("800.00"), and `.toDouble()` on a string throws — which used to wipe the
+/// whole inventory/ledger load (and with it the price history the variance
+/// report needs).
+double? _asDouble(Object? value) {
+  if (value == null) return null;
+  if (value is num) return value.toDouble();
+  return double.tryParse(value.toString().trim());
+}
+
 class InventoryItem {
   final String id;
   final String drinkId;
@@ -59,7 +70,7 @@ class InventoryItem {
               : DateTime.now()),
       category: json['category']?.toString() ?? 'Beer',
       unit: json['unit']?.toString() ?? 'Bottle',
-      purchasePrice: (json['purchasePrice'] ?? json['purchase_price'] ?? 0).toDouble(),
+      purchasePrice: _asDouble(json['purchasePrice'] ?? json['purchase_price']) ?? 0,
       companyId: json['company_id'],
     );
   }
@@ -136,8 +147,10 @@ class InventoryTransaction {
       orderId: json['orderId']?.toString() ?? json['order_id']?.toString(),
       performedBy: json['performedBy']?.toString() ?? json['performed_by']?.toString(),
       companyId: json['company_id'],
-      purchasePriceAtSale: (json['purchasePriceAtSale'] ?? json['purchase_price_at_sale'])?.toDouble(),
-      sellingPriceAtSale: (json['sellingPriceAtSale'] ?? json['selling_price_at_sale'])?.toDouble(),
+      purchasePriceAtSale: _asDouble(
+          json['purchasePriceAtSale'] ?? json['purchase_price_at_sale']),
+      sellingPriceAtSale: _asDouble(
+          json['sellingPriceAtSale'] ?? json['selling_price_at_sale']),
     );
   }
 }

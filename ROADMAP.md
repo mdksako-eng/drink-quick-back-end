@@ -407,8 +407,51 @@ Requested in one batch; shipped as nine independently validated changes.
 - i18n parity → EN=1042 FR=1042
 
 ### Next (agreed order)
-The shrinkage / variance detector: expected stock depletion (from
-`inventory_transactions`) vs the counted stock, ranked by value and attributed
-per staff member / shift — the data is already logged, so this is computation,
-not new data entry.
+The shrinkage / variance detector — shipped as Phase 12 below.
+
+---
+
+## Phase 12 — Shrinkage / variance detector (+ a real stock take) ✅
+
+### Delivered
+- **A stock take finally exists.** Inventory → tap an item → **Stock take** asks
+  for the quantity actually counted on the shelf. Until now the quantity could
+  only be *added* (restock, sales), so stock that walked out never had a moment
+  where it could be noticed — and only a physical count can reveal it.
+- **The silent overwrite is gone.** `InventoryProvider.updateQuantity` used to
+  change the number and record nothing, which is exactly where shrinkage hid. It
+  now writes the difference as a movement (`reason: stocktake`, valued at cost)
+  carrying the staff member's name, and writes nothing at all when the count
+  matches the books (a correct count leaves no noise).
+- **`lib/utils/variance_helper.dart`** (pure, 21 tests): a movement is a LOSS
+  when it is outgoing and its reason is not a sale; losses are valued at **cost**
+  (never at retail — otherwise the number is inflated), sales at the selling
+  price. It returns totals, the unexplained share (blank or unknown reasons),
+  the loss rate against turnover, and rankings by drink / staff / reason, plus
+  `reasonKey()` mapping movement reasons to EN/FR labels.
+- **`lib/screens/variance_screen.dart`** (drawer → **Shrinkage**, manager/admin,
+  plan-gated on `reports`): 7/30/90-day selector, a KPI card (lost value, units,
+  share of turnover, biggest single loss), an orange "Unexplained" line when
+  losses have no reason, three ranked cards with share bars, and the movements
+  themselves with the unexplained ones flagged for a conversation.
+- **Two NUMERIC-parsing bugs fixed on the way** (`lib/models/inventory_model.dart`):
+  `purchasePrice`, `purchase_price_at_sale` and `selling_price_at_sale` are
+  NUMERIC columns and reach the app as strings (`"800.00"`); `.toDouble()` on
+  them threw and dropped the whole inventory/ledger load. Parsing is now tolerant
+  — which is what makes the price history usable for this report at all.
+
+### Files
+- `lib/utils/variance_helper.dart` + `test/variance_helper_test.dart`
+- `lib/screens/variance_screen.dart`, `lib/screens/inventory_screen.dart`
+  (stock-take dialog + action), `lib/providers/inventory_provider.dart`
+  (records the variance), `lib/models/inventory_model.dart`, `lib/widgets/custom_drawer.dart`,
+  `lib/utils/i18n.dart`
+
+### Validation
+- `flutter analyze lib` → 0 errors
+- `flutter test` → 264 passing (21 new variance tests)
+- `npm --prefix drinks-calculator-backend test` → 8 suites / 104 tests passing
+- i18n parity → EN=1072 FR=1072
+- No schema change and no ops step: the report is computed from movements the app
+  already logs.
 

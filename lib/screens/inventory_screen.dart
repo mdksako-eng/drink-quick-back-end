@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
+import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/models/inventory_model.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
 import 'package:drinks_calculator_fixed/utils/helpers.dart';
@@ -117,6 +118,80 @@ class _InventoryScreenState extends State<InventoryScreen> {
     }
 
     return filtered;
+  }
+
+  /// 👁️ Stock take: the quantity actually counted on the shelf.
+  ///
+  /// The difference against the books is stored as a movement (reason
+  /// `stocktake`, valued at cost) so the variance report can show how much left
+  /// the shelf and who counted it — a physical count is the only way to see
+  /// stock that never made it to a sale.
+  void _showStockTakeDialog(InventoryItem item) {
+    final countedController = TextEditingController();
+    final auth = Provider.of<AuthProvider>(this.context, listen: false);
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          const Icon(Icons.fact_check_outlined, color: Colors.blue),
+          const SizedBox(width: 10),
+          Expanded(child: Text('${t('stockTake')}: ${item.drinkName}')),
+        ]),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('${t('currentStock')}: ${item.quantity}',
+              style: const TextStyle(fontSize: 14, color: Colors.grey)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: countedController,
+            keyboardType: TextInputType.number,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: t('countedQuantity'),
+              prefixIcon: const Icon(Icons.calculate_outlined),
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(t('stockTakeHint'),
+              style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('cancel')),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              final counted = int.tryParse(countedController.text.trim());
+              if (counted == null || counted < 0) {
+                Helpers.showToast(t('stockTakeInvalid'), isError: true);
+                return;
+              }
+              final inventoryProvider = Provider.of<InventoryProvider>(
+                  this.context,
+                  listen: false);
+              await inventoryProvider.updateQuantity(
+                item.drinkId,
+                counted,
+                performedBy: auth.currentUser?.username,
+              );
+              if (!dialogContext.mounted) return;
+              Navigator.pop(dialogContext);
+              final delta = counted - item.quantity;
+              Helpers.showToast(
+                delta == 0
+                    ? t('stockTakeMatched')
+                    : '${t('stockTakeSaved')} (${delta > 0 ? '+' : ''}$delta)',
+              );
+            },
+            icon: const Icon(Icons.save, size: 18),
+            label: Text(t('save')),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showAddStockDialog(InventoryItem item) {
@@ -331,6 +406,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     label: Text(t('addStock')),
                     style:
                         ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showStockTakeDialog(item);
+                    },
+                    icon: const Icon(Icons.fact_check_outlined, size: 18),
+                    label: Text(t('stockTake')),
+                    style:
+                        ElevatedButton.styleFrom(backgroundColor: Colors.blue),
                   ),
                   ElevatedButton.icon(
                     onPressed: () {
