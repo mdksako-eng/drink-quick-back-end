@@ -273,6 +273,69 @@ app.use(async (req, res, next) => {
         console.log('⚠️ forecast_events table warning:', eventTableErr.message);
       }
 
+      // 👥 CUSTOMERS — the "customer number" a shop can put a tab (credit) on.
+      // STAFF enrol a customer; only a MANAGER may approve, reject, block or
+      // re-limit the account (utils/customerApproval.js holds the rule), and
+      // only an approved account may hold credit. Every charge and payment is
+      // written to the ledger below, so a balance is never guessed.
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS customers (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            customer_number VARCHAR(20) NOT NULL,
+            name VARCHAR(120) NOT NULL,
+            phone VARCHAR(40),
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            credit_limit NUMERIC(12,2) DEFAULT 0,
+            notes TEXT,
+            enrolled_by INTEGER,
+            approved_by INTEGER,
+            approved_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await pool.query(
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_number ON customers(company_id, customer_number)`
+        );
+        await pool.query(
+          `CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(company_id, status)`
+        );
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS customer_credit_transactions (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            customer_id INTEGER NOT NULL,
+            kind VARCHAR(10) NOT NULL,
+            amount NUMERIC(12,2) NOT NULL,
+            reason VARCHAR(120),
+            order_id VARCHAR(60),
+            method VARCHAR(30),
+            performed_by INTEGER,
+            performed_by_name VARCHAR(120),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await pool.query(
+          `CREATE INDEX IF NOT EXISTS idx_customer_credit_customer ON customer_credit_transactions(company_id, customer_id, created_at DESC)`
+        );
+        // SECURITY: same rule as forecast_events — the app only reaches these
+        // tables through the session-authenticated backend, so RLS with no
+        // policies closes the anon-key hole without affecting the app.
+        await pool.query(`ALTER TABLE customers ENABLE ROW LEVEL SECURITY`);
+        await pool.query(`REVOKE ALL ON customers FROM anon, authenticated`);
+        await pool.query(
+          `ALTER TABLE customer_credit_transactions ENABLE ROW LEVEL SECURITY`
+        );
+        await pool.query(
+          `REVOKE ALL ON customer_credit_transactions FROM anon, authenticated`
+        );
+        console.log('✅ customers + credit ledger tables ensured');
+      } catch (customerTableErr) {
+        console.log('⚠️ customers table warning:', customerTableErr.message);
+      }
+
       // 🎁 One-time: grandfather all existing companies into Pro (except id 1).
       // Guarded by an app_flags marker so it runs exactly once.
       try {

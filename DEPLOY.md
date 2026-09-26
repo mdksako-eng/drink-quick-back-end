@@ -48,6 +48,30 @@ table is no longer used (the runtime creation of it was removed from
 ```
 (or paste the file's contents and Run). The app works either way.
 
+### Step 1d — `customers` + `customer_credit_transactions` (added later)
+
+The customer-number accounts and their credit ledger (tabs) are created by the
+backend at boot **with RLS enabled and the client roles revoked** — the app only
+reaches them through the session-authenticated backend
+(`/api/data/customers…`). Both tables hold money-related data, so the anon key
+must never be able to read or write them. To apply the lockdown to an existing
+database straight away:
+
+Option A (Dashboard): paste `drinks-calculator-backend/sql/rls_customers.sql` into the SQL Editor → **Run**.
+Option B (psql): `psql "$DATABASE_URL" -f drinks-calculator-backend/sql/rls_customers.sql`
+
+Verify (with the anon key):
+```
+GET {SUPABASE_URL}/rest/v1/customers?select=id                    → [] or 401
+GET {SUPABASE_URL}/rest/v1/customer_credit_transactions?select=id → [] or 401
+```
+
+Who can do what (enforced by `utils/customerApproval.js`):
+- **Staff** enrol a customer → the account waits as `pending` and can hold no credit.
+- **Manager / Administrator** approve, reject, block or set the credit limit; a
+  manager's own enrolment is approved immediately.
+- Credit is only ever written against an `approved` account.
+
 
 ---
 

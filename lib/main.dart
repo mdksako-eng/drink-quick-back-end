@@ -24,6 +24,7 @@ import 'package:drinks_calculator_fixed/services/company_branding_service.dart';
 import 'package:drinks_calculator_fixed/utils/payment_helper.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
+import 'package:drinks_calculator_fixed/providers/customer_provider.dart';
 import 'package:drinks_calculator_fixed/screens/lock_screen.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/voice_service.dart';
@@ -241,6 +242,8 @@ class MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => SyncProvider()),
         ChangeNotifierProvider(create: (_) => PaymentHelper()),
         ChangeNotifierProvider(create: (_) => PlanProvider()),
+        // 👥 Customer accounts ("customer numbers") + their credit ledger.
+        ChangeNotifierProvider(create: (_) => CustomerProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

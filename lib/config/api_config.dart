@@ -92,6 +92,12 @@ class ApiConfig {
       '$apiBase/data/inventory-transactions';
   static const String dataSettings = '$apiBase/data/settings';
   static const String dataEvents = '$apiBase/data/events';
+  // 👥 Customer accounts ("customer numbers") and their credit ledger (tabs).
+  // Staff enrol; only a manager approves — see utils/customer_ledger_helper.dart.
+  static const String dataCustomers = '$apiBase/data/customers';
+  static const String dataCustomerTransactions =
+      '$apiBase/data/customers/transactions';
+  static String dataCustomer(dynamic id) => '$apiBase/data/customers/$id';
   static const String dataPaymentTransactions =
       '$apiBase/data/payment-transactions';
   static String dataCompany(dynamic id) => '$apiBase/data/company/$id';

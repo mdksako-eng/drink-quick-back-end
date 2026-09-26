@@ -8,6 +8,16 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { getSessionUser } = require('../middleware/sessionAuth');
+const {
+  canEnrollCustomer,
+  initialStatusForRole,
+  canDecideCustomer,
+  canDecideStatus,
+  nextCustomerNumber,
+  canAddLedgerEntry,
+  exceedsCreditLimit,
+  sumLedger,
+} = require('../utils/customerApproval');
 
 const MANAGER_ROLES = ['Manager', 'Administrator', 'Admin'];
 
@@ -320,6 +330,265 @@ router.delete('/events/:id', async (req, res) => {
   } catch (error) {
     console.error('DELETE /events/:id error:', error.message);
     res.status(500).json({ message: 'Failed to delete forecast event' });
+  }
+});
+
+// ============================================================
+// 👥 CUSTOMERS — "customer numbers" + their credit ledger (tabs)
+// ============================================================
+// STAFF enrol a customer; only a MANAGER decides who is approved, blocked or
+// re-limited (rules in utils/customerApproval.js). Credit may only be given on
+// an approved account, so the ledger refuses anything else.
+router.get('/customers', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const params = [companyId];
+    let sql = 'SELECT * FROM customers WHERE company_id = $1';
+    if (req.query.status) {
+      params.push(String(req.query.status).toLowerCase());
+      sql += ` AND status = $${params.length}`;
+    }
+    sql += ' ORDER BY customer_number ASC';
+    const result = await req.db.query(sql, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('GET /customers error:', error.message);
+    res.status(500).json({ message: 'Failed to load customers' });
+  }
+});
+
+// Ledger entries, newest first. Declared BEFORE any '/customers/:id' route so
+// "transactions" is never mistaken for an id.
+router.get('/customers/transactions', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const params = [companyId];
+    let sql =
+      'SELECT * FROM customer_credit_transactions WHERE company_id = $1';
+    if (req.query.customer_id) {
+      params.push(req.query.customer_id);
+      sql += ` AND customer_id = $${params.length}`;
+    }
+    sql += ' ORDER BY created_at DESC, id DESC LIMIT 500';
+    const result = await req.db.query(sql, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('GET /customers/transactions error:', error.message);
+    res.status(500).json({ message: 'Failed to load the credit ledger' });
+  }
+});
+
+// Enrol a customer. The account starts as 'pending' for staff (a manager must
+// approve) and 'approved' when a manager enrols it themselves.
+router.post('/customers', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const allowed = canEnrollCustomer(req.user);
+    if (!allowed.ok) return res.status(403).json({ message: allowed.reason });
+
+    const name = (req.body.name || '').toString().trim();
+    if (!name) {
+      return res.status(400).json({ message: 'Customer name is required' });
+    }
+
+    // The number is always generated here — never accepted from the client.
+    const existing = await req.db.query(
+      'SELECT customer_number FROM customers WHERE company_id = $1',
+      [companyId]
+    );
+    const customerNumber = nextCustomerNumber(
+      existing.rows.map((r) => r.customer_number)
+    );
+
+    const status = initialStatusForRole(req.user.role);
+    const approved = status === 'approved';
+    // Only the manager may hand out a credit limit; a staff enrolment starts
+    // with none, so nothing can be charged before the manager sets one.
+    const creditLimit = canDecideCustomer(req.user).ok
+      ? Number(req.body.credit_limit) || 0
+      : 0;
+
+    const result = await req.db.query(
+      `INSERT INTO customers
+         (company_id, customer_number, name, phone, status, credit_limit, notes,
+          enrolled_by, approved_by, approved_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       RETURNING *`,
+      [
+        companyId,
+        customerNumber,
+        name,
+        req.body.phone ? String(req.body.phone).trim() : null,
+        status,
+        creditLimit,
+        req.body.notes ? String(req.body.notes) : null,
+        req.user.id,
+        approved ? req.user.id : null,
+        approved ? new Date() : null,
+      ]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('POST /customers error:', error.message);
+    res.status(500).json({ message: 'Failed to enrol this customer' });
+  }
+});
+
+// Approve / reject / block / re-limit a customer — MANAGER ONLY. This is the
+// rule that keeps the final say with the manager: a staff member gets a 403.
+router.patch('/customers/:id', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const decided = canDecideCustomer(req.user);
+    if (!decided.ok) return res.status(403).json({ message: decided.reason });
+
+    const current = await req.db.query(
+      'SELECT * FROM customers WHERE id = $1 AND company_id = $2',
+      [req.params.id, companyId]
+    );
+    if (current.rows.length === 0) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+    const customer = current.rows[0];
+
+    const sets = [];
+    const params = [];
+    const push = (col, value) => {
+      params.push(value);
+      sets.push(`${col} = $${params.length}`);
+    };
+
+    if (req.body.status !== undefined) {
+      const next = String(req.body.status).toLowerCase();
+      const move = canDecideStatus(customer.status, next);
+      if (!move.ok) return res.status(409).json({ message: move.reason });
+      push('status', next);
+      if (next === 'approved') {
+        push('approved_by', req.user.id);
+        push('approved_at', new Date());
+      }
+    }
+    if (req.body.credit_limit !== undefined) {
+      push('credit_limit', Number(req.body.credit_limit) || 0);
+    }
+    if (req.body.name !== undefined) {
+      const name = String(req.body.name).trim();
+      if (!name) {
+        return res.status(400).json({ message: 'Customer name is required' });
+      }
+      push('name', name);
+    }
+    if (req.body.phone !== undefined) {
+      push('phone', String(req.body.phone).trim() || null);
+    }
+    if (req.body.notes !== undefined) push('notes', String(req.body.notes));
+    if (sets.length === 0) {
+      return res.status(400).json({ message: 'Nothing to update' });
+    }
+
+    push('updated_at', new Date());
+    const result = await req.db.query(
+      `UPDATE customers SET ${sets.join(', ')}
+        WHERE id = $${params.length + 1} AND company_id = $${params.length + 2}
+        RETURNING *`,
+      [...params, req.params.id, companyId]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('PATCH /customers/:id error:', error.message);
+    res.status(500).json({ message: 'Failed to update this customer' });
+  }
+});
+
+// Charge a tab, or record a payment against it. Answers with the new balance.
+router.post('/customers/transactions', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const kind = String(req.body.kind || '').toLowerCase();
+    const found = await req.db.query(
+      'SELECT * FROM customers WHERE id = $1 AND company_id = $2',
+      [req.body.customer_id, companyId]
+    );
+    const customer = found.rows[0] || null;
+
+    const allowed = canAddLedgerEntry({
+      user: req.user,
+      customer,
+      kind,
+      amount: req.body.amount,
+    });
+    if (!allowed.ok) {
+      return res
+        .status(customer ? 409 : 404)
+        .json({ message: allowed.reason });
+    }
+
+    const amount = Number(req.body.amount);
+
+    // Going past the agreed limit is possible, but only on purpose: a manager
+    // must confirm it. The limit is the manager's rule, not the till's.
+    if (kind === 'charge') {
+      const ledger = await req.db.query(
+        'SELECT kind, amount FROM customer_credit_transactions WHERE company_id = $1 AND customer_id = $2',
+        [companyId, customer.id]
+      );
+      const { balance } = sumLedger(ledger.rows);
+      const over = exceedsCreditLimit({
+        balance,
+        amount,
+        creditLimit: customer.credit_limit,
+      });
+      const overridden =
+        req.body.override_limit === true && canDecideCustomer(req.user).ok;
+      if (over && !overridden) {
+        return res.status(409).json({
+          message: 'This charge goes past the credit limit — a manager must approve it',
+          code: 'CREDIT_LIMIT',
+          balance,
+          creditLimit: Number(customer.credit_limit) || 0,
+        });
+      }
+    }
+
+    const inserted = await req.db.query(
+      `INSERT INTO customer_credit_transactions
+         (company_id, customer_id, kind, amount, reason, order_id, method,
+          performed_by, performed_by_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING *`,
+      [
+        companyId,
+        customer.id,
+        kind,
+        amount,
+        req.body.reason ? String(req.body.reason).slice(0, 120) : null,
+        req.body.order_id ? String(req.body.order_id) : null,
+        req.body.method ? String(req.body.method) : null,
+        req.user.id,
+        req.user.username || null,
+      ]
+    );
+    await req.db.query('UPDATE customers SET updated_at = $1 WHERE id = $2', [
+      new Date(),
+      customer.id,
+    ]);
+
+    const ledger = await req.db.query(
+      'SELECT kind, amount FROM customer_credit_transactions WHERE company_id = $1 AND customer_id = $2',
+      [companyId, customer.id]
+    );
+    res.status(201).json({ entry: inserted.rows[0], ...sumLedger(ledger.rows) });
+  } catch (error) {
+    console.error('POST /customers/transactions error:', error.message);
+    res.status(500).json({ message: 'Failed to record this ledger entry' });
   }
 });
 

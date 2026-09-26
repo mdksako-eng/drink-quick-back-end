@@ -53,6 +53,52 @@ class StockMoveResult {
       const StockMoveResult._(ok: false, offline: true);
 }
 
+/// Result of writing to a customer's tab.
+///
+/// A charge past the agreed credit limit comes back as [limitExceeded] — the
+/// caller can then ask a manager and re-send with `overrideLimit: true`.
+class LedgerWriteResult {
+  final bool ok;
+  final bool limitExceeded;
+  final double balance;
+  final double creditLimit;
+  final String? message;
+
+  const LedgerWriteResult({
+    required this.ok,
+    this.limitExceeded = false,
+    this.balance = 0,
+    this.creditLimit = 0,
+    this.message,
+  });
+
+  factory LedgerWriteResult.success({
+    double balance = 0,
+    double creditLimit = 0,
+  }) =>
+      LedgerWriteResult(
+        ok: true,
+        balance: balance,
+        creditLimit: creditLimit,
+      );
+
+  factory LedgerWriteResult.limit({
+    required double balance,
+    required double creditLimit,
+    String? message,
+  }) =>
+      LedgerWriteResult(
+        ok: false,
+        limitExceeded: true,
+        balance: balance,
+        creditLimit: creditLimit,
+        message: message,
+      );
+
+  factory LedgerWriteResult.failed(String? message) =>
+      LedgerWriteResult(ok: false, message: message);
+}
+
 class SupabaseService {
   static int? _currentCompanyId;
   static int? _currentUserId;
@@ -700,6 +746,183 @@ class SupabaseService {
       print('❌ Supabase deleteForecastEvent error: $e');
       return false;
     }
+  }
+
+  // ============================================================
+  // 👥 CUSTOMER ACCOUNTS ("customer numbers") + CREDIT LEDGER
+  // ============================================================
+  // STAFF enrol a customer; only a MANAGER approves, rejects, blocks or
+  // re-limits. The backend is the authority (utils/customerApproval.js); these
+  // calls simply surface what it decides.
+
+  /// Loads the company's customer accounts, optionally filtered by status
+  /// ('pending' is the manager's approval queue).
+  static Future<List<Map<String, dynamic>>?> getCustomers({String? status}) async {
+    if (!canUseSupabase) return null;
+    try {
+      final url = (status == null || status.isEmpty)
+          ? ApiConfig.dataCustomers
+          : '${ApiConfig.dataCustomers}?status=$status';
+      final response = await http.get(
+        Uri.parse(url),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode != 200) {
+        print('❌ Failed to load customers: ${response.statusCode}');
+        return null;
+      }
+      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase getCustomers error: $e');
+      return null;
+    }
+  }
+
+  /// Loads the ledger (charges + payments), newest first.
+  static Future<List<Map<String, dynamic>>?> getCustomerLedger({
+    int? customerId,
+  }) async {
+    if (!canUseSupabase) return null;
+    try {
+      final url = customerId == null
+          ? ApiConfig.dataCustomerTransactions
+          : '${ApiConfig.dataCustomerTransactions}?customer_id=$customerId';
+      final response = await http.get(
+        Uri.parse(url),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode != 200) {
+        print('❌ Failed to load the credit ledger: ${response.statusCode}');
+        return null;
+      }
+      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase getCustomerLedger error: $e');
+      return null;
+    }
+  }
+
+  /// Enrols a customer. The backend generates the customer number and decides
+  /// the starting status: staff -> 'pending', manager -> 'approved'.
+  static Future<Map<String, dynamic>?> enrollCustomer({
+    required String name,
+    String? phone,
+    String? notes,
+  }) async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataCustomers),
+        headers: await _authedHeaders(),
+        body: jsonEncode({
+          'name': name,
+          if (phone != null && phone.isNotEmpty) 'phone': phone,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+        }),
+      );
+      if (response.statusCode != 201) {
+        print('❌ Failed to enrol the customer: ${response.body}');
+        return null;
+      }
+      return Map<String, dynamic>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase enrollCustomer error: $e');
+      return null;
+    }
+  }
+
+  /// Manager-only decision: approve / reject / block / re-limit (and correct
+  /// the name, phone or note). Returns the updated row, or null.
+  static Future<Map<String, dynamic>?> decideCustomer(
+    dynamic id, {
+    String? status,
+    double? creditLimit,
+    String? name,
+    String? phone,
+    String? notes,
+  }) async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.patch(
+        Uri.parse(ApiConfig.dataCustomer(id)),
+        headers: await _authedHeaders(),
+        body: jsonEncode({
+          if (status != null) 'status': status,
+          if (creditLimit != null) 'credit_limit': creditLimit,
+          if (name != null) 'name': name,
+          if (phone != null) 'phone': phone,
+          if (notes != null) 'notes': notes,
+        }),
+      );
+      if (response.statusCode != 200) {
+        print('❌ Failed to update the customer: ${response.body}');
+        return null;
+      }
+      return Map<String, dynamic>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase decideCustomer error: $e');
+      return null;
+    }
+  }
+
+  /// Charges a tab or records a payment. When the charge would pass the
+  /// manager's credit limit the result is a [LedgerWriteResult.limit]; the
+  /// caller asks a manager and re-sends with `overrideLimit: true`.
+  static Future<LedgerWriteResult> addCustomerEntry({
+    required int customerId,
+    required String kind,
+    required double amount,
+    String? reason,
+    String? method,
+    String? orderId,
+    bool overrideLimit = false,
+  }) async {
+    if (!canUseSupabase) {
+      return LedgerWriteResult.failed('Offline');
+    }
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataCustomerTransactions),
+        headers: await _authedHeaders(),
+        body: jsonEncode({
+          'customer_id': customerId,
+          'kind': kind,
+          'amount': amount,
+          if (reason != null && reason.isNotEmpty) 'reason': reason,
+          if (method != null && method.isNotEmpty) 'method': method,
+          if (orderId != null && orderId.isNotEmpty) 'order_id': orderId,
+          if (overrideLimit) 'override_limit': true,
+        }),
+      );
+      final body = response.body.isEmpty
+          ? <String, dynamic>{}
+          : Map<String, dynamic>.from(jsonDecode(response.body));
+
+      if (response.statusCode == 201) {
+        return LedgerWriteResult.success(balance: _ledgerNumber(body['balance']));
+      }
+      if (response.statusCode == 409 && body['code'] == 'CREDIT_LIMIT') {
+        return LedgerWriteResult.limit(
+          balance: _ledgerNumber(body['balance']),
+          creditLimit: _ledgerNumber(body['creditLimit']),
+          message: body['message']?.toString(),
+        );
+      }
+      return LedgerWriteResult.failed(
+        body['message']?.toString() ??
+            'Could not save this entry (${response.statusCode})',
+      );
+    } catch (e) {
+      print('❌ Supabase addCustomerEntry error: $e');
+      return LedgerWriteResult.failed('$e');
+    }
+  }
+
+  /// NUMERIC columns reach the app as strings ("5000.00") through the backend.
+  static double _ledgerNumber(Object? value) {
+    if (value == null) return 0;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString().trim()) ?? 0;
   }
 
   // ============================================================

@@ -16,6 +16,7 @@ import 'package:drinks_calculator_fixed/screens/subscription_screen.dart';
 import 'package:drinks_calculator_fixed/screens/auth_screen.dart';
 import 'package:drinks_calculator_fixed/screens/inventory_screen.dart';
 import 'package:drinks_calculator_fixed/screens/profile_screen.dart';
+import 'package:drinks_calculator_fixed/screens/customer_ledger_screen.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/screens/manager_approval_screen.dart';
@@ -298,6 +299,19 @@ class CustomDrawer extends StatelessWidget {
                       MaterialPageRoute(
                           builder: (context) => const ProfileScreen()));
                 }, primaryColor: primaryColor),
+
+                // 👥 Customer accounts ("customer numbers") — every staff member
+                // enrols, the manager approves on the Approvals tab.
+                if (!isCustomer)
+                  _buildDrawerItem(context, Icons.people_outline, t('custMenu'),
+                      () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) =>
+                                const CustomerLedgerScreen()));
+                  }, primaryColor: primaryColor),
 
                 _buildDrawerItem(context, Icons.history, t('invoiceHistoryDrawer'), () {
                   Navigator.pop(context);
