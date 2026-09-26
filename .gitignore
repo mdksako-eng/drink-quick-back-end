@@ -51,6 +51,13 @@ app.*.map.json
 .env.*
 !.env.example
 
+# Signing material. android/.gitignore covers these only inside android/, and a
+# keystore dropped at the repo root (the usual `flutter build apk` layout) would
+# otherwise be committed — the release key must never be public.
+**/*.jks
+**/*.keystore
+**/key.properties
+
 # Backend node_modules
 **/node_modules/
 

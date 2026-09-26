@@ -514,6 +514,12 @@ routes (five verification sites), plus one missing check:
   instead of a truthy object, so a refusal can never be mistaken for an activation.
 - Replay is a no-op by construction (only a `pending` row activates) and the
   company is resolved from the DB row / session, never from the payload.
+- **Signing material** is now ignored repository-wide: `android/.gitignore` covers
+  `*.jks` / `*.keystore` / `key.properties` only *inside* `android/`, so a keystore
+  dropped at the repo root (the usual `flutter build apk` layout) would have been
+  committed. The root `.gitignore` now carries `**/*.jks`, `**/*.keystore` and
+  `**/key.properties`; verified with `git check-ignore` (`release.jks` ignored,
+  `.env.example` still tracked).
 
 ### Validation
 - `flutter analyze lib` → 0 errors
