@@ -96,21 +96,48 @@ function canHoldCredit(customer) {
 }
 
 /**
- * The next free customer number for a company: C-0001, C-0002, ...
- * Taken numbers are skipped, so a number is never handed out twice.
+ * The next free customer number for a company: 000001, 000002, … — six digits,
+ * which is the shop's format. Taken numbers are skipped, and a number is
+ * compared by its DIGITS, so an older 4-digit row ("C-0001") still blocks the
+ * six-digit "000001" instead of handing the same number out twice.
+ *
+ * Pass `{ prefix: 'C', width: 4 }` to get the older "C-0001" style back.
  */
-function nextCustomerNumber(existingNumbers, { prefix = 'C', width = 4 } = {}) {
-  const taken = new Set(
-    (existingNumbers || []).map((n) => (n == null ? '' : String(n).trim()))
-  );
+function nextCustomerNumber(existingNumbers, { prefix = '', width = 6 } = {}) {
+  const taken = new Set();
+  const takenDigits = new Set();
+  for (const value of existingNumbers || []) {
+    if (value == null) continue;
+    const text = String(value).trim();
+    if (text === '') continue;
+    taken.add(text);
+    const tail = numericTail(text);
+    if (tail !== null) takenDigits.add(tail);
+  }
+
   let counter = 1;
   // Guard against an endless loop on a corrupt table.
-  while (counter <= 100000) {
-    const candidate = `${prefix}-${String(counter).padStart(width, '0')}`;
-    if (!taken.has(candidate)) return candidate;
+  while (counter <= 10000000) {
+    const digits = String(counter).padStart(width, '0');
+    // A prefix is joined with a dash ("C-0001"); without one the number is
+    // just the digits ("000001").
+    const candidate = prefix ? `${prefix}-${digits}` : digits;
+    const tail = numericTail(digits);
+    if (!taken.has(candidate) && (tail === null || !takenDigits.has(tail))) {
+      return candidate;
+    }
     counter += 1;
   }
-  return `${prefix}-${Date.now()}`;
+  const fallback = String(Date.now());
+  return prefix ? `${prefix}-${fallback}` : fallback;
+}
+
+/** The number without its prefix and leading zeros ("C-0001" -> "1"). */
+function numericTail(value) {
+  const digits = (value == null ? '' : String(value)).replace(/\D/g, '');
+  if (digits === '') return null;
+  if (digits.length > 15) return digits; // too long to compare as a number
+  return String(parseInt(digits, 10));
 }
 
 /** Digits only, so "6 77 12 34 56" and "+237 677123456" match the same person. */

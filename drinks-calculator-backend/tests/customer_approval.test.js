@@ -147,17 +147,31 @@ describe('credit is only for an approved account', () => {
 });
 
 describe('customer numbers', () => {
-  test('starts at C-0001 for an empty company', () => {
-    expect(nextCustomerNumber([])).toBe('C-0001');
+  test('starts at 000001 for an empty company', () => {
+    expect(nextCustomerNumber([])).toBe('000001');
+  });
+
+  test('the number is six digits', () => {
+    expect(nextCustomerNumber([]).length).toBe(6);
+    expect(nextCustomerNumber(['000001']).length).toBe(6);
   });
 
   test('skips numbers that are already taken', () => {
-    expect(nextCustomerNumber(['C-0001', 'C-0002'])).toBe('C-0003');
-    expect(nextCustomerNumber(['C-0001', 'C-0003'])).toBe('C-0002');
+    expect(nextCustomerNumber(['000001', '000002'])).toBe('000003');
+    expect(nextCustomerNumber(['000001', '000003'])).toBe('000002');
+  });
+
+  test('an older 4-digit number still blocks the same slot', () => {
+    // "C-0001" already belongs to a customer: 000001 must not be handed out.
+    expect(nextCustomerNumber(['C-0001'])).toBe('000002');
+  });
+
+  test('the older C-0001 style is still available on request', () => {
+    expect(nextCustomerNumber([], { prefix: 'C', width: 4 })).toBe('C-0001');
   });
 
   test('tolerates a company with numbers from another format', () => {
-    expect(nextCustomerNumber(['OLD-1', null, ''])).toBe('C-0001');
+    expect(nextCustomerNumber(['OLD-1', null, ''])).toBe('000002');
   });
 });
 
