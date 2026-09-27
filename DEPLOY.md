@@ -143,6 +143,7 @@ To go live (Render → your service → **Environment**):
 | `NOTCHPAY_PUBLIC_KEY` | `pk_live_…` |
 | `NOTCHPAY_PRIVATE_KEY` | `sk_live_…` |
 | `NOTCHPAY_WEBHOOK_SECRET` | your live webhook secret |
+| `NOTCHPAY_REQUIRE_LIVE` | `true` — refuse to start a payment while the keys are still test keys |
 | `FLUTTERWAVE_PUBLIC_KEY` / `FLUTTERWAVE_SECRET_KEY` | optional card rail |
 | `PLATFORM_MTN_SANDBOX` | `false` (only for direct MTN MoMo credentials) |
 
@@ -187,6 +188,11 @@ then leaves every rail enabled, so a working rail is never hidden.
   logged with both amounts. If Notch Pay ever reports a net (fee-deducted) amount,
   set `NOTCHPAY_ALLOW_UNDERPAYMENT=true` on Render — otherwise honest payments
   would be refused.
+- `NOTCHPAY_REQUIRE_LIVE=true` makes `/subscriptions/notchpay-initiate` answer 503
+  while the platform keys are test keys, so a production service can never hand out
+  a paid plan without collecting money. Off by default (demos keep working), and the
+  server startup log + `/subscriptions/notchpay/health` state the mode either way —
+  a test key prints `🛑 Subscriptions: TEST KEYS — real money will NOT be collected`.
 - Replays are harmless: only a row still in `pending` can activate, so a repeated
   webhook is a no-op after the first success.
 - The company behind a payment is always resolved from the session or the database

@@ -708,6 +708,14 @@ router.post('/subscriptions/notchpay-initiate', async (req, res) => {
     const { plan, channel } = req.body || {};
     if (!VALID_PLANS.includes(plan)) return res.status(400).json({ success: false, error: 'Invalid plan' });
     if (!notchpay.isConfigured()) return res.status(503).json({ success: false, error: 'Notch Pay not configured' });
+    // Opt-in production guard: never start a payment that cannot collect money.
+    if (paymentGuard.liveKeyRequired() && notchpay.status().mode !== 'live') {
+      return res.status(503).json({
+        success: false,
+        error:
+          'Payments are disabled while the platform keys are in test mode (NOTCHPAY_REQUIRE_LIVE=true).',
+      });
+    }
 
     const resolved = paymentChannels.resolveChannel(channel, {
       cardSlug: await cardSlugFromAccount(),

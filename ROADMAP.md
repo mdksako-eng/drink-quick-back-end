@@ -514,6 +514,12 @@ routes (five verification sites), plus one missing check:
   instead of a truthy object, so a refusal can never be mistaken for an activation.
 - Replay is a no-op by construction (only a `pending` row activates) and the
   company is resolved from the DB row / session, never from the payload.
+- **Test keys can no longer masquerade as live.** The server prints its payment
+  mode on startup (`💳 Subscriptions: LIVE keys …` / `🛑 Subscriptions: TEST KEYS —
+  real money will NOT be collected`) and the opt-in `NOTCHPAY_REQUIRE_LIVE=true`
+  makes `/subscriptions/notchpay-initiate` answer 503 while the keys are test keys.
+  Both exist because pasting `pk_test_` keys while expecting real money is an easy,
+  silent mistake: the key **prefix** is the only thing that decides the mode.
 - **Signing material** is now ignored repository-wide: `android/.gitignore` covers
   `*.jks` / `*.keystore` / `key.properties` only *inside* `android/`, so a keystore
   dropped at the repo root (the usual `flutter build apk` layout) would have been
@@ -524,8 +530,8 @@ routes (five verification sites), plus one missing check:
 ### Validation
 - `flutter analyze lib` → 0 errors
 - `flutter test` → 276 passing (12 new)
-- `npm --prefix drinks-calculator-backend test` → 11 suites / 142 tests passing
-  (21 new: payment guard 15, request body 6)
+- `npm --prefix drinks-calculator-backend test` → 11 suites / 144 tests passing
+  (23 new: payment guard 17, request body 6)
 - i18n parity → EN=1075 FR=1075
 - `node --check` clean on every touched backend file
 

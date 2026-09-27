@@ -2651,6 +2651,11 @@ app.use((req, res) => {
 
 // ========== START ==========
 const PORT = process.env.PORT || 3000;
+// Read the payment configuration once, so the log below can say plainly whether
+// a plan upgrade would collect money. `mode` is derived from the key prefix:
+// pk_test_/sk_test_ = sandbox (no real money), pk_live_/sk_live_ = production.
+const notchpayStatus = require('./utils/notchpay');
+const paymentRails = require('./utils/paymentChannels');
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 DRINKQUICK SERVER v3.0 🚀`);
   console.log(`📍 Port: ${PORT}`);
@@ -2658,5 +2663,16 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('📧 Email: Password Reset Codes Enabled');
   console.log('✅ Session Management: Enabled');
   console.log('✅ Staff Approval System: Enabled');
-  console.log('✅ Approval Logging: Enabled\n');
+  console.log('✅ Approval Logging: Enabled');
+  const notch = notchpayStatus.status();
+  if (!notchpayStatus.isConfigured()) {
+    console.log('💳 Subscriptions: no payment keys — upgrades cannot be paid for\n');
+  } else if (notch.mode === 'live') {
+    console.log('💳 Subscriptions: LIVE keys — real money WILL be collected');
+    console.log(`🪙 Rails: ${paymentRails.PROVIDERS.join(', ')}\n`);
+  } else {
+    console.log(`🛑 Subscriptions: ${notch.mode.toUpperCase()} KEYS — real money will NOT be collected`);
+    console.log('   A plan upgrade would activate without charging anyone.');
+    console.log('   Set NOTCHPAY_PUBLIC_KEY / NOTCHPAY_PRIVATE_KEY to pk_live_ / sk_live_ keys\n');
+  }
 });

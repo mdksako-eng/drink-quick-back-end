@@ -77,9 +77,21 @@ function shouldEnforce() {
   return String(process.env.NOTCHPAY_ALLOW_UNDERPAYMENT || 'false').toLowerCase() !== 'true';
 }
 
+/**
+ * Must real money actually move for a payment to be started?
+ *
+ * Off by default, because test keys are useful for demos and dry runs. Set
+ * `NOTCHPAY_REQUIRE_LIVE=true` on a production service so a test key can never
+ * silently hand out a paid plan without collecting anything.
+ */
+function liveKeyRequired() {
+  return String(process.env.NOTCHPAY_REQUIRE_LIVE || 'false').toLowerCase() === 'true';
+}
+
 module.exports = {
   normalizeAmount,
   normalizeCurrency,
   paidAmountMatches,
   shouldEnforce,
+  liveKeyRequired,
 };

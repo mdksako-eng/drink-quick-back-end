@@ -12,6 +12,7 @@ const {
   normalizeCurrency,
   paidAmountMatches,
   shouldEnforce,
+  liveKeyRequired,
 } = require('../utils/paymentGuard');
 
 describe('normalizeAmount', () => {
@@ -139,5 +140,24 @@ describe('shouldEnforce', () => {
     expect(shouldEnforce()).toBe(false);
     process.env.NOTCHPAY_ALLOW_UNDERPAYMENT = 'false';
     expect(shouldEnforce()).toBe(true);
+  });
+});
+
+describe('liveKeyRequired', () => {
+  afterEach(() => {
+    delete process.env.NOTCHPAY_REQUIRE_LIVE;
+  });
+
+  test('off by default, so demo mode with test keys keeps working', () => {
+    expect(liveKeyRequired()).toBe(false);
+  });
+
+  test('a production service can refuse test keys', () => {
+    process.env.NOTCHPAY_REQUIRE_LIVE = 'true';
+    expect(liveKeyRequired()).toBe(true);
+    process.env.NOTCHPAY_REQUIRE_LIVE = 'TRUE';
+    expect(liveKeyRequired()).toBe(true);
+    process.env.NOTCHPAY_REQUIRE_LIVE = 'false';
+    expect(liveKeyRequired()).toBe(false);
   });
 });
