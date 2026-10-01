@@ -22,6 +22,9 @@ import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/providers/order_provider.dart';
+import 'package:drinks_calculator_fixed/providers/customer_provider.dart';
+import 'package:drinks_calculator_fixed/providers/shift_provider.dart';
+import 'package:drinks_calculator_fixed/utils/payment_helper.dart';
 import 'package:drinks_calculator_fixed/screens/profile_screen.dart';
 import 'package:drinks_calculator_fixed/screens/forecast_screen.dart';
 import 'package:drinks_calculator_fixed/screens/drink_management_screen.dart';
@@ -30,6 +33,11 @@ import 'package:drinks_calculator_fixed/screens/inventory_screen.dart';
 import 'package:drinks_calculator_fixed/screens/manager_panel.dart';
 import 'package:drinks_calculator_fixed/screens/notifications_screen.dart';
 import 'package:drinks_calculator_fixed/screens/subscription_screen.dart';
+import 'package:drinks_calculator_fixed/screens/calculator_screen.dart';
+import 'package:drinks_calculator_fixed/screens/customer_ledger_screen.dart';
+import 'package:drinks_calculator_fixed/screens/manager_dashboard.dart';
+import 'package:drinks_calculator_fixed/screens/shift_screen.dart';
+import 'package:drinks_calculator_fixed/screens/variance_screen.dart';
 import 'package:drinks_calculator_fixed/utils/flutter_assertion_guard.dart';
 import 'package:drinks_calculator_fixed/widgets/upgrade_required.dart';
 
@@ -84,6 +92,11 @@ void main() {
           ChangeNotifierProvider(create: (_) => DrinkProvider()),
           ChangeNotifierProvider(create: (_) => InventoryProvider()),
           ChangeNotifierProvider(create: (_) => OrderProvider()),
+          // Registered in main.dart too — a screen that reads one of these
+          // without it in the tree would fail here first.
+          ChangeNotifierProvider(create: (_) => CustomerProvider()),
+          ChangeNotifierProvider(create: (_) => ShiftProvider()),
+          ChangeNotifierProvider(create: (_) => PaymentHelper()),
         ],
         child: MaterialApp(home: screen),
       ),
@@ -188,6 +201,44 @@ void main() {
     await pumpScreen(tester, const ManagerPanel(), size: phone);
     expectNoLayoutError();
     await pumpScreen(tester, const ManagerPanel(), size: tablet);
+    expectNoLayoutError();
+  });
+
+  // The screens below were the ones the harness missed, which is why
+  // "RenderBox was not laid out" could reach the console without a failing test.
+  testWidgets('CalculatorScreen lays out on phone and tablet', (tester) async {
+    await pumpScreen(tester, const CalculatorScreen(), size: phone);
+    expectNoLayoutError();
+    await pumpScreen(tester, const CalculatorScreen(), size: tablet);
+    expectNoLayoutError();
+  });
+
+  testWidgets('CustomerLedgerScreen lays out on phone and tablet',
+      (tester) async {
+    await pumpScreen(tester, const CustomerLedgerScreen(), size: phone);
+    expectNoLayoutError();
+    await pumpScreen(tester, const CustomerLedgerScreen(), size: tablet);
+    expectNoLayoutError();
+  });
+
+  testWidgets('ShiftScreen lays out on phone and tablet', (tester) async {
+    await pumpScreen(tester, const ShiftScreen(), size: phone);
+    expectNoLayoutError();
+    await pumpScreen(tester, const ShiftScreen(), size: tablet);
+    expectNoLayoutError();
+  });
+
+  testWidgets('VarianceScreen lays out on phone and tablet', (tester) async {
+    await pumpScreen(tester, const VarianceScreen(), size: phone);
+    expectNoLayoutError();
+    await pumpScreen(tester, const VarianceScreen(), size: tablet);
+    expectNoLayoutError();
+  });
+
+  testWidgets('ManagerDashboard lays out on phone and tablet', (tester) async {
+    await pumpScreen(tester, const ManagerDashboard(), size: phone);
+    expectNoLayoutError();
+    await pumpScreen(tester, const ManagerDashboard(), size: tablet);
     expectNoLayoutError();
   });
 }

@@ -95,16 +95,22 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   void initState() {
     super.initState();
     NotificationService().initialize();
-    _loadData();
-    _loadBusinessPaymentSettings();
-    _loadCompanyName();
     _amountPaidController.addListener(_calculateBalance);
     CurrencyHelper.addListener(_refreshCurrency);
     PaymentHelper.addPaymentListener(_refreshPaymentSettings);
     _searchController.addListener(() {
       _filterDrinks(_searchController.text);
     });
-    _loadPendingOrderFromAI();
+    // Defer the initial loads past the first frame: PaymentHelper.loadSettings,
+    // DrinkProvider.load* and OrderProvider all call notifyListeners(), which is
+    // illegal while the tree is still building (it throws
+    // "setState() called during build").
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+      _loadBusinessPaymentSettings();
+      _loadCompanyName();
+      _loadPendingOrderFromAI();
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshDrinks();
       _initOrdersAndSettingsAfterLogin();
@@ -1952,18 +1958,25 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     _scaffoldKey.currentState?.openDrawer();
                   }),
             ),
-            SizedBox(width: 16),
-            Text('Drinks Quick Cal',
-                style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: primaryColor)),
-            Spacer(),
+            const SizedBox(width: 16),
+            // Expanded + ellipsis: a narrow phone must not overflow, and the
+            // French heading is longer than the English one.
+            Expanded(
+              child: Text(t('appName'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: primaryColor)),
+            ),
             _buildNotificationBell(primaryColor),
           ],
         ),
         SizedBox(height: 5),
-        Text('Professional Drink Ordering & Management',
+        Text(t('appTagline'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 12, color: theme.hintColor)),
         const SizedBox(height: 15),
         Container(
@@ -1976,12 +1989,16 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             children: [
               Row(
                 children: [
-                  Text('Welcome, ',
+                  Text('${t('welcome')}, ',
                       style: TextStyle(color: Colors.green, fontSize: 13)),
                   Icon(Icons.person, color: primaryColor, size: 16),
-                  SizedBox(width: 8),
-                  Text('${user?.username ?? 'User'}',
-                      style: TextStyle(color: Colors.green, fontSize: 13)),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(user?.username ?? t('user'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Colors.green, fontSize: 13)),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -2501,27 +2518,35 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 ],
               ),
             ),
-            ElevatedButton(
-              onPressed: () {
-                if (_selectedDrinkId != null && sortedDrinks.isNotEmpty) {
-                  final selectedDrink =
-                      sortedDrinks.firstWhere((d) => d.id == _selectedDrinkId);
-                  if (selectedDrink.currentStock <= 0) {
-                    Helpers.showToast('${selectedDrink.name} is out of stock!',
-                        isError: true);
-                    return;
+            const SizedBox(width: 10),
+            // Flexible: the button label is longer in French ("Ajouter à la
+            // commande") and used to overflow the row on a 390 px phone.
+            Flexible(
+              child: ElevatedButton(
+                onPressed: () {
+                  if (_selectedDrinkId != null && sortedDrinks.isNotEmpty) {
+                    final selectedDrink =
+                        sortedDrinks.firstWhere((d) => d.id == _selectedDrinkId);
+                    if (selectedDrink.currentStock <= 0) {
+                      Helpers.showToast(
+                          '${selectedDrink.name} — ${t('outOfStockToast')}',
+                          isError: true);
+                      return;
+                    }
+                    _addDrink(selectedDrink);
+                  } else {
+                    Helpers.showToast(t('selectDrinkFirst'));
                   }
-                  _addDrink(selectedDrink);
-                } else {
-                  Helpers.showToast('Please select a drink first');
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
-              child: Text(t('addToOrder'),
-                  style: TextStyle(fontSize: 14, color: Colors.white)),
+                },
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+                child: Text(t('addToOrder'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, color: Colors.white)),
+              ),
             ),
           ],
         ),
@@ -2547,7 +2572,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                         padding: EdgeInsets.symmetric(vertical: 12)),
                     icon: Icon(Icons.receipt,
                         size: 18, color: Colors.white),
-                    label: Text('Preview',
+                    label: Text(t('preview'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 14, color: Colors.white)))),
           ],
         ),

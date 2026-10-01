@@ -1,3 +1,4 @@
+// utils/i18n.dart
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -339,6 +340,11 @@ const Map<String, String> _en = {
   'enterLoginPassword': 'Enter your login password to continue',
   'enterPassword': 'Enter password',
   'welcome': 'Welcome',
+  'appTagline': 'Professional drink ordering & management',
+  'user': 'User',
+  'preview': 'Preview',
+  'outOfStockToast': 'Out of stock',
+  'selectDrinkFirst': 'Please select a drink first',
   'verify': 'Verify',
   // Batch 3: staff management, approvals, AI assistant
   'b3_staffMgmt': 'Staff Management',
@@ -963,7 +969,7 @@ const Map<String, String> _en = {
   'connectInternet': 'Please connect to the internet first.',
   'dataLoadFailed': 'Failed to load data',
   'dataLoaded': 'Data loaded successfully!',
-  'dataRefreshed': '✅ Data refreshed successfully!',
+  'dataRefreshed': 'Data refreshed successfully!',
   'enterVerificationCode': 'Enter Verification Code',
   'exportCsv': 'CSV',
   'exportExcel': 'Excel',
@@ -1374,6 +1380,11 @@ const Map<String, String> _fr = {
   'enterLoginPassword': 'Entrez votre mot de passe pour continuer',
   'enterPassword': 'Entrez le mot de passe',
   'welcome': 'Bienvenue',
+  'appTagline': 'Commande et gestion de boissons professionnelles',
+  'user': 'Utilisateur',
+  'preview': 'Aperçu',
+  'outOfStockToast': 'Rupture de stock',
+  'selectDrinkFirst': 'Veuillez d\'abord sélectionner une boisson',
   'verify': 'Vérifier',
   'companyAddress': "Adresse de l'entreprise",
   'inviteCode': "Code d'invitation",

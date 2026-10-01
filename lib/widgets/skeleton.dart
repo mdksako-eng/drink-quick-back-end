@@ -64,7 +64,14 @@ class SkeletonList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // shrinkWrap + non-scrollable on purpose: a skeleton is decorative, and it is
+    // embedded in places with an UNBOUNDED height (e.g. inside the calculator's
+    // SingleChildScrollView). A plain ListView there never gets a size, which
+    // makes every widget that reads it (the clip in the decoration chain) throw
+    // "RenderBox was not laid out" once per frame in debug builds.
     return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       itemCount: itemCount,
       separatorBuilder: (_, __) => const SizedBox(height: 12),

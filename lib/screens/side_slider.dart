@@ -72,7 +72,12 @@ class _SideSliderState extends State<SideSlider> {
     CurrencyHelper.addListener(_refreshCurrency);
     _checkUserRole();
     _companyAtLoad = SupabaseService.currentCompanyId;
-    _refreshOrders(force: true);
+    // Defer: _refreshOrders calls setState + OrderProvider.reloadOrders(), which
+    // calls notifyListeners() — illegal while the tree is still building (it
+    // throws "setState() called during build").
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _refreshOrders(force: true);
+    });
   }
 
   /// Reloads the company-scoped orders whenever the company context changed or
@@ -858,13 +863,13 @@ class _SideSliderState extends State<SideSlider> {
                                     scrollDirection: Axis.horizontal,
                                     child: Row(
                                       children: [
-                                        _buildFilterChip('Today', 'Today'),
+                                        _buildFilterChip(t('today'), 'Today'),
                                         const SizedBox(width: 8),
-                                        _buildFilterChip('Week', 'This Week'),
+                                        _buildFilterChip(t('thisWeek'), 'This Week'),
                                         const SizedBox(width: 8),
-                                        _buildFilterChip('Month', 'This Month'),
+                                        _buildFilterChip(t('thisMonth'), 'This Month'),
                                         const SizedBox(width: 8),
-                                        _buildFilterChip('All', 'All Time'),
+                                        _buildFilterChip(t('allTime'), 'All Time'),
                                       ],
                                     ),
                                   ),
@@ -882,7 +887,7 @@ class _SideSliderState extends State<SideSlider> {
                                           ),
                                           const SizedBox(width: 8),
                                           Text(
-                                            'Sort:',
+                                            t('sortBy'),
                                             style: TextStyle(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w600,
@@ -891,19 +896,25 @@ class _SideSliderState extends State<SideSlider> {
                                           ),
                                         ],
                                       ),
-                                      SingleChildScrollView(
-                                        scrollDirection: Axis.horizontal,
-                                        child: Row(
-                                          children: [
-                                            _buildSortChip('Recent', 'Recent'),
-                                            const SizedBox(width: 6),
-                                            _buildSortChip('Oldest', 'Oldest'),
-                                            const SizedBox(width: 6),
-                                            _buildSortChip(
-                                                'High', 'High Amount'),
-                                            const SizedBox(width: 6),
-                                            _buildSortChip('Low', 'Low Amount'),
-                                          ],
+                                      const SizedBox(width: 8),
+                                      // Expanded: the sort chips scroll horizontally
+                                      // instead of overflowing the drawer on a phone.
+                                      Expanded(
+                                        child: SingleChildScrollView(
+                                          scrollDirection: Axis.horizontal,
+                                          child: Row(
+                                            children: [
+                                              _buildSortChip(t('recent'), 'Recent'),
+                                              const SizedBox(width: 6),
+                                              _buildSortChip(t('oldest'), 'Oldest'),
+                                              const SizedBox(width: 6),
+                                              _buildSortChip(
+                                                  t('highAmount'), 'High Amount'),
+                                              const SizedBox(width: 6),
+                                              _buildSortChip(
+                                                  t('lowAmount'), 'Low Amount'),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ],
