@@ -286,6 +286,7 @@ app.use(async (req, res, next) => {
             customer_number VARCHAR(20) NOT NULL,
             name VARCHAR(120) NOT NULL,
             phone VARCHAR(40),
+            address TEXT,
             status VARCHAR(20) NOT NULL DEFAULT 'pending',
             credit_limit NUMERIC(12,2) DEFAULT 0,
             notes TEXT,
@@ -302,6 +303,8 @@ app.use(async (req, res, next) => {
         await pool.query(
           `CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(company_id, status)`
         );
+        // Address was added after launch — keep old deployments in sync.
+        await pool.query(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS address TEXT`);
         await pool.query(`
           CREATE TABLE IF NOT EXISTS customer_credit_transactions (
             id SERIAL PRIMARY KEY,

@@ -13,6 +13,10 @@ import '../services/company_branding_service.dart';
 import '../services/secure_storage_service.dart';
 import '../utils/helpers.dart';
 import '../utils/i18n.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../utils/image_crop_helper.dart';
+import '../utils/owner_permissions.dart';
 import 'auth_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -339,6 +343,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// Tapping the logo: only the owner (or a platform administrator) may change
+  /// it — everyone else sees it read-only.
+  void _onLogoTap(String role, bool isOwner) {
+    if (!OwnerPermissions.canManageBranding(role: role, isOwner: isOwner)) {
+      Helpers.showToast(t('onlyOwnerCanChangeLogo'), isError: true);
+      return;
+    }
+    _changeLogo();
+  }
+
+  /// Asks the owner/manager whether they want to change the company logo, then
+  /// picks, square-crops and uploads a new one.
+  Future<void> _changeLogo() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t('changeCompanyLogo')),
+        content: Text(t('changeCompanyLogoHint')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(t('cancel'))),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(t('change'))),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1200,
+        imageQuality: 80,
+      );
+      if (picked == null) return;
+      final raw = await picked.readAsBytes();
+      final bytes = await ImageCropHelper.cropToSquare(raw);
+      final error = await CompanyBrandingService.setLogoFromBytes(
+        bytes,
+        fileName: picked.name,
+      );
+      final saved = error == null ? await CompanyBrandingService.cached() : null;
+      if (!mounted) return;
+      setState(() {
+        if (saved != null) _logoUrl = saved;
+      });
+      Helpers.showToast(
+        error == null ? t('branding_saved') : '${t('dm_imageUploadFailed')}: $error',
+        isError: error != null,
+      );
+    } catch (e) {
+      if (mounted) {
+        Helpers.showToast('${t('dm_imageUploadFailed')}: $e', isError: true);
+      }
+    }
+  }
+
   Widget _headerCard(
     ThemeData theme,
     Color primary,
@@ -356,21 +419,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Container(
-              width: 66,
-              height: 66,
-              decoration: BoxDecoration(
-                color: primary.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
+            GestureDetector(
+              onTap: () => _onLogoTap(role, isOwner),
+              child: Container(
+                width: 66,
+                height: 66,
+                decoration: BoxDecoration(
+                  color: primary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: (logo != null && logo.isNotEmpty)
+                    ? Image.network(
+                        logo,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _initialsAvatar(primary),
+                      )
+                    : _initialsAvatar(primary),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: (logo != null && logo.isNotEmpty)
-                  ? Image.network(
-                      logo,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _initialsAvatar(primary),
-                    )
-                  : _initialsAvatar(primary),
             ),
             const SizedBox(width: 14),
             Expanded(

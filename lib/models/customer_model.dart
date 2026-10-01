@@ -26,6 +26,7 @@ class Customer {
   final String customerNumber;
   final String name;
   final String phone;
+  final String address;
 
   /// pending | approved | rejected | blocked
   final String status;
@@ -38,6 +39,7 @@ class Customer {
     required this.customerNumber,
     required this.name,
     this.phone = '',
+    this.address = '',
     this.status = 'pending',
     this.creditLimit = 0,
     this.notes = '',
@@ -49,6 +51,7 @@ class Customer {
         customerNumber: (json['customer_number'] ?? '').toString(),
         name: (json['name'] ?? '').toString(),
         phone: (json['phone'] ?? '').toString(),
+        address: (json['address'] ?? '').toString(),
         status: (json['status'] ?? 'pending').toString().toLowerCase(),
         creditLimit: _asDouble(json['credit_limit']) ?? 0,
         notes: (json['notes'] ?? '').toString(),
@@ -60,6 +63,7 @@ class Customer {
         'customer_number': customerNumber,
         'name': name,
         'phone': phone,
+        'address': address,
         'status': status,
         'credit_limit': creditLimit,
         'notes': notes,

@@ -335,6 +335,7 @@ class _CustomerLedgerScreenState extends State<CustomerLedgerScreen>
   Future<void> _enrollDialog() async {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
+    final addressController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
     final accepted = await showDialog<bool>(
@@ -356,6 +357,12 @@ class _CustomerLedgerScreenState extends State<CustomerLedgerScreen>
               controller: phoneController,
               keyboardType: TextInputType.phone,
               decoration: InputDecoration(labelText: t('phone')),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: addressController,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(labelText: t('customerAddress')),
             ),
             const SizedBox(height: 8),
             if (!_canDecide)
@@ -387,13 +394,16 @@ class _CustomerLedgerScreenState extends State<CustomerLedgerScreen>
 
     final name = nameController.text.trim();
     final phone = phoneController.text.trim();
+    final address = addressController.text.trim();
     nameController.dispose();
     phoneController.dispose();
+    addressController.dispose();
     if (accepted != true || !mounted) return;
 
     final created = await context.read<CustomerProvider>().enroll(
           name: name,
           phone: phone,
+          address: address,
         );
     if (!mounted) return;
     if (created == null) {

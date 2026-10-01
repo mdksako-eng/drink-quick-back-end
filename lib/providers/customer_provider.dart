@@ -98,11 +98,13 @@ class CustomerProvider extends ChangeNotifier {
   Future<Customer?> enroll({
     required String name,
     String? phone,
+    String? address,
     String? notes,
   }) async {
     final row = await SupabaseService.enrollCustomer(
       name: name,
       phone: phone,
+      address: address,
       notes: notes,
     );
     if (row == null) return null;

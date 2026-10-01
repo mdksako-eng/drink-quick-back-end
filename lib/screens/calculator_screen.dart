@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
+import 'package:drinks_calculator_fixed/providers/customer_provider.dart';
 import 'package:drinks_calculator_fixed/providers/order_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/models/drink_model.dart';
@@ -1197,6 +1198,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   Future<String?> _showCustomerNameDialog({String? prefillName}) async {
     final TextEditingController nameController =
         TextEditingController(text: prefillName);
+    // Registered, approved customers are offered first; a walk-in just types a
+    // name in the field below.
+    final approvedCustomers = context.read<CustomerProvider>().approved;
 
     return await showDialog<String>(
       context: context,
@@ -1205,40 +1209,67 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(t('customerInformation'),
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.person, size: 50, color: Color(0xFF667EEA)),
-            SizedBox(height: 16),
-            Text('Please enter customer name for this invoice',
-                textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
-            SizedBox(height: 16),
-            TextField(
-              controller: nameController,
-              decoration: InputDecoration(
-                labelText: t('customerName'),
-                hintText: t('enterCustomerName'),
-                prefixIcon: const Icon(Icons.person_outline),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide:
-                        const BorderSide(color: Color(0xFF667EEA), width: 2)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (approvedCustomers.isNotEmpty) ...[
+                Text(t('chooseExistingCustomer'),
+                    style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 180),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: approvedCustomers.length,
+                    itemBuilder: (context, i) {
+                      final c = approvedCustomers[i];
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.person_outline),
+                        title: Text(c.name),
+                        subtitle: c.phone.isNotEmpty ? Text(c.phone) : null,
+                        onTap: () => Navigator.pop(context, c.name),
+                      );
+                    },
+                  ),
+                ),
+                const Divider(),
+                Text(t('walkInCustomer'),
+                    style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+              ],
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: t('customerName'),
+                  hintText: t('enterCustomerName'),
+                  prefixIcon: const Icon(Icons.person_outline),
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          const BorderSide(color: Color(0xFF667EEA), width: 2)),
+                ),
+                autofocus: approvedCustomers.isEmpty,
+                onSubmitted: (value) {
+                  if (value.trim().isNotEmpty) {
+                    Navigator.pop(context, value.trim());
+                  }
+                },
               ),
-              autofocus: true,
-              onSubmitted: (value) {
-                if (value.trim().isNotEmpty) {
-                  Navigator.pop(context, value.trim());
-                }
-              },
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, null),
-              child: Text('Cancel')),
+              child: Text(t('cancel'))),
           ElevatedButton(
             onPressed: () {
               final name = nameController.text.trim();

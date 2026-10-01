@@ -807,6 +807,7 @@ class SupabaseService {
   static Future<Map<String, dynamic>?> enrollCustomer({
     required String name,
     String? phone,
+    String? address,
     String? notes,
   }) async {
     if (!canUseSupabase) return null;
@@ -817,6 +818,7 @@ class SupabaseService {
         body: jsonEncode({
           'name': name,
           if (phone != null && phone.isNotEmpty) 'phone': phone,
+          if (address != null && address.isNotEmpty) 'address': address,
           if (notes != null && notes.isNotEmpty) 'notes': notes,
         }),
       );

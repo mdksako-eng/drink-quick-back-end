@@ -421,15 +421,16 @@ router.post('/customers', async (req, res) => {
 
     const result = await req.db.query(
       `INSERT INTO customers
-         (company_id, customer_number, name, phone, status, credit_limit, notes,
+         (company_id, customer_number, name, phone, address, status, credit_limit, notes,
           enrolled_by, approved_by, approved_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
       [
         companyId,
         customerNumber,
         name,
         req.body.phone ? String(req.body.phone).trim() : null,
+        req.body.address ? String(req.body.address).trim() : null,
         status,
         creditLimit,
         req.body.notes ? String(req.body.notes) : null,
