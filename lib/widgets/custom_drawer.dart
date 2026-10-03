@@ -170,14 +170,14 @@ class CustomDrawer extends StatelessWidget {
                         color: Colors.yellow.shade700,
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.workspace_premium,
+                          const Icon(Icons.workspace_premium,
                               size: 12, color: Colors.black87),
-                          SizedBox(width: 3),
-                          Text('Owner',
-                              style: TextStyle(
+                          const SizedBox(width: 3),
+                          Text(t('owner'),
+                              style: const TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.black87)),
@@ -535,14 +535,14 @@ class CustomDrawer extends StatelessWidget {
                   children: [
                     TextButton(
                       onPressed: () => _openUrl(ApiConfig.privacyPolicyForLanguage),
-                      child: const Text('Privacy Policy',
-                          style: TextStyle(fontSize: 12)),
+                      child: Text(t('privacyPolicy'),
+                          style: const TextStyle(fontSize: 12)),
                     ),
                     Text('|', style: TextStyle(color: theme.hintColor)),
                     TextButton(
                       onPressed: () => _openUrl(ApiConfig.termsOfServiceForLanguage),
-                      child: const Text('Terms',
-                          style: TextStyle(fontSize: 12)),
+                      child: Text(t('termsOfService'),
+                          style: const TextStyle(fontSize: 12)),
                     ),
                   ],
                 ),
@@ -737,7 +737,7 @@ class CustomDrawer extends StatelessWidget {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel')),
+              child: Text(t('cancel'))),
           ElevatedButton(
             onPressed: () async {
               // ✅ Save navigator BEFORE popping anything
@@ -815,7 +815,7 @@ class CustomDrawer extends StatelessWidget {
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel')),
+                child: Text(t('cancel'))),
             ElevatedButton(
               onPressed: () {
                 final authProvider =
@@ -902,7 +902,7 @@ class CustomDrawer extends StatelessWidget {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Close'))
+              child: Text(t('close')))
         ],
       ),
     );
@@ -1178,7 +1178,7 @@ class CustomDrawer extends StatelessWidget {
         title: Row(children: [
           Icon(Icons.help, color: primaryColor),
           const SizedBox(width: 10),
-          Text('Help & Support',
+          Text(t('helpSupport'),
               style: TextStyle(color: theme.textTheme.bodyLarge?.color))
         ]),
         content: Column(
@@ -1201,13 +1201,13 @@ class CustomDrawer extends StatelessWidget {
               Text(t('manageDrinksSettings'),
                   style: TextStyle(color: theme.hintColor)),
               const SizedBox(height: 16),
-              Text('For support, contact: mbundaderick@gmail.com',
+              Text(t('supportContact'),
                   style: TextStyle(fontSize: 12, color: theme.hintColor)),
             ]),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Got it'))
+              child: Text(t('gotIt')))
         ],
       ),
     );

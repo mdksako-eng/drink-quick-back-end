@@ -1123,7 +1123,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       completer.complete(false);
                     }
                   },
-                  child: Text('Cancel'),
+                  child: Text(t('cancel')),
                 ),
                 TextButton(
                   onPressed: () {
@@ -1322,7 +1322,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   void _showDrinkManagementDialog() {
     _showPasswordDialog(
       title: t('passwordRequired'),
-      message: 'Enter your password to manage drinks:',
+      message: t('manageDrinksPassword'),
       onVerified: () {
         Navigator.push(
             context,
@@ -1444,7 +1444,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                               side: BorderSide(
                                   color: Theme.of(context).dividerColor,
                                   width: 1))),
-                      child: Text('Cancel',
+                      child: Text(t('cancel'),
                           style: TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
@@ -1461,7 +1461,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                           onVerified();
                         } else {
                           _showErrorDialog(
-                              'Access Denied', 'Incorrect password!');
+                              t('accessDeniedDialog'), t('incorrectPassword'));
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -1563,12 +1563,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Are you sure you want to logout from your account?',
+            Text(t('confirmLogoutDialog'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     color: Theme.of(context).hintColor, fontSize: 16)),
             SizedBox(height: 10),
-            Text("You'll be redirected to login screen.",
+            Text(t('logoutRedirect'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     color: Theme.of(context).hintColor.withValues(alpha: 0.8),
@@ -1586,7 +1586,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       padding: EdgeInsets.symmetric(vertical: 15),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10))),
-                  child: Text('Cancel',
+                  child: Text(t('cancel'),
                       style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -1611,7 +1611,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       padding: EdgeInsets.symmetric(vertical: 15),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10))),
-                  child: Text('Logout',
+                  child: Text(t('logout'),
                       style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -2087,7 +2087,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                               borderRadius: BorderRadius.circular(20))),
                       icon: Icon(Icons.logout,
                           size: 14, color: Colors.white),
-                      label: Text('Logout',
+                      label: Text(t('logout'),
                           style: TextStyle(fontSize: 11, color: Colors.white)),
                     ),
                   ),
@@ -2116,7 +2116,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   }),
             ),
             SizedBox(width: 16),
-            Text('Drinks Quick Cal',
+            Text(t('appName'),
                 style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -2132,11 +2132,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               borderRadius: BorderRadius.circular(20)),
           child: Row(
             children: [
-              Text('Welcome, ',
+              Text('${t('welcome')}, ',
                   style: TextStyle(color: Colors.green, fontSize: 13)),
               Icon(Icons.person, color: primaryColor, size: 18),
               SizedBox(width: 8),
-              Text('${user?.username ?? 'User'}',
+              Text(user?.username ?? t('user'),
                   style: TextStyle(color: Colors.green)),
               const SizedBox(width: 12),
               Container(width: 1, height: 20, color: theme.dividerColor),
@@ -2187,7 +2187,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20))),
                 icon: Icon(Icons.logout, size: 16, color: Colors.white),
-                label: Text('Logout',
+                label: Text(t('logout'),
                     style: TextStyle(fontSize: 12, color: Colors.white)),
               ),
             ],
@@ -2214,7 +2214,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   }),
             ),
             SizedBox(width: 16),
-            Text('Drinks Quick Cal',
+            Text(t('appName'),
                 style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
@@ -2230,11 +2230,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               borderRadius: BorderRadius.circular(25)),
           child: Row(
             children: [
-              Text('Welcome, ',
+              Text('${t('welcome')}, ',
                   style: TextStyle(color: Colors.green, fontSize: 13)),
               Icon(Icons.person, color: primaryColor, size: 20),
               SizedBox(width: 10),
-              Text('${user?.username ?? 'User'}',
+              Text(user?.username ?? t('user'),
                   style: TextStyle(color: Colors.green, fontSize: 16)),
               const SizedBox(width: 16),
               Container(width: 1, height: 24, color: theme.dividerColor),
