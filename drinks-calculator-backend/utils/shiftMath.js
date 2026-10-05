@@ -67,11 +67,12 @@ function summarisePayments(payments) {
  * `payments` is optional: without it the report still works from the orders
  * (a till with no network keeps taking sales).
  */
-function summariseShift({ shift, orders, payments }) {
+function summariseShift({ shift, orders, payments, voids }) {
   const openingFloat = money(shift && shift.opening_float);
   const payouts = money(shift && shift.cash_payouts);
   const orderTotals = summariseOrders(orders);
   const paymentTotals = summarisePayments(payments);
+  const voidTotals = voids || { voidCount: 0, voidValue: 0 };
 
   // What should be in the drawer: the float, plus what was collected in cash,
   // minus anything paid out of the till during the shift.
@@ -88,6 +89,11 @@ function summariseShift({ shift, orders, payments }) {
     variance: counted == null ? null : money(counted - expectedCash),
     byMethod: paymentTotals.byMethod,
     paymentsTotal: paymentTotals.total,
+    // Corrections made after the fact, shown separately: the sales above are
+    // net of them, so a manager can always see what was cancelled and why the
+    // till does not match an older printout.
+    voidCount: num(voidTotals.voidCount),
+    voidValue: money(voidTotals.voidValue),
     ...orderTotals,
   };
 }

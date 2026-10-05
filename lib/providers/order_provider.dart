@@ -18,6 +18,13 @@ class Order {
   final String receiptNumber;
   final DateTime date;
   final bool isActive;
+
+  /// The void trace: set when a manager corrected this order after the fact.
+  final DateTime? voidedAt;
+  final String voidReason;
+  final String voidedByName;
+
+  bool get isVoided => voidedAt != null;
   final String customerName;
   final String staffName;
 
@@ -30,6 +37,9 @@ class Order {
     required this.receiptNumber,
     required this.date,
     this.isActive = true,
+    this.voidedAt,
+    this.voidReason = '',
+    this.voidedByName = '',
     this.customerName = '',
     this.staffName = '',
   });
@@ -44,6 +54,9 @@ class Order {
       'receiptNumber': receiptNumber,
       'date': date.toIso8601String(),
       'isActive': isActive,
+      'voidedAt': voidedAt?.toIso8601String(),
+      'voidReason': voidReason,
+      'voidedByName': voidedByName,
       'customerName': customerName,
       'staffName': staffName,
       'staff_name': staffName,
@@ -98,6 +111,11 @@ class Order {
           '',
       date: date,
       isActive: json['isActive'] ?? json['is_active'] ?? true,
+      voidedAt: DateTime.tryParse(
+          '${json['voidedAt'] ?? json['voided_at'] ?? ''}'),
+      voidReason: (json['voidReason'] ?? json['void_reason'] ?? '').toString(),
+      voidedByName:
+          (json['voidedByName'] ?? json['voided_by_name'] ?? '').toString(),
       customerName: json['customerName']?.toString() ??
           json['customer_name']?.toString() ??
           '',
@@ -343,6 +361,21 @@ class OrderProvider with ChangeNotifier {
   void clearCurrentOrder() {
     _currentOrder = null;
     notifyListeners();
+  }
+
+  /// Voids an order (manager only) and refreshes the list. A void keeps who,
+  /// when and why, and stops the order counting as a sale — never a delete.
+  Future<bool> voidOrder(String orderId, String reason) async {
+    final ok = await SupabaseService.voidOrder(orderId, reason);
+    if (ok) await reloadOrders();
+    return ok;
+  }
+
+  /// Undoes a void (manager only) — the order counts as a sale again.
+  Future<bool> restoreOrder(String orderId) async {
+    final ok = await SupabaseService.restoreOrder(orderId);
+    if (ok) await reloadOrders();
+    return ok;
   }
 
   Future<void> toggleOrderStatus(String orderId, bool isActive) async {

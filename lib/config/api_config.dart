@@ -84,6 +84,14 @@ class ApiConfig {
   // ========== BACKEND DATA ENDPOINTS (session-authenticated; replaces direct Supabase REST) ==========
   static const String dataDrinks = '$apiBase/data/drinks';
   static const String dataOrders = '$apiBase/data/orders';
+
+  /// Manager-only: correct an order with a reason (no silent delete).
+  static String dataOrderVoid(String orderId) =>
+      '$apiBase/data/orders/$orderId/void';
+
+  /// Manager-only: undo a void.
+  static String dataOrderRestore(String orderId) =>
+      '$apiBase/data/orders/$orderId/restore';
   static const String dataInventory = '$apiBase/data/inventory';
   static const String dataInventoryUpsert = '$apiBase/data/inventory/upsert';
   static const String dataInventorySell = '$apiBase/data/inventory/sell';

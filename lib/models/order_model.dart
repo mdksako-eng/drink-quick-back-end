@@ -35,6 +35,12 @@ class PurchaseHistory {
   bool isActive;
   String customerName;
 
+  /// Set when a manager corrected this order: the trace stays with the order so
+  /// the shift report and this list can explain why a sale disappeared.
+  DateTime? voidedAt;
+  String voidReason;
+  String voidedByName;
+
   PurchaseHistory({
     required this.id,
     required this.date,
@@ -43,7 +49,12 @@ class PurchaseHistory {
     required this.amountPaid,
     this.isActive = true,
     this.customerName = '',
+    this.voidedAt,
+    this.voidReason = '',
+    this.voidedByName = '',
   }) : balance = amountPaid - totalAmount;
+
+  bool get isVoided => voidedAt != null;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -54,6 +65,9 @@ class PurchaseHistory {
         'balance': balance,
         'isActive': isActive,
         'customerName': customerName,
+        'voidedAt': voidedAt?.toIso8601String(),
+        'voidReason': voidReason,
+        'voidedByName': voidedByName,
       };
 
   factory PurchaseHistory.fromJson(Map<String, dynamic> json) => PurchaseHistory(
@@ -66,5 +80,8 @@ class PurchaseHistory {
         amountPaid: json['amountPaid'].toDouble(),
         isActive: json['isActive'] ?? true,
         customerName: json['customerName'] ?? '',
+        voidedAt: DateTime.tryParse('${json['voidedAt'] ?? ''}'),
+        voidReason: (json['voidReason'] ?? '').toString(),
+        voidedByName: (json['voidedByName'] ?? '').toString(),
       );
 }

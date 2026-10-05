@@ -602,6 +602,43 @@ class SupabaseService {
     }
   }
 
+  /// Voids an order (manager only). The order keeps who/when/why and stops
+  /// counting as a sale; the backend puts the stock back and reports it as a
+  /// void on the shift report.
+  static Future<bool> voidOrder(String orderId, String reason) async {
+    if (!canUseSupabase) return false;
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataOrderVoid(orderId)),
+        headers: await _authedHeaders(),
+        body: jsonEncode({'reason': reason}),
+      );
+      if (response.statusCode == 200) return true;
+      print('⚠️ voidOrder HTTP ${response.statusCode}: ${response.body}');
+      return false;
+    } catch (e) {
+      print('⚠️ voidOrder error: $e');
+      return false;
+    }
+  }
+
+  /// Undoes a void (manager only) — the order counts as a sale again.
+  static Future<bool> restoreOrder(String orderId) async {
+    if (!canUseSupabase) return false;
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataOrderRestore(orderId)),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode == 200) return true;
+      print('⚠️ restoreOrder HTTP ${response.statusCode}: ${response.body}');
+      return false;
+    } catch (e) {
+      print('⚠️ restoreOrder error: $e');
+      return false;
+    }
+  }
+
   static Future<bool> saveOrder(Map<String, dynamic> order) async {
     if (!canUseSupabase) {
       print('⚠️ Cannot save order - Supabase not available');

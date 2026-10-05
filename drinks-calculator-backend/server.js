@@ -339,6 +339,20 @@ app.use(async (req, res, next) => {
         console.log('⚠️ customers table warning:', customerTableErr.message);
       }
 
+      // 🧾 ORDER VOID — an order corrected after the fact keeps a trace
+      // (who/when/why), stops counting as a sale and restores the stock, but is
+      // REPORTED on the shift report instead of vanishing from it: a deleted
+      // order would silently rewrite yesterday's cash-up.
+      try {
+        await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS voided_at TIMESTAMP`);
+        await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS voided_by INTEGER`);
+        await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS voided_by_name VARCHAR(120)`);
+        await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS void_reason VARCHAR(200)`);
+        console.log('✅ orders void columns ensured');
+      } catch (orderVoidErr) {
+        console.log('⚠️ orders void columns warning:', orderVoidErr.message);
+      }
+
       // 🕒 SHIFTS — the cash-up / Z-report. A staff member opens a shift with
       // the float that is in the drawer; the report is computed from the orders
       // inside that window and FROZEN onto the row when the shift closes, so a

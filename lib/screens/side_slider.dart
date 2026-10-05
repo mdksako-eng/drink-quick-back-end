@@ -179,6 +179,9 @@ class _SideSliderState extends State<SideSlider> {
       amountPaid: (order.amountPaid ?? 0).toDouble(),
       isActive: order.isActive,
       customerName: order.customerName ?? '',
+      voidedAt: order.voidedAt,
+      voidReason: order.voidReason,
+      voidedByName: order.voidedByName,
     );
   }
 
@@ -282,7 +285,7 @@ class _SideSliderState extends State<SideSlider> {
 
   Future<void> _toggleInvoiceStatus(PurchaseHistory order) async {
     if (!_canManageOrders) {
-      _showToast('Only administrators can modify invoice status',
+      _showToast(t('onlyManagersCanVoid'),
           isError: true);
       return;
     }
@@ -304,7 +307,7 @@ class _SideSliderState extends State<SideSlider> {
             ),
             const SizedBox(width: 10),
             Text(
-              currentlyActive ? 'Deactivate Invoice' : 'Activate Invoice',
+              currentlyActive ? t('voidOrder') : t('restoreOrder'),
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: widget.textPrimaryColor,
@@ -318,20 +321,20 @@ class _SideSliderState extends State<SideSlider> {
           children: [
             Text(
               currentlyActive
-                  ? 'Are you sure you want to deactivate invoice #${order.id.substring(0, 8)}?'
-                  : 'Are you sure you want to activate invoice #${order.id.substring(0, 8)}?',
+                  ? '${t('voidOrderConfirm')} #${order.id.substring(0, 8)}?'
+                  : '${t('restoreOrderConfirm')} #${order.id.substring(0, 8)}?',
               style: TextStyle(color: widget.textSecondaryColor),
             ),
             const SizedBox(height: 8),
             Text(
-              'Total: ${_formatCurrency(order.totalAmount)}',
+              '${t('inv_total')}: ${_formatCurrency(order.totalAmount)}',
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: widget.textPrimaryColor,
               ),
             ),
             Text(
-              'Date: ${DateFormat('MMM dd, yyyy').format(order.date)}',
+              '${t('date')}: ${DateFormat('MMM dd, yyyy').format(order.date)}',
               style: TextStyle(color: widget.textSecondaryColor),
             ),
             const SizedBox(height: 12),
@@ -359,8 +362,8 @@ class _SideSliderState extends State<SideSlider> {
                   Expanded(
                     child: Text(
                       currentlyActive
-                          ? 'Deactivated invoices will be hidden from reports and cannot be edited.'
-                          : 'Activated invoices will appear in reports and can be edited.',
+                          ? t('voidInfo')
+                          : t('restoreInfo'),
                       style: TextStyle(
                         color: currentlyActive ? _warningColor : _successColor,
                         fontSize: 12,
@@ -382,25 +385,77 @@ class _SideSliderState extends State<SideSlider> {
             style: ElevatedButton.styleFrom(
               backgroundColor: currentlyActive ? _warningColor : _successColor,
             ),
-            child: Text(currentlyActive ? 'Deactivate' : 'Activate'),
+            child: Text(currentlyActive ? t('voidOrder') : t('restoreOrder')),
           ),
         ],
       ),
     );
 
-    if (confirmed == true) {
-      setState(() => _isLoading = true);
-      try {
-        final orderProvider =
-            Provider.of<OrderProvider>(widget.parentContext, listen: false);
-        await orderProvider.toggleOrderStatus(order.id, !currentlyActive);
-        _showToast(currentlyActive
-            ? 'Invoice deactivated successfully'
-            : 'Invoice activated successfully');
-        setState(() {});
-      } catch (e) {
-        _showToast('Failed to update invoice status', isError: true);
-      }
+    if (confirmed != true) return;
+
+    // Voiding needs a reason — "why was this sale cancelled" is the whole point.
+    // Restoring a void does not.
+    String reason = '';
+    if (!order.isVoided) {
+      final reasonController = TextEditingController();
+      final entered = await showDialog<String>(
+        context: widget.parentContext,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(t('voidReason'),
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, color: widget.textPrimaryColor)),
+          content: TextField(
+            controller: reasonController,
+            autofocus: true,
+            maxLength: 200,
+            decoration: InputDecoration(
+              hintText: t('voidReasonHint'),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: Text(t('cancel')),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final text = reasonController.text.trim();
+                if (text.isEmpty) {
+                  _showToast(t('voidReasonRequired'), isError: true);
+                  return;
+                }
+                Navigator.pop(context, text);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: _warningColor),
+              child: Text(t('voidOrder')),
+            ),
+          ],
+        ),
+      );
+      reasonController.dispose();
+      if (entered == null || entered.isEmpty) return;
+      reason = entered;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final orderProvider =
+          Provider.of<OrderProvider>(widget.parentContext, listen: false);
+      final bool ok = order.isVoided
+          ? await orderProvider.restoreOrder(order.id)
+          : await orderProvider.voidOrder(order.id, reason);
+      _showToast(
+        ok
+            ? (order.isVoided ? t('orderRestored') : t('orderVoided'))
+            : t('orderVoidFailed'),
+        isError: !ok,
+      );
+    } catch (e) {
+      _showToast(t('orderVoidFailed'), isError: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

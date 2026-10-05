@@ -25,6 +25,7 @@ const {
   validateOpeningFloat,
   validateClose,
 } = require('../utils/shiftMath');
+const orderVoid = require('../utils/orderVoid');
 
 const MANAGER_ROLES = ['Manager', 'Administrator', 'Admin'];
 
@@ -52,7 +53,8 @@ const WRITABLE = {
     'is_active', 'minimum_level', 'purchase_price', 'unit', 'barcode', 'units_per_pack',
     'unit_kind', 'production_date', 'expiry_date', 'created_at', 'updated_at'],
   orders: ['id', 'company_id', 'items', 'total_amount', 'amount_paid', 'balance',
-    'receipt_number', 'date', 'is_active', 'customer_name', 'staff_name', 'created_by', 'created_at'],
+    'receipt_number', 'date', 'is_active', 'customer_name', 'staff_name', 'created_by', 'created_at',
+    'voided_at', 'voided_by', 'voided_by_name', 'void_reason'],
   inventory: ['id', 'company_id', 'drink_id', 'drink_name', 'quantity', 'min_stock_level',
     'category', 'unit', 'purchase_price', 'last_restocked', 'created_at'],
   inventory_transactions: ['id', 'company_id', 'drink_id', 'drink_name', 'quantity',
@@ -272,6 +274,147 @@ router.patch('/orders/:id', async (req, res) => {
   } catch (error) {
     console.error('PATCH /orders/:id error:', error.message);
     res.status(500).json({ message: 'Failed to update order' });
+  }
+});
+
+/**
+ * Put an order's drinks back on the shelf, or take them off again when a void
+ * is undone.
+ *
+ * Best-effort by design: correcting the order must never fail because the
+ * inventory tables are missing a column — the order is still corrected and
+ * still reported on the shift report either way.
+ *
+ * @param {number} sign +1 restores stock, -1 removes it again
+ * @returns {Promise<number>} units moved
+ */
+async function moveStockForOrder(req, companyId, order, reason, sign) {
+  const plan = orderVoid.stockToRestore(order.items);
+  let moved = 0;
+  for (const line of plan) {
+    try {
+      await req.db.query(
+        `INSERT INTO inventory_transactions
+           (company_id, drink_id, drink_name, quantity, type, reason, order_id, performed_by, date)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,CURRENT_TIMESTAMP)`,
+        [
+          companyId,
+          line.drinkId != null ? String(line.drinkId) : null,
+          line.drinkName,
+          line.quantity,
+          sign > 0 ? 'in' : 'out',
+          reason,
+          String(order.id),
+          req.user ? req.user.id : null,
+        ]
+      );
+      if (line.drinkId != null) {
+        await req.db.query(
+          `UPDATE inventory SET quantity = quantity + $3
+            WHERE company_id = $1 AND drink_id = $2`,
+          [companyId, String(line.drinkId), sign * line.quantity]
+        );
+      }
+      moved += line.quantity;
+    } catch (e) {
+      console.log('⚠️ stock move for a void skipped:', e.message);
+    }
+  }
+  return moved;
+}
+
+// 🧾 VOID an order — MANAGER ONLY, and never a silent delete.
+//
+// The order keeps who/when/why, stops counting as a sale, puts the stock back
+// and is reported separately on the shift report — so yesterday's cash-up can
+// never change without a trace.
+router.post('/orders/:id/void', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const allowed = orderVoid.canVoidOrder({ user: req.user });
+    if (!allowed.ok) return res.status(403).json({ message: allowed.reason });
+
+    const found = await req.db.query(
+      'SELECT * FROM orders WHERE id = $1 AND company_id = $2',
+      [req.params.id, companyId]
+    );
+    if (found.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    const order = found.rows[0];
+    if (orderVoid.isVoided(order)) {
+      return res.status(409).json({ message: 'This order is already voided' });
+    }
+
+    const valid = orderVoid.validateVoid({ order, reason: req.body && req.body.reason });
+    if (!valid.ok) return res.status(400).json({ message: valid.reason });
+
+    const voidedByName =
+      (req.user && (req.user.username || req.user.email)) || '';
+
+    const updated = await req.db.query(
+      `UPDATE orders
+          SET is_active = false,
+              voided_at = CURRENT_TIMESTAMP,
+              voided_by = $3,
+              voided_by_name = $4,
+              void_reason = $5
+        WHERE id = $1 AND company_id = $2
+        RETURNING *`,
+      [req.params.id, companyId, req.user.id, voidedByName, valid.reason]
+    );
+
+    const moved = await moveStockForOrder(req, companyId, order, 'void', 1);
+
+    res.json({ ...updated.rows[0], stockRestored: moved });
+  } catch (error) {
+    console.error('POST /orders/:id/void error:', error.message);
+    res.status(500).json({ message: 'Failed to void this order' });
+  }
+});
+
+// ♻️ Undo a void — MANAGER ONLY. The trace is removed and the stock is taken
+// off the shelf again, so the numbers match what was actually sold.
+router.post('/orders/:id/restore', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const allowed = orderVoid.canVoidOrder({ user: req.user });
+    if (!allowed.ok) return res.status(403).json({ message: allowed.reason });
+
+    const found = await req.db.query(
+      'SELECT * FROM orders WHERE id = $1 AND company_id = $2',
+      [req.params.id, companyId]
+    );
+    if (found.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    const order = found.rows[0];
+
+    const valid = orderVoid.validateRestore({ order });
+    if (!valid.ok) return res.status(409).json({ message: valid.reason });
+
+    const updated = await req.db.query(
+      `UPDATE orders
+          SET is_active = true,
+              voided_at = NULL,
+              voided_by = NULL,
+              voided_by_name = NULL,
+              void_reason = NULL
+        WHERE id = $1 AND company_id = $2
+        RETURNING *`,
+      [req.params.id, companyId]
+    );
+
+    const moved = await moveStockForOrder(req, companyId, order, 'void_restored', -1);
+
+    res.json({ ...updated.rows[0], stockRestored: -moved });
+  } catch (error) {
+    console.error('POST /orders/:id/restore error:', error.message);
+    res.status(500).json({ message: 'Failed to restore this order' });
   }
 });
 
@@ -687,14 +830,27 @@ router.get('/shifts/:id/summary', async (req, res) => {
     }
     const shift = found.rows[0];
 
-    // The sales of this shift: the orders taken inside its window.
+    // The sales of this shift: the orders taken inside its window. VOIDED orders
+    // are excluded from the sales and reported separately, so a correction can
+    // never silently rewrite a cash-up.
     const orders = await req.db.query(
       `SELECT total_amount, amount_paid FROM orders
         WHERE company_id = $1 AND created_at >= $2
-          AND created_at <= COALESCE($3, CURRENT_TIMESTAMP)`,
+          AND created_at <= COALESCE($3, CURRENT_TIMESTAMP)
+          AND voided_at IS NULL`,
       [companyId, shift.opened_at, shift.closed_at]
     );
-    res.json(summariseShift({ shift, orders: orders.rows }));
+    const voids = await req.db.query(
+      `SELECT total_amount, voided_at FROM orders
+        WHERE company_id = $1 AND voided_at IS NOT NULL
+          AND voided_at >= $2 AND voided_at <= COALESCE($3, CURRENT_TIMESTAMP)`,
+      [companyId, shift.opened_at, shift.closed_at]
+    );
+    res.json(summariseShift({
+      shift,
+      orders: orders.rows,
+      voids: orderVoid.summariseVoids(voids.rows),
+    }));
   } catch (error) {
     console.error('GET /shifts/:id/summary error:', error.message);
     res.status(500).json({ message: 'Failed to build the Z-report' });
@@ -730,7 +886,14 @@ router.patch('/shifts/:id', async (req, res) => {
     const orders = await req.db.query(
       `SELECT total_amount, amount_paid FROM orders
         WHERE company_id = $1 AND created_at >= $2
-          AND created_at <= CURRENT_TIMESTAMP`,
+          AND created_at <= CURRENT_TIMESTAMP
+          AND voided_at IS NULL`,
+      [companyId, shift.opened_at]
+    );
+    const voids = await req.db.query(
+      `SELECT total_amount, voided_at FROM orders
+        WHERE company_id = $1 AND voided_at IS NOT NULL
+          AND voided_at >= $2 AND voided_at <= CURRENT_TIMESTAMP`,
       [companyId, shift.opened_at]
     );
 
@@ -757,6 +920,7 @@ router.patch('/shifts/:id', async (req, res) => {
       },
       orders: orders.rows,
       payments: payments.rows,
+      voids: orderVoid.summariseVoids(voids.rows),
     });
 
     const result = await req.db.query(
