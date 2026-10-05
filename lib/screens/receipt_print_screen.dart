@@ -22,6 +22,9 @@ class ReceiptPrintScreen extends StatefulWidget {
   final String companyPhone;
   final String companyEmail;
 
+  /// The ORIGINAL order date. A reprinted receipt must not be dated today.
+  final DateTime? date;
+
   const ReceiptPrintScreen({
     Key? key,
     required this.drinks,
@@ -34,6 +37,7 @@ class ReceiptPrintScreen extends StatefulWidget {
     this.companyAddress = '',
     this.companyPhone = '',
     this.companyEmail = '',
+    this.date,
   }) : super(key: key);
 
   @override
@@ -64,7 +68,7 @@ class _ReceiptPrintScreenState extends State<ReceiptPrintScreen> {
       orderId:
           widget.orderId ?? DateTime.now().millisecondsSinceEpoch.toString(),
       customerName: widget.customerName ?? '',
-      date: DateTime.now(),
+      date: widget.date ?? DateTime.now(),
       items: items,
       totalAmount: widget.totalAmount,
       amountPaid: widget.amountPaid,

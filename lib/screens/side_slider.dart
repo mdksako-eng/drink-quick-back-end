@@ -13,6 +13,12 @@ import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/widgets/skeleton.dart';
 import '../utils/i18n.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:drinks_calculator_fixed/providers/customer_provider.dart';
+import 'package:drinks_calculator_fixed/screens/receipt_print_screen.dart';
+import 'package:drinks_calculator_fixed/services/whatsapp_service.dart';
+import 'package:drinks_calculator_fixed/utils/receipt_from_order.dart';
+import 'package:drinks_calculator_fixed/utils/whatsapp_helper.dart';
 
 class SideSlider extends StatefulWidget {
   final bool isOpen;
@@ -1399,6 +1405,114 @@ class _SideSliderState extends State<SideSlider> {
     );
   }
 
+  /// Company header for a reprinted receipt — the same source the live invoice
+  /// uses, so a reprint looks identical to the original.
+  Future<Map<String, String>> _companyHeader() async {
+    final prefs = await SharedPreferences.getInstance();
+    return {
+      'name': prefs.getString('company_name') ?? 'Drink Quick Cal',
+      'address': prefs.getString('company_address') ?? '',
+      'phone': prefs.getString('company_phone') ?? '',
+      'email': prefs.getString('company_email') ?? '',
+    };
+  }
+
+  /// The phone on file for the customer this order was billed to, when that name
+  /// matches a registered customer (older orders have no phone of their own).
+  String? _phoneForCustomer(String customerName) {
+    final wanted = customerName.trim().toLowerCase();
+    if (wanted.isEmpty) return null;
+    try {
+      final customers =
+          Provider.of<CustomerProvider>(widget.parentContext, listen: false)
+              .customers;
+      for (final c in customers) {
+        if (c.name.trim().toLowerCase() == wanted) {
+          final phone = c.phone.trim();
+          return phone.isEmpty ? null : phone;
+        }
+      }
+    } catch (_) {
+      // No customer list available: fall back to WhatsApp's own contact picker.
+    }
+    return null;
+  }
+
+  /// Reprints a past order. The receipt is rebuilt from the stored order and
+  /// keeps its ORIGINAL date — a reprint dated today would be misleading.
+  Future<void> _reprintOrder(PurchaseHistory order) async {
+    if (!ReceiptFromOrder.hasItems(order)) {
+      Helpers.showToast(t('noItemsToPrint'), isError: true);
+      return;
+    }
+    final company = await _companyHeader();
+    if (!mounted) return;
+    await Navigator.push(
+      widget.parentContext,
+      MaterialPageRoute(
+        builder: (_) => ReceiptPrintScreen(
+          drinks: ReceiptFromOrder.drinksFor(order),
+          totalAmount: order.totalAmount,
+          amountPaid: order.amountPaid,
+          balance: order.balance,
+          orderId: order.id,
+          customerName: ReceiptFromOrder.customerLabel(order, t('walkIn')),
+          date: order.date,
+          companyName: company['name'] ?? 'Drink Quick Cal',
+          companyAddress: company['address'] ?? '',
+          companyPhone: company['phone'] ?? '',
+          companyEmail: company['email'] ?? '',
+        ),
+      ),
+    );
+  }
+
+  /// Re-sends a past order's receipt on WhatsApp: to the customer's number when
+  /// we know it, otherwise WhatsApp asks which chat to send it to.
+  Future<void> _sendOrderOnWhatsApp(PurchaseHistory order) async {
+    if (!ReceiptFromOrder.hasItems(order)) {
+      Helpers.showToast(t('noItemsToPrint'), isError: true);
+      return;
+    }
+    final company = await _companyHeader();
+
+    final rows = <WaRow?>[
+      WhatsAppHelper.row(
+          t('customerName'), ReceiptFromOrder.customerLabel(order, t('walkIn'))),
+      WhatsAppHelper.row(t('orders'), '#${order.id}'),
+      WhatsAppHelper.row(
+          t('date'), DateFormat('dd/MM/yyyy HH:mm').format(order.date)),
+    ];
+    for (final item in order.items) {
+      rows.add(WhatsAppHelper.row(
+        '${item.quantity} x ${item.drinkName}',
+        _formatCurrency(item.totalPrice),
+      ));
+    }
+
+    final message = WhatsAppHelper.message(
+      title: company['name'] ?? 'Drink Quick Cal',
+      subtitle: t('orderReceipt'),
+      rows: WhatsAppHelper.rows(rows),
+      totalLabel: t('inv_total'),
+      totalValue: _formatCurrency(order.totalAmount),
+      notes: [
+        '${t('amountReceived')}: ${_formatCurrency(order.amountPaid)}',
+        '${order.balance >= 0 ? t('changeDue') : t('balanceDue')}: '
+            '${_formatCurrency(order.balance.abs())}',
+      ],
+      footer: company['phone'] ?? '',
+    );
+
+    final phone = _phoneForCustomer(order.customerName);
+    final sent = phone != null
+        ? await WhatsAppService.send(phone: phone, message: message)
+        : await WhatsAppService.share(message: message);
+    if (!sent && mounted) {
+      Helpers.showToast(t('waSendFailed'), isError: true);
+    }
+  }
+
   void _showOrderDetails(PurchaseHistory order, double screenWidth) {
     final isMobile = screenWidth < 600;
     final bool isActive = order.isActive;
@@ -1468,7 +1582,7 @@ class _SideSliderState extends State<SideSlider> {
                           const SizedBox(height: 2),
                           // FULL ORDER ID displayed here
                           Text(
-                            'Order #${order.id}',
+                            '#${order.id}',
                             style: TextStyle(
                               fontSize: isMobile ? 12.0 : 13.0,
                               color: widget.textSecondaryColor,
@@ -1549,7 +1663,7 @@ class _SideSliderState extends State<SideSlider> {
 
                 // Items List Title
                 Text(
-                  'Items Ordered:',
+                  t('inv_orderItems'),
                   style: TextStyle(
                     fontSize: isMobile ? 16.0 : 18.0,
                     fontWeight: FontWeight.w600,
@@ -1634,23 +1748,23 @@ class _SideSliderState extends State<SideSlider> {
                   child: Column(
                     children: [
                       _buildDetailRow(
-                        'Total Items',
-                        '${order.items.length} items',
+                        t('totalItems'),
+                        '${ReceiptFromOrder.unitCount(order)} ${t('items')}',
                         isMobile: isMobile,
                       ),
                       _buildDetailRow(
-                        'Subtotal',
+                        t('subtotal'),
                         _formatCurrency(order.totalAmount),
                         isMobile: isMobile,
                       ),
                       _buildDetailRow(
-                        'Amount Received',
+                        t('amountReceived'),
                         _formatCurrency(order.amountPaid),
                         isMobile: isMobile,
                       ),
                       const Divider(height: 20),
                       _buildDetailRow(
-                        order.balance >= 0 ? 'Change Due' : 'Balance Due',
+                        order.balance >= 0 ? t('changeDue') : t('balanceDue'),
                         _formatCurrency(order.balance.abs()),
                         isMobile: isMobile,
                         isBold: true,
@@ -1687,7 +1801,7 @@ class _SideSliderState extends State<SideSlider> {
                         icon:
                             Icon(Icons.edit_note, size: isMobile ? 18.0 : 20.0),
                         label: Text(
-                          'Edit & Re-invoice',
+                          t('editReInvoice'),
                           style: TextStyle(
                             fontSize: isMobile ? 14.0 : 15.0,
                             fontWeight: FontWeight.w600,
@@ -1719,7 +1833,7 @@ class _SideSliderState extends State<SideSlider> {
                             size: isMobile ? 18.0 : 20.0,
                           ),
                           label: Text(
-                            isActive ? 'Deactivate' : 'Activate',
+                            isActive ? t('deactivate') : t('activate'),
                             style: TextStyle(
                               fontSize: isMobile ? 14.0 : 15.0,
                               fontWeight: FontWeight.w600,
@@ -1727,6 +1841,36 @@ class _SideSliderState extends State<SideSlider> {
                           ),
                         ),
                       ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+
+                // Reprint / re-send: a customer who comes back the next day needs
+                // proof of purchase, and the receipt keeps its ORIGINAL date.
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _reprintOrder(order),
+                        icon: Icon(Icons.print, size: isMobile ? 18.0 : 20.0),
+                        label: Text(
+                          t('inv_print'),
+                          style: TextStyle(fontSize: isMobile ? 14.0 : 15.0),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _sendOrderOnWhatsApp(order),
+                        icon: Icon(Icons.chat, size: isMobile ? 18.0 : 20.0),
+                        label: Text(
+                          t('waSend'),
+                          style: TextStyle(fontSize: isMobile ? 14.0 : 15.0),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ],
