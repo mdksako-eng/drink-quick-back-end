@@ -535,3 +535,52 @@ routes (five verification sites), plus one missing check:
 - i18n parity → EN=1075 FR=1075
 - `node --check` clean on every touched backend file
 
+## Phase 14 - order honesty, legal pages and manuals (2026-10-05, commit 44edf91)
+
+### What shipped
+- **Reprint or re-send a past order** (`bd87598`): `receipt_from_order.dart` (+12 tests)
+  rebuilds any historical order on the receipt screen, WhatsApp resend included, with
+  ten new EN/FR keys.
+- **Void an order with a trace** (`aa24533`): `orders.voided_at / voided_by /
+  voided_by_name / void_reason`, pure `utils/orderVoid.js` (20 Jest tests),
+  `POST /orders/:id/void` and `/restore` (manager-only, reason mandatory), stock put
+  back through `inventory_transactions`, and the Z report excluding voids while
+  reporting `voidCount` and `voidValue` as their own line.
+- **`GET /api/auth/me` now returns `isOwner`** (`44edf91`). Only the login path set
+  that flag, so auto-login (cold start) sent a user object without it and the
+  owner-only company-logo action answered "not authorized" even to the owner. New
+  `utils/companyOwner.js` (`resolveIsOwner`, self-heals a missing `owner_id` claim,
+  15 Jest tests) is wired into `controllers/auth.controller.js`, which returns
+  `{...userData, isOwner}`.
+- **Privacy Policy and Terms rewritten** (`44edf91`): `public/privacy.html`,
+  `terms.html` and their French twins. Inline Drink Quick Cal SVG logo, dark-mode
+  aware styling, and the clauses a multi-tenant till actually needs -
+  controller/processor split (the Shop controls its own customers' data), named
+  sub-processors (Supabase, Render, the payment operator), retention plus a 90-day
+  deletion window after closure, security measures, user rights, Cameroon Law
+  2010/012, the Shop's own legal duties (licence, minors, receipts, taxes), liability
+  capped at three months of fees, and Douala as the forum.
+- **Manuals** (`44edf91`): `docs/USER_MANUAL.md` follows one service end to end (sell,
+  receipt, tab, stock, shift, count, offline, subscription, troubleshooting), and
+  `docs/ADMIN_MANUAL.md` is the control manual (role matrix and the protected owner
+  row, voids with a trace, discount approvals, variance at cost, cash-up and Z report,
+  credit control, price/margin hygiene, subscription and payment reconciliation with
+  test versus live mode, security operations, data-protection duties, escalation).
+  Both are English with a French summary.
+
+### Validation (2026-10-05)
+- `flutter analyze lib` -> 0 errors (503 issues, all pre-existing warnings/infos)
+- `flutter test` -> 293 passed
+- `npm --prefix drinks-calculator-backend test` -> 13 suites / 175 tests passing
+- i18n parity -> EN=1114 FR=1114, no key differences
+- `node --check drinks-calculator-backend/server.js` -> clean
+
+### Still open
+- **Live money is a human step**: the deployed backend is still in TEST mode
+  (`/api/subscriptions/notchpay/health` -> `mode: "test"`); Production Mode plus
+  `pk_live_` / `sk_live_` on Render, then `NOTCHPAY_REQUIRE_LIVE=true`.
+- Part-payment -> remainder onto the customer's tab: approved, not built.
+- `Math.random()` reset/join codes (5 sites) still to move to `crypto.randomInt`;
+  rate limiting still covers only the most sensitive endpoints.
+
+
