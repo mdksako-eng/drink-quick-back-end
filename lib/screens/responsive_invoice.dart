@@ -60,8 +60,20 @@ class _ResponsiveInvoiceState extends State<ResponsiveInvoice> {
   static const Color warningColor = Color(0xFFFF9800);
   static const Color errorColor = Color(0xFFF44336);
   static const Color backgroundColor = Color(0xFFF8F9FA);
-  static const Color textPrimary = Color(0xFF2C3E50);
-  static const Color textSecondary = Color(0xFF7B8A8B);
+
+  /// Theme-aware text colours: the invoice must follow the app's theme (and stay
+  /// readable on it) instead of being a fixed light page with dark text. These
+  /// were `static const` — which is exactly why dark mode could not affect them.
+  Color get textPrimary => Theme.of(context).brightness == Brightness.dark
+      ? Colors.white
+      : const Color(0xFF2C3E50);
+  Color get textSecondary => Theme.of(context).brightness == Brightness.dark
+      ? Colors.white70
+      : const Color(0xFF7B8A8B);
+
+  /// Surfaces: paper-white in light mode, the app's card colour in dark mode.
+  Color get _surfaceColor => Theme.of(context).cardColor;
+  Color get _pageColor => Theme.of(context).scaffoldBackgroundColor;
   static const Color lightBlueBg = Color(0xFFE8F4FD);
   static const Color purpleButtonColor = Color(0xFF764BA2);
 
@@ -395,13 +407,13 @@ class _ResponsiveInvoiceState extends State<ResponsiveInvoice> {
     final authProvider = Provider.of<AuthProvider>(context);
   final isStaff = (authProvider.user!.role.toLowerCase()) == 'staff';
     final entries = _groupDrinks().entries.toList();
-    return Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 20)]), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    return Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: _surfaceColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 20)]), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(_companyName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primaryColor)),
-          if (_companyPhone.isNotEmpty) Row(children: [const Icon(Icons.phone, size: 14, color: textSecondary), const SizedBox(width: 4), Text(_companyPhone, style: const TextStyle(fontSize: 12, color: textSecondary))]),
-          if (_companyEmail.isNotEmpty) Row(children: [const Icon(Icons.email, size: 14, color: textSecondary), const SizedBox(width: 4), Text(_companyEmail, style: const TextStyle(fontSize: 12, color: textSecondary))]),
-          if (_companyAddress.isNotEmpty) Row(children: [const Icon(Icons.location_on, size: 14, color: textSecondary), const SizedBox(width: 4), Expanded(child: Text(_companyAddress, style: const TextStyle(fontSize: 12, color: textSecondary)))]),
+          if (_companyPhone.isNotEmpty) Row(children: [Icon(Icons.phone, size: 14, color: textSecondary), const SizedBox(width: 4), Text(_companyPhone, style: TextStyle(fontSize: 12, color: textSecondary))]),
+          if (_companyEmail.isNotEmpty) Row(children: [Icon(Icons.email, size: 14, color: textSecondary), const SizedBox(width: 4), Text(_companyEmail, style: TextStyle(fontSize: 12, color: textSecondary))]),
+          if (_companyAddress.isNotEmpty) Row(children: [Icon(Icons.location_on, size: 14, color: textSecondary), const SizedBox(width: 4), Expanded(child: Text(_companyAddress, style: TextStyle(fontSize: 12, color: textSecondary)))]),
         ])),
         if (!widget.isPreview && !isStaff ) GestureDetector(onTap: () => _showCompanyNameDialog(context), child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: primaryColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: primaryColor)), child: Row(children: [Icon(Icons.edit, size: 16, color: primaryColor), SizedBox(width: 4), Text(t('edit'), style: TextStyle(fontSize: 12, color: primaryColor))]))),
       ]),
@@ -431,10 +443,10 @@ class _ResponsiveInvoiceState extends State<ResponsiveInvoice> {
   Widget _infoCard(IconData icon, String title, String name, String phone, String email, String address) {
     return Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: backgroundColor, borderRadius: BorderRadius.circular(12), border: Border.all(color: primaryColor.withValues(alpha: 0.2))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [Icon(icon, size: 18, color: primaryColor), const SizedBox(width: 8), Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: primaryColor))]),
-      const SizedBox(height: 12), Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textPrimary)),
-      if (phone.isNotEmpty) ...[const SizedBox(height: 8), Row(children: [const Icon(Icons.phone, size: 14, color: textSecondary), const SizedBox(width: 8), Text(phone, style: const TextStyle(fontSize: 13, color: textSecondary))])],
-      if (email.isNotEmpty) ...[const SizedBox(height: 4), Row(children: [const Icon(Icons.email, size: 14, color: textSecondary), const SizedBox(width: 8), Text(email, style: const TextStyle(fontSize: 13, color: textSecondary))])],
-      if (address.isNotEmpty) ...[const SizedBox(height: 4), Row(children: [const Icon(Icons.location_on, size: 14, color: textSecondary), const SizedBox(width: 8), Expanded(child: Text(address, style: const TextStyle(fontSize: 13, color: textSecondary)))])],
+      const SizedBox(height: 12), Text(name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textPrimary)),
+      if (phone.isNotEmpty) ...[const SizedBox(height: 8), Row(children: [Icon(Icons.phone, size: 14, color: textSecondary), const SizedBox(width: 8), Text(phone, style: TextStyle(fontSize: 13, color: textSecondary))])],
+      if (email.isNotEmpty) ...[const SizedBox(height: 4), Row(children: [Icon(Icons.email, size: 14, color: textSecondary), const SizedBox(width: 8), Text(email, style: TextStyle(fontSize: 13, color: textSecondary))])],
+      if (address.isNotEmpty) ...[const SizedBox(height: 4), Row(children: [Icon(Icons.location_on, size: 14, color: textSecondary), const SizedBox(width: 8), Expanded(child: Text(address, style: TextStyle(fontSize: 13, color: textSecondary)))])],
     ]));
   }
 
@@ -449,7 +461,7 @@ class _ResponsiveInvoiceState extends State<ResponsiveInvoice> {
     ]));
   }
 
-  Widget _infoRow(String label, String value) => Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: const TextStyle(fontSize: 13, color: textSecondary)), Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textPrimary))]);
+  Widget _infoRow(String label, String value) => Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: TextStyle(fontSize: 13, color: textSecondary)), Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textPrimary))]);
   Widget _summaryRow(String label, String value, [bool bold = false, Color? color]) => Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: TextStyle(fontSize: 16, fontWeight: bold ? FontWeight.bold : FontWeight.normal)), Text(value, style: TextStyle(fontSize: 16, fontWeight: bold ? FontWeight.bold : FontWeight.normal, color: color ?? primaryColor))]);
 
   @override
@@ -469,10 +481,10 @@ class _ResponsiveInvoiceState extends State<ResponsiveInvoice> {
         if (!widget.isPreview) IconButton(icon: const Icon(Icons.receipt_long), onPressed: _openReceipt, tooltip: t('receiptTitle')),
         if (_isGeneratingPDF) const Padding(padding: EdgeInsets.all(8), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))),
       ]),
-      body: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [backgroundColor, Colors.white])), child: SingleChildScrollView(padding: const EdgeInsets.all(20), child:
+      body: Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [_pageColor, _surfaceColor])), child: SingleChildScrollView(padding: const EdgeInsets.all(20), child:
       
        _buildInvoiceContent())),
-      bottomNavigationBar: widget.isPreview ? null : Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)]), child: SafeArea(child: Row(children: [
+      bottomNavigationBar: widget.isPreview ? null : Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: _surfaceColor, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)]), child: SafeArea(child: Row(children: [
         Expanded(child: ElevatedButton.icon(onPressed: _isGeneratingPDF ? null : () => _generateAndPrintPDF(context), icon: const Icon(Icons.print), label: Text(t('inv_print')), style: ElevatedButton.styleFrom(backgroundColor: primaryColor, padding: const EdgeInsets.symmetric(vertical: 14)))),
         const SizedBox(width: 10),
         Expanded(child: ElevatedButton.icon(onPressed: _isGeneratingPDF ? null : () => _savePDF(context), icon: const Icon(Icons.save), label: Text(t('save')), style: ElevatedButton.styleFrom(backgroundColor: successColor, padding: const EdgeInsets.symmetric(vertical: 14)))),

@@ -1,131 +1,162 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Privacy Policy — Drink Quick Cal</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      background: #f5f6fa;
-      color: #2d3436;
-      line-height: 1.7;
-    }
-    .header {
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: #fff;
-      padding: 40px 20px;
-      text-align: center;
-    }
-    .header h1 { margin: 0 0 6px; font-size: 28px; }
-    .header p { margin: 0; opacity: 0.9; font-size: 14px; }
-    .wrap { max-width: 800px; margin: 0 auto; padding: 30px 20px 60px; }
-    .card {
-      background: #fff;
-      border-radius: 12px;
-      padding: 28px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-    }
-    h2 { color: #667eea; font-size: 20px; margin-top: 0; }
-    h3 { color: #2d3436; font-size: 16px; margin-bottom: 4px; }
-    p, li { font-size: 15px; }
-    ul { padding-left: 20px; }
-    .updated { font-size: 12px; color: #888; }
-    a { color: #667eea; }
-    .footer { text-align: center; color: #888; font-size: 13px; padding: 20px; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Drink Quick Cal</title>
+<meta name="description" content="How Drink Quick Cal collects, uses, stores and protects personal data.">
+<style>
+  :root{--brand:#4361EE;--ink:#12203a;--muted:#5b6b85;--bg:#f6f8fc;--card:#fff;--line:#e3e9f2;--warn:#fff7e6;--warnline:#f0c36d}
+  @media (prefers-color-scheme:dark){:root{--ink:#eaf0fb;--muted:#a8b6cd;--bg:#0e1420;--card:#151d2c;--line:#26324a;--warn:#241d0d;--warnline:#8a6a2a}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:880px;margin:0 auto;padding:26px 20px 60px}
+  .brand{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 0 2px}
+  .wordmark{font-size:23px;font-weight:800;letter-spacing:-.4px}
+  .wordmark span{color:var(--brand)}
+  .tagline{margin:2px 0 0;color:var(--muted);font-size:13px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 24px;margin-top:20px}
+  h1{font-size:29px;margin:12px 0 4px;letter-spacing:-.5px}
+  h2{font-size:18px;margin:26px 0 6px}
+  .meta{color:var(--muted);font-size:13px}
+  ul{padding-left:20px}li{margin:4px 0}
+  .toc{columns:2;column-gap:26px}.toc a{color:var(--brand);text-decoration:none;font-size:14px}
+  .note{background:var(--warn);border:1px solid var(--warnline);border-radius:12px;padding:14px 16px;margin:18px 0}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:15px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:rgba(67,97,238,.08)}
+  footer{margin-top:30px;color:var(--muted);font-size:13px;text-align:center}
+  a{color:var(--brand)}@media(max-width:560px){.toc{columns:1}h1{font-size:25px}}
+</style>
 </head>
 <body>
-  <div class="header">
-    <h1>🍹 Drink Quick Cal</h1>
-    <p>Privacy Policy</p>
+<div class="wrap">
+  <div class="brand">
+    <svg width="46" height="46" viewBox="0 0 64 64" role="img" aria-label="Drink Quick Cal">
+      <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4361EE"/><stop offset="1" stop-color="#4CC9F0"/></linearGradient></defs>
+      <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#g1)"/>
+      <path d="M20 16h24l-10 16v12h6v4H24v-4h6V32L20 16z" fill="#fff" opacity=".95"/>
+      <circle cx="45" cy="20" r="3.2" fill="#fff"/>
+    </svg>
+    <div>
+      <div class="wordmark">Drink&nbsp;Quick&nbsp;<span>Cal</span></div>
+      <p class="tagline">Bar &amp; drinks management for Cameroon — built to work offline</p>
+    </div>
   </div>
 
-  <div class="wrap">
-    <div class="card">
-      <p class="updated">Last updated: 3 September 2026</p>
-      <p>This Privacy Policy explains what information <strong>Drink Quick Cal</strong> (&quot;we&quot;, &quot;us&quot;, &quot;the app&quot;) collects, how we use and protect it, and the choices you have. By creating an account or using the app, you agree to the practices described here.</p>
+  <div class="card">
+    <h1>Privacy Policy</h1>
+    <p class="meta">Version 2.0 &middot; Effective 27 September 2026 &middot; Applies to the Drink Quick Cal app and the service behind it (the &ldquo;Service&rdquo;).</p>
+    <p>Drink Quick Cal is used by bars, restaurants and drinks retailers (each a &ldquo;Shop&rdquo;) to record sales, manage stock, follow customer credit and close the day&rsquo;s cash-up. A till handles money and customers&rsquo; names, so this policy states plainly what we collect, why, who can see it, and how you get it out or deleted.</p>
+    <div class="note"><strong>Plain-language summary.</strong> Your Shop owns its business data — drinks, orders, stock, customers, staff. We host and process it for you and never sell it. Staff accounts are created by the Shop&rsquo;s manager, not by us. There is no advertising tracking, and we do not read your books for our own purposes.</div>
+
+    <h2>Contents</h2>
+    <div class="toc">
+      <a href="#who">1. Who we are</a><br>
+      <a href="#roles">2. Our data vs your Shop&rsquo;s data</a><br>
+      <a href="#collect">3. What we collect</a><br>
+      <a href="#why">4. Why we process it</a><br>
+      <a href="#share">5. Who we share it with</a><br>
+      <a href="#where">6. Where data is stored</a><br>
+      <a href="#retain">7. How long we keep it</a><br>
+      <a href="#security">8. How we protect it</a><br>
+      <a href="#rights">9. Your rights</a><br>
+      <a href="#device">10. Device permissions</a><br>
+      <a href="#children">11. Children</a><br>
+      <a href="#changes">12. Changes</a><br>
+      <a href="#contact">13. Contact and complaints</a>
     </div>
 
-    <div class="card">
-      <h2>1. Information We Collect</h2>
-      <h3>a) Account information</h3>
-      <p>When you register, we collect your <strong>username, email address, phone number, password (stored only as a secure hash), and the answers to your security questions</strong>.</p>
-      <h3>b) Business information (for business owners/managers)</h3>
-      <p>If you register a business, we collect your <strong>company name, company code, contact email, phone, and address</strong>. If you connect mobile-money payments, we store the <strong>payment configuration</strong> needed to process your transactions (we do not store your bank/card details).</p>
-      <h3>c) Device &amp; session information</h3>
-      <p>To keep your account secure, we collect <strong>device identifiers, device names, and session records</strong>, and may log IP-level data. This powers features such as staff login approvals and detecting when a session is used on another device.</p>
-      <h3>d) Business data you create</h3>
-      <p>Drink menus, orders, inventory, stock transactions, payments, reports, and settings that you create or enter within the app are stored to provide the service.</p>
-    </div>
-<div class="card">
-      <h2>2. How We Use Your Information</h2>
-      <ul>
-        <li>To create and manage your account and business, and to verify your email.</li>
-        <li>To authenticate you securely and protect your account (including owner/manager verification of new members, and staff login approvals).</li>
-        <li>To process orders and payments, and to show you order, stock, and payment history.</li>
-        <li>To provide in-app notifications about your orders, stock, and payments.</li>
-        <li>To improve, secure, and maintain the app.</li>
-      </ul>
-    </div>
+    <h2 id="who">1. Who we are</h2>
+    <p>Drink Quick Cal (the &ldquo;Service&rdquo;) is operated by the Drink Quick Cal publisher, based in Douala, Cameroon (&ldquo;we&rdquo;, &ldquo;us&rdquo;). We decide how the Service itself is built, secured and operated; full legal identification of the publisher is available at the address in section 13.</p>
 
-    <div class="card">
-      <h2>3. How We Store and Protect Data</h2>
-      <ul>
-        <li>Passwords are <strong>hashed</strong> (bcrypt) — we never store or see your plaintext password.</li>
-        <li>Sensitive application data is stored in a <strong>database protected by Row-Level Security (RLS)</strong>, and is only accessed through our authenticated backend.</li>
-        <li>On mobile devices, local secure storage (such as PINs) is encrypted using the device's hardware security features.</li>
-        <li>Business payment credentials are kept server-side and never exposed to clients.</li>
-        <li>Verification codes and join approvals are time-limited and single-use.</li>
-      </ul>
-    </div>
+    <h2 id="roles">2. Two roles: our data and your Shop&rsquo;s data</h2>
+    <table>
+      <tr><th>Data</th><th>Who decides</th><th>What that means</th></tr>
+      <tr><td>Account, staff, drinks, orders, stock, expenses</td><td><strong>Your Shop</strong></td><td>The Shop controls it; we host and process it only to run the Service for that Shop.</td></tr>
+      <tr><td><strong>Your Shop&rsquo;s own customers</strong> — names, phones, addresses, tabs, purchase history</td><td><strong>Your Shop</strong></td><td>The Shop is responsible for telling its customers what it records and why. We act only on the Shop&rsquo;s instructions and never use that data for ourselves.</td></tr>
+      <tr><td>Service usage, security logs, billing</td><td><strong>Us</strong></td><td>Needed to keep the Service running, secure and paid for.</td></tr>
+    </table>
+    <p>Every record is scoped to one Shop, and access is enforced on the server from the signed-in session — never from anything the app sends.</p>
 
-    <div class="card">
-      <h2>4. Sharing of Information</h2>
-      <p>We do <strong>not</strong> sell your personal data. We only share information in these limited cases:</p>
-      <ul>
-        <li><strong>Payment providers (MTN Mobile Money, Orange Money):</strong> to process a payment you initiate, the relevant transaction details are submitted to the provider you choose.</li>
-        <li><strong>Hosting providers</strong> that store data on our behalf (e.g., database and application hosting), under appropriate safeguards.</li>
-        <li><strong>Legal requirements:</strong> to comply with a valid legal request or to protect rights, safety, and security.</li>
-      </ul>
-    </div>
+    <h2 id="collect">3. What we collect</h2>
+    <ul>
+      <li><strong>Account:</strong> name or username, email, optional phone, role, company, hashed password (never the password itself), language and theme.</li>
+      <li><strong>Business records you enter:</strong> drinks and prices, stock movements, sales and their items, receipt numbers, shifts and cash counts, customer accounts and credit ledger, supplier and expense notes.</li>
+      <li><strong>Device and technical data:</strong> app version, platform, an anonymous session identifier, error traces, and the amount/status of payment attempts.</li>
+      <li><strong>Support messages</strong> you send us and the contact details in them.</li>
+    </ul>
+    <p>We do not collect your address book, your SMS, or your location history, and there are no third-party advertising or analytics trackers in the app.</p>
 
-    <div class="card">
-      <h2>5. Your Choices &amp; Rights</h2>
-      <ul>
-        <li>You can update your account and business information at any time in the app.</li>
-        <li>You can request access to, correction of, or deletion of your personal data.</li>
-        <li>Company owners can manage the members of their business (approve or reject join requests, remove members).</li>
-        <li>You can delete your app-stored data (local storage) via the app's storage settings.</li>
-      </ul>
-      <p>To exercise any of these rights, contact us using the details below. We will respond within a reasonable time.</p>
-    </div>
+    <h2 id="why">4. Why we process it</h2>
+    <ul>
+      <li><strong>To provide the Service</strong> — recording sales, syncing a Shop across its devices, printing receipts, reports and forecasts.</li>
+      <li><strong>To keep accounts secure</strong> — sessions, roles, manager approvals, audit trails.</li>
+      <li><strong>To manage subscriptions</strong> — which plan is active, when it expires, and the transaction that activated it.</li>
+      <li><strong>To support you</strong> — diagnosing a problem you report.</li>
+      <li><strong>To comply with the law</strong> — answering lawful requests from competent authorities.</li>
+    </ul>
 
-    <div class="card">
-      <h2>6. Data Retention</h2>
-      <p>We keep your account and business data for as long as your account is active. When you request account deletion, we delete or anonymise your personal data, except where we are required to keep records for legal or security purposes.</p>
-    </div>
+    <h2 id="share">5. Who we share it with</h2>
+    <p>We never sell personal data. We share it only with the providers needed to run the Service, each bound to use it for that purpose alone:</p>
+    <ul>
+      <li><strong>Hosting and database</strong> — our server host and managed Postgres provider, in an isolated, access-restricted project.</li>
+      <li><strong>Payment providers</strong> — the mobile-money and card operators used for payments; they receive the amount, the reference and the payer&rsquo;s phone or email, and have their own privacy policies.</li>
+      <li><strong>Messaging</strong> — if a user taps &ldquo;send on WhatsApp&rdquo;, the message leaves the device to WhatsApp; we do not see the recipient.</li>
+      <li><strong>Authorities</strong> — only where the law requires, and we will inform the Shop unless legally barred from doing so.</li>
+    </ul>
 
-    <div class="card">
-      <h2>7. Children's Privacy</h2>
-      <p>The app is intended for business and adult use. We do not knowingly collect personal information from children under 13. If you believe a child has provided us personal data, contact us and we will delete it.</p>
-    </div>
+    <h2 id="where">6. Where data is stored</h2>
+    <p>Business data lives on servers and database infrastructure we manage, with access limited to the Shop&rsquo;s own users and our technical operators. Part of it is also cached on the device so the till keeps selling without network (section 10). Where a transfer leaves Cameroon it is made only to providers under contractual safeguards.</p>
 
-    <div class="card">
-      <h2>8. Changes to This Policy</h2>
-      <p>We may update this Privacy Policy from time to time. We will post any changes on this page and update the &quot;Last updated&quot; date. Continued use of the app after changes means you accept the updated policy.</p>
-    </div>
+    <h2 id="retain">7. How long we keep it</h2>
+    <ul>
+      <li><strong>Active Shop data:</strong> for as long as the subscription is active.</li>
+      <li><strong>After closure:</strong> deleted or irreversibly anonymised within 90 days, except what accounting or legal rules require us to keep (typically payment records).</li>
+      <li><strong>Security and audit logs:</strong> up to 12 months.</li>
+      <li><strong>Device caches:</strong> removed on sign-out and whenever the Shop changes.</li>
+    </ul>
 
-    <div class="card">
-      <h2>9. Contact Us</h2>
-      <p>If you have questions or requests about this Privacy Policy or your data, contact us at:</p>
-      <p><strong>Email:</strong> <a href="mailto:mdksako@gmail.com">mdksako@gmail.com</a></p>
-    </div>
+    <h2 id="security">8. How we protect it</h2>
+    <ul>
+      <li>Passwords are stored only as strong one-way hashes; older rows are upgraded on the next successful sign-in.</li>
+      <li>Sessions are server-side and revocable, and the device PIN plus lock screen add a second barrier on a shared till.</li>
+      <li>Traffic is encrypted in transit, and public client keys cannot read the business tables (row-level security).</li>
+      <li>Every request is scoped on the server to the signed-in user&rsquo;s Shop; manager-only actions &mdash; voiding an order, approving a customer, changing the company logo &mdash; are re-checked server-side and logged with who, when and why.</li>
+      <li>Payment webhooks are verified by signature before any plan is activated.</li>
+    </ul>
 
-    <div class="footer">© 2026 Drink Quick Cal · <a href="/terms.html">Terms of Service</a></div>
+    <h2 id="rights">9. Your rights</h2>
+    <p>Subject to applicable law, including Cameroon&rsquo;s Law No. 2010/012 on cybersecurity, you may ask us to <strong>access</strong> a copy of your personal data, <strong>correct</strong> anything inaccurate, <strong>delete</strong> your account and data, <strong>export</strong> it, <strong>restrict or object</strong> to a processing activity, or <strong>withdraw consent</strong> where we relied on it.</p>
+    <p>A Shop&rsquo;s own customer who wants their tab data corrected or removed should ask that Shop first, since the Shop controls it; if the Shop cannot help, write to us and we will assist.</p>
+
+    <h2 id="device">10. Device permissions</h2>
+    <ul>
+      <li><strong>Camera</strong> &mdash; only when scanning a barcode/QR label or attaching a drink photo.</li>
+      <li><strong>Photos/files</strong> &mdash; only to attach a drink picture or a company logo.</li>
+      <li><strong>Bluetooth</strong> &mdash; only to print a receipt on a paired thermal printer.</li>
+      <li><strong>Notifications</strong> &mdash; stock, expiry and shift reminders; switch them off in the app or Android settings.</li>
+      <li><strong>Local storage</strong> &mdash; the offline cache that lets the till keep selling. It is scoped per Shop and cleared on sign-out.</li>
+    </ul>
+    <p>You may refuse any permission; the matching feature simply stays unavailable.</p>
+
+    <h2 id="children">11. Children</h2>
+    <p>The Service is a professional business tool, not directed at children. We do not knowingly create accounts for anyone under 18, and staff accounts must be created by the Shop&rsquo;s manager.</p>
+
+    <h2 id="changes">12. Changes</h2>
+    <p>We may update this policy as the Service evolves. The version and date at the top always reflect the current text, and a material change is announced in the app before it takes effect. Continuing to use the Service after a change means you accept the updated policy.</p>
+
+    <h2 id="contact">13. Contact and complaints</h2>
+    <p><strong>Privacy contact:</strong> <a href="mailto:mdksako@gmail.com">mdksako@gmail.com</a><br>
+       <strong>In-app support:</strong> <a href="mailto:mbundaderick@gmail.com">mbundaderick@gmail.com</a></p>
+    <p>We reply within 7 working days. If you are not satisfied you may complain to the competent Cameroonian authority for the protection of personal data.</p>
+
   </div>
+
+  <footer>
+    &copy; 2026 Drink Quick Cal &middot; Douala, Cameroon<br>
+    <a href="terms.html">Terms of Service</a> &middot; <a href="privacy.fr.html">Version française</a>
+  </footer>
+</div>
 </body>
 </html>

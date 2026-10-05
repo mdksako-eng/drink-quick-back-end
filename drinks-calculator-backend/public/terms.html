@@ -1,108 +1,139 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Terms of Service — Drink Quick Cal</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      background: #f5f6fa;
-      color: #2d3436;
-      line-height: 1.7;
-    }
-    .header {
-      background: linear-gradient(135deg, #38b000, #16a753);
-      color: #fff;
-      padding: 40px 20px;
-      text-align: center;
-    }
-    .header h1 { margin: 0 0 6px; font-size: 28px; }
-    .header p { margin: 0; opacity: 0.9; font-size: 14px; }
-    .wrap { max-width: 800px; margin: 0 auto; padding: 30px 20px 60px; }
-    .card { background: #fff; border-radius: 12px; padding: 28px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
-    h2 { color: #16a753; font-size: 20px; margin-top: 0; }
-    p, li { font-size: 15px; }
-    ul { padding-left: 20px; }
-    .updated { font-size: 12px; color: #888; }
-    a { color: #16a753; }
-    .footer { text-align: center; color: #888; font-size: 13px; padding: 20px; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terms of Service — Drink Quick Cal</title>
+<meta name="description" content="The terms governing use of the Drink Quick Cal app and service.">
+<style>
+  :root{--brand:#4361EE;--ink:#12203a;--muted:#5b6b85;--bg:#f6f8fc;--card:#fff;--line:#e3e9f2;--warn:#fff7e6;--warnline:#f0c36d}
+  @media (prefers-color-scheme:dark){:root{--ink:#eaf0fb;--muted:#a8b6cd;--bg:#0e1420;--card:#151d2c;--line:#26324a;--warn:#241d0d;--warnline:#8a6a2a}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:880px;margin:0 auto;padding:26px 20px 60px}
+  .brand{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 0 2px}
+  .wordmark{font-size:23px;font-weight:800;letter-spacing:-.4px}
+  .wordmark span{color:var(--brand)}
+  .tagline{margin:2px 0 0;color:var(--muted);font-size:13px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 24px;margin-top:20px}
+  h1{font-size:29px;margin:12px 0 4px;letter-spacing:-.5px}
+  h2{font-size:18px;margin:26px 0 6px}
+  .meta{color:var(--muted);font-size:13px}
+  ul{padding-left:20px}li{margin:4px 0}
+  .note{background:var(--warn);border:1px solid var(--warnline);border-radius:12px;padding:14px 16px;margin:18px 0}
+  footer{margin-top:30px;color:var(--muted);font-size:13px;text-align:center}
+  a{color:var(--brand)}@media(max-width:560px){h1{font-size:25px}}
+</style>
 </head>
 <body>
-  <div class="header">
-    <h1>🍹 Drink Quick Cal</h1>
-    <p>Terms of Service</p>
+<div class="wrap">
+  <div class="brand">
+    <svg width="46" height="46" viewBox="0 0 64 64" role="img" aria-label="Drink Quick Cal">
+      <defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4361EE"/><stop offset="1" stop-color="#4CC9F0"/></linearGradient></defs>
+      <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#g2)"/>
+      <path d="M20 16h24l-10 16v12h6v4H24v-4h6V32L20 16z" fill="#fff" opacity=".95"/>
+      <circle cx="45" cy="20" r="3.2" fill="#fff"/>
+    </svg>
+    <div>
+      <div class="wordmark">Drink&nbsp;Quick&nbsp;<span>Cal</span></div>
+      <p class="tagline">Bar &amp; drinks management for Cameroon — built to work offline</p>
+    </div>
   </div>
 
-  <div class="wrap">
-    <div class="card">
-      <p class="updated">Last updated: 3 September 2026</p>
-      <p>These Terms of Service (&quot;Terms&quot;) govern your use of the <strong>Drink Quick Cal</strong> application and related services. By creating an account or using the app, you agree to these Terms.</p>
-    </div>
+  <div class="card">
+    <h1>Terms of Service</h1>
+    <p class="meta">Version 2.0 &middot; Effective 27 September 2026 &middot; Applies to the Drink Quick Cal app and the service behind it (the &ldquo;Service&rdquo;).</p>
+    <p>These Terms are a contract between the business using the Service (the &ldquo;Shop&rdquo;) and the Drink Quick Cal publisher (&ldquo;we&rdquo;, &ldquo;us&rdquo;). Please read them before creating an account. By creating an account, subscribing to a plan, or using the Service, the Shop and each of its users accept these Terms.</p>
+    <div class="note"><strong>In short.</strong> You keep ownership of your business data. You pay for the plan you choose, in advance. Use the app honestly and lawfully. We keep it running and secure, but we are a management tool — the figures you enter and the stock you count remain your responsibility.</div>
 
-    <div class="card">
-      <h2>1. Your Account</h2>
-      <ul>
-        <li>You are responsible for maintaining the confidentiality of your login credentials.</li>
-        <li>You must provide accurate information when registering and keep it up to date.</li>
-        <li>You are responsible for all activity that occurs under your account.</li>
-        <li>We may suspend or terminate accounts that violate these Terms or misuse the service.</li>
-      </ul>
-    </div>
+    <h2>1. Who we are</h2>
+    <p>The Service is operated by the Drink Quick Cal publisher, based in Douala, Cameroon. Legal identification of the publisher is available on request at the address in section 16.</p>
 
-    <div class="card">
-      <h2>2. Acceptable Use</h2>
-      <p>You agree not to:</p>
-      <ul>
-        <li>Use the app for any unlawful or fraudulent purpose.</li>
-        <li>Attempt to access other users' accounts, data, or systems without authorisation.</li>
-        <li>Interfere with, disrupt, or overload the app or its servers.</li>
-        <li>Circumvent security measures, or misuse another business's invite codes or verification flows.</li>
-      </ul>
-    </div>
+    <h2>2. What you get &mdash; licence to use</h2>
+    <p>We grant the Shop a non-exclusive, non-transferable, revocable licence to use the Service for its own internal business during an active subscription. Each user account is personal: credentials must not be shared, and staff accounts must be created by the Shop&rsquo;s manager.</p>
 
-    <div class="card">
-      <h2>3. Business Owners &amp; Members</h2>
-      <ul>
-        <li>Business owners are responsible for how they use the app within their business and for deciding who may join.</li>
-        <li>Owners approve new members; managers and staff should use the app only for the legitimate operations of the business.</li>
-        <li>We may remove content or accounts that violate these Terms.</li>
-      </ul>
-    </div>
+    <h2>3. Accounts, roles and Shop responsibility</h2>
+    <ul>
+      <li>The Shop is responsible for the accuracy of the information it enters and for the users it creates.</li>
+      <li>Roles (owner, manager, staff) determine what a user may do. Manager-only actions — voiding an order, restoring it, applying a discount, changing the company logo — are logged with the user&rsquo;s name, the date and the reason given.</li>
+      <li>The Shop must remove access for staff who leave, and keep the owner&rsquo;s contact details current.</li>
+      <li>An account may not be used to record sales for a business other than the Shop it belongs to, nor to pool unrelated businesses into one company record.</li>
+    </ul>
 
-    <div class="card">
-      <h2>4. Payments &amp; Mobile Money</h2>
-      <ul>
-        <li>Payment processing is provided in cooperation with third-party mobile-money providers (e.g., MTN Mobile Money, Orange Money).</li>
-        <li>Transactions are subject to the applicable provider's terms and any fees they charge.</li>
-        <li>We are not responsible for the actions of third-party payment providers.</li>
-      </ul>
-    </div>
+    <h2>4. Plans, trials and subscriptions</h2>
+    <ul>
+      <li>The Service is offered as a free tier and as paid plans (for example monthly or annual). The features included in each plan are described in the app at the moment of purchase.</li>
+      <li>A trial or promotional period ends on the date shown in the app, without notice and without automatic conversion unless the Shop pays.</li>
+      <li>Paid periods are prepaid and run for the duration shown on the receipt. When a plan expires, paid features switch off and the Shop continues on the free tier: existing records are kept, but read-only or limited where they were plan-gated. Nothing is deleted merely because a plan expired.</li>
+      <li>Activation happens only after our payment provider confirms the transaction and the notification is verified. A pending or failed transaction does not extend a plan.</li>
+    </ul>
 
-    <div class="card">
-      <h2>5. The Service Is Provided &quot;As Is&quot;</h2>
-      <p>The app is provided without warranties of any kind, express or implied. While we work to keep the service reliable and secure, we do not guarantee that it will be uninterrupted or error-free.</p>
-    </div>
+    <h2>5. Payments</h2>
+    <ul>
+      <li>Payments are collected through mobile-money and card operators (for example MTN MoMo, Orange Money and card rails) using their own rules, limits and fees. The Shop must use an account it is entitled to use.</li>
+      <li>All amounts are in XAF unless stated otherwise. Operator fees, if any, are those of the operator.</li>
+      <li>The Shop is responsible for keeping enough balance and correct numbers; a failed payment is not a cancellation and does not by itself create a refund right.</li>
+      <li>Refunds are given where the law requires, or where a payment was taken twice or for a feature that was not delivered at all. Send the transaction reference to the address in section 16.</li>
+      <li>Fraudulent payment notifications, chargeback abuse, or attempt to obtain paid features without payment may lead to suspension of the account.</li>
+    </ul>
 
-    <div class="card">
-      <h2>6. Limitation of Liability</h2>
-      <p>To the maximum extent permitted by law, we are not liable for indirect, incidental, special, or consequential damages arising from your use of the app, including loss of data, loss of profits, or interruption of business.</p>
-    </div>
+    <h2>6. Price changes</h2>
+    <p>We may change plan prices or introduce new plans. A change never applies retroactively to a period already paid for, and we announce a price change in the app at least 14 days before it applies to a renewal. If the Shop does not agree, it may simply not renew.</p>
 
-    <div class="card">
-      <h2>7. Changes to These Terms</h2>
-      <p>We may update these Terms from time to time. Changes will be posted on this page with an updated &quot;Last updated&quot; date. Continued use of the app after changes means you accept the updated Terms.</p>
-    </div>
+    <h2>7. Your data</h2>
+    <ul>
+      <li><strong>Ownership:</strong> the Shop owns the business records it enters — drinks, orders, stock, customers, staff, expenses. We claim no ownership of them.</li>
+      <li><strong>Purpose:</strong> we process them only to provide and secure the Service, as described in the <a href="privacy.html">Privacy Policy</a>.</li>
+      <li><strong>Exports:</strong> the app can produce PDF, Excel and CSV reports; the Shop should keep its own copies of anything it must retain (tax, alcohol licensing, or accounting).</li>
+      <li><strong>Deletion:</strong> on written request from the owner, the Shop&rsquo;s data is deleted or irreversibly anonymised within 90 days, except what we must keep for accounting or legal reasons.</li>
+      <li><strong>Backups:</strong> we take reasonable measures to protect against loss, but the Service is not a substitute for the Shop&rsquo;s own record-keeping.</li>
+    </ul>
 
-    <div class="card">
-      <h2>8. Contact Us</h2>
-      <p>Questions about these Terms can be sent to: <a href="mailto:mdksako@gmail.com">mdksako@gmail.com</a></p>
-    </div>
+    <h2>8. Acceptable use</h2>
+    <p>The Shop and its users must not: use the Service unlawfully, sell alcohol to persons the law forbids, record a business other than their own, resell or sub-licence the Service, reverse-engineer or probe it, attempt to reach another Shop&rsquo;s data, overload or attack the servers, or upload unlawful, hateful or infringing content. Suspected breaches may be suspended immediately and, if serious, terminated.</p>
 
-    <div class="footer">© 2026 Drink Quick Cal · <a href="/privacy.html">Privacy Policy</a></div>
+    <h2>9. Availability, offline mode and maintenance</h2>
+    <ul>
+      <li>We work to keep the Service available and secure, but we do not promise uninterrupted or error-free operation: networks, devices, hosting and payment operators are outside our control.</li>
+      <li>The app is designed to keep recording sales while offline and to synchronise when the connection returns. Synchronising after a long offline period may take time, and conflicts are resolved in favour of the most recent confirmed action.</li>
+      <li>We may interrupt access for maintenance, security or upgrades, aiming to keep such interruptions short.</li>
+    </ul>
+
+    <h2>10. Third-party services</h2>
+    <p>The Service relies on third parties: hosting and database infrastructure, payment operators, and messaging or printing integrations. Their own terms and privacy policies apply to their part, and we are not responsible for their acts, omissions, delays or outages. If a provider stops offering a rail we use, we will try to offer an alternative and will tell the Shop in the app.</p>
+
+    <h2>11. The Shop&rsquo;s own legal obligations</h2>
+    <p>Drink Quick Cal records what the Shop tells it to record; it does not replace the Shop&rsquo;s legal duties. The Shop remains solely responsible for: holding a valid trading/alcohol licence where required; refusing sale to minors and intoxicated persons; issuing receipts and paying its taxes and duties; the accuracy of prices, stock counts, cash-ups and customer balances; the lawfulness of any customer credit it grants; and employment and data notices owed to its own staff and customers.</p>
+
+    <h2>12. Intellectual property</h2>
+    <p>The Service, its name, logo, design, code and documentation remain our property or that of our licensors. These Terms transfer no ownership, only the licence in section 2. The Shop keeps the rights in its own content and grants us a limited licence to host and process it for the purpose of providing the Service.</p>
+
+    <h2>13. Disclaimers</h2>
+    <p>The Service is provided &ldquo;as is&rdquo; and &ldquo;as available&rdquo;. Calculations, forecasts, stock alerts and reconciliation tools are aids: they depend on the data entered and on the quantities physically counted. To the fullest extent the law allows, we disclaim implied warranties of merchantability, fitness for a particular purpose and non-infringement. Nothing in these Terms excludes liability that cannot lawfully be excluded.</p>
+
+    <h2>14. Limitation of liability</h2>
+    <p>To the extent permitted by Cameroonian law, our total liability towards the Shop for all claims relating to the Service is limited to the subscription fees actually paid by that Shop in the three (3) months preceding the event giving rise to the claim. We are not liable for lost profit, lost sales, loss of goodwill, cash or stock discrepancies, or any indirect, special or consequential loss, nor for a user&rsquo;s own acts — including discounting, voiding, crediting or miscounting — or for loss of data that the Shop was able to export and keep.</p>
+
+    <h2>15. Suspension, termination and changes to these Terms</h2>
+    <ul>
+      <li>The Shop may stop using the Service at any time; a paid period is not refunded merely because the Shop stops using it.</li>
+      <li>We may suspend or terminate an account for non-payment, for a serious breach of section 8, for fraud, or where the law requires it. Except in urgent cases, we warn the owner first and allow a reasonable time to fix the issue.</li>
+      <li>On termination, the licence ends, and data handling follows section 7 (export window, then deletion).</li>
+      <li>We may update these Terms as the Service evolves. The version and date at the top always reflect the current text; a material change is announced in the app before it takes effect. Continuing to use the Service means the Shop accepts the updated Terms.</li>
+    </ul>
+
+    <h2>16. Governing law, disputes and contact</h2>
+    <p>These Terms are governed by the laws of Cameroon. The parties will first try to resolve any dispute amicably by written notice, and failing that before the competent courts of Douala, Cameroon.</p>
+    <p><strong>Legal contact:</strong> <a href="mailto:mdksako@gmail.com">mdksako@gmail.com</a><br>
+       <strong>In-app support:</strong> <a href="mailto:mbundaderick@gmail.com">mbundaderick@gmail.com</a></p>
+    <p>We reply within 7 working days. Please include the Shop name and, for payment questions, the transaction reference.</p>
+
   </div>
+
+  <footer>
+    &copy; 2026 Drink Quick Cal &middot; Douala, Cameroon<br>
+    <a href="privacy.html">Privacy Policy</a> &middot; <a href="terms.fr.html">Version française</a>
+  </footer>
+</div>
 </body>
 </html>

@@ -3,6 +3,7 @@ const { generateToken, generateRefreshToken } = require('../middleware/auth.midd
 const { sanitizeUser } = require('../utils/helpers');
 const { sendPasswordResetEmail, sendPasswordResetSuccessEmail, sendWelcomeEmail } = require('../utils/email.service');
 const crypto = require('crypto');
+const { resolveIsOwner } = require('../utils/companyOwner');
 
 // ============================================================
 // AUTHENTICATION FUNCTIONS
@@ -323,9 +324,19 @@ const getMe = async(req, res) => {
             });
         }
         const userData = sanitizeUser(user);
+        // 👑 Owner-only actions (change the company logo, branding, clear data)
+        // are gated on this flag in the app. It MUST be answered here too, not
+        // only at login: this endpoint is what the app calls on every start, and
+        // without it the shop's real owner was treated as a plain manager and
+        // could no longer change the logo.
+        const isOwner = await resolveIsOwner(req.db, {
+            id: user.id ?? user._id,
+            company_id: user.company_id ?? user.companyId,
+            role: user.role,
+        });
         res.json({
             status: 'success',
-            data: { user: userData }
+            data: { user: { ...userData, isOwner } }
         });
     } catch (error) {
         console.error('Get me error:', error);

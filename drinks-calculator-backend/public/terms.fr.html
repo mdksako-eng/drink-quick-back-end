@@ -1,112 +1,138 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Conditions d'utilisation — Drink Quick Cal</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      background: #f5f6fa;
-      color: #2d3436;
-      line-height: 1.7;
-    }
-    .header {
-      background: linear-gradient(135deg, #38b000, #16a753);
-      color: #fff;
-      padding: 40px 20px;
-      text-align: center;
-    }
-    .header h1 { margin: 0 0 6px; font-size: 28px; }
-    .header p { margin: 0; opacity: 0.9; font-size: 14px; }
-    .wrap { max-width: 800px; margin: 0 auto; padding: 30px 20px 60px; }
-    .card { background: #fff; border-radius: 12px; padding: 28px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
-    h2 { color: #16a753; font-size: 20px; margin-top: 0; }
-    p, li { font-size: 15px; }
-    ul { padding-left: 20px; }
-    .updated { font-size: 12px; color: #888; }
-    a { color: #16a753; }
-    .footer { text-align: center; color: #888; font-size: 13px; padding: 20px; }
-    .lang { text-align: right; font-size: 13px; padding: 12px 20px 0; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conditions d'utilisation — Drink Quick Cal</title>
+<style>
+  :root{--brand:#4361EE;--ink:#12203a;--muted:#5b6b85;--bg:#f6f8fc;--card:#fff;--line:#e3e9f2;--warn:#fff7e6;--warnline:#f0c36d}
+  @media (prefers-color-scheme:dark){:root{--ink:#eaf0fb;--muted:#a8b6cd;--bg:#0e1420;--card:#151d2c;--line:#26324a;--warn:#241d0d;--warnline:#8a6a2a}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:880px;margin:0 auto;padding:26px 20px 60px}
+  .brand{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 0 2px}
+  .wordmark{font-size:23px;font-weight:800;letter-spacing:-.4px}
+  .wordmark span{color:var(--brand)}
+  .tagline{margin:2px 0 0;color:var(--muted);font-size:13px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 24px;margin-top:20px}
+  h1{font-size:29px;margin:12px 0 4px;letter-spacing:-.5px}
+  h2{font-size:18px;margin:26px 0 6px}
+  .meta{color:var(--muted);font-size:13px}
+  ul{padding-left:20px}li{margin:4px 0}
+  .note{background:var(--warn);border:1px solid var(--warnline);border-radius:12px;padding:14px 16px;margin:18px 0}
+  footer{margin-top:30px;color:var(--muted);font-size:13px;text-align:center}
+  a{color:var(--brand)}@media(max-width:560px){h1{font-size:25px}}
+</style>
 </head>
 <body>
-  <div class="header">
-    <h1>🍹 Drink Quick Cal</h1>
-    <p>Conditions d'utilisation</p>
+<div class="wrap">
+  <div class="brand">
+    <svg width="46" height="46" viewBox="0 0 64 64" role="img" aria-label="Drink Quick Cal">
+      <defs><linearGradient id="g4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4361EE"/><stop offset="1" stop-color="#4CC9F0"/></linearGradient></defs>
+      <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#g4)"/>
+      <path d="M20 16h24l-10 16v12h6v4H24v-4h6V32L20 16z" fill="#fff" opacity=".95"/>
+      <circle cx="45" cy="20" r="3.2" fill="#fff"/>
+    </svg>
+    <div>
+      <div class="wordmark">Drink&nbsp;Quick&nbsp;<span>Cal</span></div>
+      <p class="tagline">Gestion de bar au Cameroun — conçue pour fonctionner hors ligne</p>
+    </div>
   </div>
 
-  <div class="lang"><a href="/terms.html">Read in English</a></div>
+  <div class="card">
+    <h1>Conditions d&rsquo;utilisation</h1>
+    <p class="meta">Version 2.0 &middot; En vigueur le 27 septembre 2026 &middot; Concerne l&rsquo;application Drink Quick Cal et le service qui la soutient (le « Service »).</p>
+    <p>Ces conditions forment un contrat entre l&rsquo;entreprise qui utilise le Service (l&rsquo;« Établissement ») et l&rsquo;éditeur de Drink Quick Cal (« nous »). Merci de les lire avant de créer un compte. En créant un compte, en souscrivant une formule ou en utilisant le Service, l&rsquo;Établissement et chacun de ses utilisateurs acceptent ces conditions.</p>
+    <div class="note"><strong>En résumé.</strong> Vous restez propriétaire de vos données. Vous payez la formule choisie, d&rsquo;avance. Utilisez l&rsquo;application honnêtement et légalement. Nous la maintenons en état de marche et sécurisée, mais c&rsquo;est un outil de gestion : les chiffres saisis et le stock compté restent votre responsabilité.</div>
 
-  <div class="wrap">
-    <div class="card">
-      <p class="updated">Dernière mise à jour : 3 septembre 2026</p>
-      <p>Les présentes conditions d'utilisation (« Conditions ») régissent votre utilisation de l'application <strong>Drink Quick Cal</strong> et des services associés. En créant un compte ou en utilisant l'application, vous acceptez ces Conditions.</p>
-    </div>
+    <h2>1. Qui nous sommes</h2>
+    <p>Le Service est exploité par l&rsquo;éditeur de Drink Quick Cal, établi à Douala, Cameroun. L&rsquo;identification légale complète de l&rsquo;éditeur est disponible sur demande à l&rsquo;adresse de la section 16.</p>
 
-    <div class="card">
-      <h2>1. Votre compte</h2>
-      <ul>
-        <li>Vous êtes responsable de la confidentialité de vos identifiants de connexion.</li>
-        <li>Vous devez fournir des informations exactes lors de l'inscription et les tenir à jour.</li>
-        <li>Vous êtes responsable de toute activité effectuée depuis votre compte.</li>
-        <li>Nous pouvons suspendre ou résilier les comptes qui enfreignent ces Conditions ou détournent le service.</li>
-      </ul>
-    </div>
+    <h2>2. Ce que vous obtenez — licence d&rsquo;utilisation</h2>
+    <p>Nous accordons à l&rsquo;Établissement une licence non exclusive, non transférable et révocable d&rsquo;utiliser le Service pour ses propres besoins internes pendant la durée d&rsquo;un abonnement actif. Chaque compte utilisateur est personnel : les identifiants ne doivent pas être partagés, et les comptes du personnel sont créés par le gérant de l&rsquo;Établissement.</p>
 
-    <div class="card">
-      <h2>2. Utilisation acceptable</h2>
-      <p>Vous acceptez de ne pas :</p>
-      <ul>
-        <li>Utiliser l'application à des fins illégales ou frauduleuses.</li>
-        <li>Tenter d'accéder sans autorisation aux comptes, données ou systèmes d'autres utilisateurs.</li>
-        <li>Perturber, désorganiser ou surcharger l'application ou ses serveurs.</li>
-        <li>Contourner les mesures de sécurité, ou détourner les codes d'invitation ou les procédures de vérification d'une autre entreprise.</li>
-      </ul>
-    </div>
+    <h2>3. Comptes, rôles et responsabilité de l&rsquo;Établissement</h2>
+    <ul>
+      <li>L&rsquo;Établissement est responsable de l&rsquo;exactitude des informations saisies et des utilisateurs qu&rsquo;il crée.</li>
+      <li>Les rôles (propriétaire, gérant, personnel) déterminent ce qu&rsquo;un utilisateur peut faire. Les actions réservées au gérant — annuler une commande, la restaurer, appliquer une remise, changer le logo de l&rsquo;entreprise — sont journalisées avec le nom de l&rsquo;utilisateur, la date et le motif.</li>
+      <li>L&rsquo;Établissement doit retirer l&rsquo;accès du personnel qui part et tenir à jour les coordonnées du propriétaire.</li>
+      <li>Un compte ne peut servir à enregistrer les ventes d&rsquo;une autre entreprise, ni à regrouper des entreprises sans lien dans une même fiche.</li>
+    </ul>
 
-    <div class="card">
-      <h2>3. Propriétaires d'entreprise et membres</h2>
-      <ul>
-        <li>Les propriétaires d'entreprise sont responsables de l'usage de l'application dans leur activité et du choix des personnes autorisées à rejoindre l'entreprise.</li>
-        <li>Les propriétaires approuvent les nouveaux membres ; les gestionnaires et le personnel doivent utiliser l'application uniquement pour les opérations légitimes de l'entreprise.</li>
-        <li>Nous pouvons retirer des contenus ou des comptes qui enfreignent ces Conditions.</li>
-      </ul>
-    </div>
+    <h2>4. Formules, essais et abonnements</h2>
+    <ul>
+      <li>Le Service propose une formule gratuite et des formules payantes (par exemple mensuelles ou annuelles). Le contenu de chaque formule est décrit dans l&rsquo;application au moment de l&rsquo;achat.</li>
+      <li>Une période d&rsquo;essai ou promotionnelle se termine à la date affichée dans l&rsquo;application, sans reconduction automatique sauf paiement de l&rsquo;Établissement.</li>
+      <li>Les périodes payantes sont prépayées et courent pour la durée indiquée sur le reçu. À l&rsquo;expiration, les fonctions payantes s&rsquo;éteignent et l&rsquo;Établissement continue sur la formule gratuite : les données existantes sont conservées, en lecture seule ou limitées là où elles dépendaient de la formule. Rien n&rsquo;est supprimé du seul fait de l&rsquo;expiration.</li>
+      <li>L&rsquo;activation n&rsquo;a lieu qu&rsquo;après confirmation de la transaction par notre prestataire de paiement et vérification de la notification. Une transaction en attente ou échouée ne prolonge pas une formule.</li>
+    </ul>
 
-    <div class="card">
-      <h2>4. Paiements et mobile money</h2>
-      <ul>
-        <li>Le traitement des paiements est assuré en coopération avec des fournisseurs de mobile money tiers (par exemple MTN Mobile Money, Orange Money).</li>
-        <li>Les transactions sont soumises aux conditions du fournisseur concerné et aux frais qu'il applique.</li>
-        <li>Nous ne sommes pas responsables des actions des fournisseurs de paiement tiers.</li>
-      </ul>
-    </div>
+    <h2>5. Paiements</h2>
+    <ul>
+      <li>Les paiements sont encaissés par des opérateurs mobile money et cartes (par exemple MTN MoMo, Orange Money et les rails carte) selon leurs propres règles, plafonds et frais. L&rsquo;Établissement doit utiliser un compte qu&rsquo;il est en droit d&rsquo;utiliser.</li>
+      <li>Les montants sont en XAF sauf indication contraire. Les frais d&rsquo;opérateur, s&rsquo;il y en a, sont ceux de l&rsquo;opérateur.</li>
+      <li>L&rsquo;Établissement doit veiller à disposer d&rsquo;un solde suffisant et de numéros corrects ; un paiement échoué n&rsquo;est pas une résiliation et n&rsquo;ouvre pas à lui seul un droit au remboursement.</li>
+      <li>Un remboursement est accordé lorsque la loi l&rsquo;exige, ou si un paiement a été prélevé deux fois, ou pour une fonction qui n&rsquo;a pas du tout été livrée. Envoyez la référence de transaction à l&rsquo;adresse de la section 16.</li>
+      <li>Les notifications de paiement frauduleuses, l&rsquo;usage abusif des contestations de paiement, ou la tentative d&rsquo;obtenir des fonctions payantes sans payer peuvent entraîner la suspension du compte.</li>
+    </ul>
 
-    <div class="card">
-      <h2>5. Le service est fourni « en l'état »</h2>
-      <p>L'application est fournie sans garantie d'aucune sorte, expresse ou implicite. Nous travaillons à la fiabilité et à la sécurité du service, mais nous ne garantissons pas qu'il sera ininterrompu ou exempt d'erreurs.</p>
-    </div>
+    <h2>6. Changement de prix</h2>
+    <p>Nous pouvons modifier les prix ou créer de nouvelles formules. Un changement ne s&rsquo;applique jamais rétroactivement à une période déjà payée, et tout changement de prix est annoncé dans l&rsquo;application au moins 14 jours avant de s&rsquo;appliquer à un renouvellement. Si l&rsquo;Établissement n&rsquo;est pas d&rsquo;accord, il lui suffit de ne pas renouveler.</p>
 
-    <div class="card">
-      <h2>6. Limitation de responsabilité</h2>
-      <p>Dans la mesure maximale permise par la loi, nous ne sommes pas responsables des dommages indirects, accessoires, spéciaux ou consécutifs résultant de votre utilisation de l'application, notamment la perte de données, la perte de bénéfices ou l'interruption d'activité.</p>
-    </div>
+    <h2>7. Vos données</h2>
+    <ul>
+      <li><strong>Propriété :</strong> l&rsquo;Établissement est propriétaire des données qu&rsquo;il saisit — boissons, commandes, stock, clients, personnel, dépenses. Nous n&rsquo;en revendiquons aucune.</li>
+      <li><strong>Finalité :</strong> nous les traitons uniquement pour fournir et sécuriser le Service, comme décrit dans la <a href="privacy.fr.html">Politique de confidentialité</a>.</li>
+      <li><strong>Exports :</strong> l&rsquo;application produit des rapports PDF, Excel et CSV ; l&rsquo;Établissement doit conserver ses propres copies de tout document qu&rsquo;il doit garder (fiscalité, licence de débit de boissons, comptabilité).</li>
+      <li><strong>Suppression :</strong> sur demande écrite du propriétaire, les données de l&rsquo;Établissement sont supprimées ou anonymisées de façon irréversible sous 90 jours, sauf ce que la comptabilité ou la loi nous oblige à conserver.</li>
+      <li><strong>Sauvegardes :</strong> nous prenons des mesures raisonnables contre la perte, mais le Service ne remplace pas la tenue de registres propre à l&rsquo;Établissement.</li>
+    </ul>
 
-    <div class="card">
-      <h2>7. Modifications de ces Conditions</h2>
-      <p>Nous pouvons mettre à jour ces Conditions de temps à autre. Les modifications seront publiées sur cette page avec une nouvelle date de mise à jour. Continuer à utiliser l'application après ces changements signifie que vous acceptez les Conditions mises à jour.</p>
-    </div>
+    <h2>8. Usage acceptable</h2>
+    <p>L&rsquo;Établissement et ses utilisateurs ne doivent pas : utiliser le Service de façon illégale, vendre de l&rsquo;alcool à des personnes à qui la loi l&rsquo;interdit, enregistrer l&rsquo;activité d&rsquo;une autre entreprise, revendre ou sous-licencier le Service, le décompiler ou le sonder, tenter d&rsquo;accéder aux données d&rsquo;un autre Établissement, surcharger ou attaquer les serveurs, ni téléverser des contenus illicites, haineux ou contrefaisants. Tout manquement suspect peut entraîner une suspension immédiate et, s&rsquo;il est grave, une résiliation.</p>
 
-    <div class="card">
-      <h2>8. Nous contacter</h2>
-      <p>Pour toute question concernant ces Conditions, écrivez à : <a href="mailto:mdksako@gmail.com">mdksako@gmail.com</a></p>
-    </div>
+    <h2>9. Disponibilité, mode hors ligne et maintenance</h2>
+    <ul>
+      <li>Nous travaillons à maintenir le Service disponible et sécurisé, sans garantir un fonctionnement ininterrompu ou sans erreur : réseaux, appareils, hébergeur et opérateurs de paiement échappent à notre contrôle.</li>
+      <li>L&rsquo;application est conçue pour continuer à enregistrer les ventes hors ligne et se synchroniser au retour du réseau. Après une longue période hors ligne, la synchronisation peut prendre du temps, et les conflits sont tranchés en faveur de la dernière action confirmée.</li>
+      <li>Nous pouvons interrompre l&rsquo;accès pour maintenance, sécurité ou mise à niveau, en cherchant à limiter la durée de ces interruptions.</li>
+    </ul>
 
-    <div class="footer">© 2026 Drink Quick Cal · <a href="/privacy.fr.html">Politique de confidentialité</a></div>
+    <h2>10. Services tiers</h2>
+    <p>Le Service repose sur des tiers : hébergement et base de données, opérateurs de paiement, intégrations de messagerie ou d&rsquo;impression. Leurs propres conditions et politiques de confidentialité s&rsquo;appliquent à leur partie, et nous ne répondons ni de leurs actes ou omissions, ni de leurs délais ou pannes. Si un prestataire cesse d&rsquo;offrir un moyen que nous utilisons, nous chercherons une alternative et en informerons l&rsquo;Établissement dans l&rsquo;application.</p>
+
+    <h2>11. Obligations légales propres à l&rsquo;Établissement</h2>
+    <p>Drink Quick Cal enregistre ce que l&rsquo;Établissement lui demande d&rsquo;enregistrer ; il ne remplace pas ses obligations légales. L&rsquo;Établissement reste seul responsable de : détenir une licence d&rsquo;exploitation ou de débit de boissons lorsqu&rsquo;elle est exigée ; refuser la vente aux mineurs et aux personnes en état d&rsquo;ivresse ; délivrer les reçus et payer ses impôts et taxes ; l&rsquo;exactitude des prix, des comptages de stock, des clôtures de caisse et des soldes clients ; la légalité des crédits qu&rsquo;il accorde ; et les obligations d&rsquo;information envers son personnel et ses clients.</p>
+
+    <h2>12. Propriété intellectuelle</h2>
+    <p>Le Service, son nom, son logo, son design, son code et sa documentation restent notre propriété ou celle de nos concédants. Ces conditions ne transfèrent aucune propriété, seulement la licence de la section 2. L&rsquo;Établissement conserve les droits sur ses propres contenus et nous accorde une licence limitée pour les héberger et les traiter aux fins de fourniture du Service.</p>
+
+    <h2>13. Avertissements</h2>
+    <p>Le Service est fourni « en l&rsquo;état » et « selon disponibilité ». Les calculs, prévisions, alertes de stock et outils de rapprochement sont des aides : ils dépendent des données saisies et des quantités physiquement comptées. Dans la mesure maximale permise par la loi, nous excluons les garanties implicites de qualité marchande, d&rsquo;adaptation à un usage particulier et d&rsquo;absence de contrefaçon. Aucune clause de ces conditions n&rsquo;exclut une responsabilité qui ne peut légalement être exclue.</p>
+
+    <h2>14. Limitation de responsabilité</h2>
+    <p>Dans la mesure permise par le droit camerounais, notre responsabilité totale envers l&rsquo;Établissement pour toute réclamation liée au Service est limitée aux frais d&rsquo;abonnement effectivement payés par cet Établissement au cours des trois (3) mois précédant le fait générateur. Nous ne répondons pas du manque à gagner, des ventes perdues, de la perte de clientèle, des écarts de caisse ou de stock, ni d&rsquo;aucun dommage indirect, spécial ou consécutif, ni des actes d&rsquo;un utilisateur — remises, annulations, crédits ou erreurs de comptage — ni de la perte de données que l&rsquo;Établissement pouvait exporter et conserver.</p>
+
+    <h2>15. Suspension, résiliation et modification des conditions</h2>
+    <ul>
+      <li>L&rsquo;Établissement peut cesser d&rsquo;utiliser le Service à tout moment ; une période payée n&rsquo;est pas remboursée du seul fait qu&rsquo;il cesse de l&rsquo;utiliser.</li>
+      <li>Nous pouvons suspendre ou résilier un compte en cas de non-paiement, de manquement grave à la section 8, de fraude, ou lorsque la loi l&rsquo;exige. Sauf urgence, nous avertissons d&rsquo;abord le propriétaire et laissons un délai raisonnable pour corriger.</li>
+      <li>En cas de résiliation, la licence prend fin et le sort des données suit la section 7 (fenêtre d&rsquo;export, puis suppression).</li>
+      <li>Nous pouvons mettre à jour ces conditions avec l&rsquo;évolution du Service. La version et la date en tête reflètent toujours le texte en vigueur ; tout changement important est annoncé dans l&rsquo;application avant son entrée en application. Continuer à utiliser le Service vaut acceptation des conditions mises à jour.</li>
+    </ul>
+
+    <h2>16. Droit applicable, litiges et contact</h2>
+    <p>Ces conditions sont régies par le droit camerounais. Les parties cherchent d&rsquo;abord une solution amiable par notification écrite, puis, à défaut, devant les juridictions compétentes de Douala, Cameroun.</p>
+    <p><strong>Contact juridique :</strong> <a href="mailto:mdksako@gmail.com">mdksako@gmail.com</a><br>
+       <strong>Assistance dans l&rsquo;application :</strong> <a href="mailto:mbundaderick@gmail.com">mbundaderick@gmail.com</a></p>
+    <p>Nous répondons sous 7 jours ouvrés. Indiquez le nom de l&rsquo;Établissement et, pour toute question de paiement, la référence de la transaction.</p>
+
   </div>
+
+  <footer>
+    &copy; 2026 Drink Quick Cal &middot; Douala, Cameroun<br>
+    <a href="privacy.fr.html">Politique de confidentialité</a> &middot; <a href="terms.html">English version</a>
+  </footer>
+</div>
 </body>
 </html>
-
