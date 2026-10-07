@@ -6,6 +6,10 @@ const { getSessionUser } = require('../middleware/sessionAuth');
 const momo = require('../utils/momo');
 const orangeMoney = require('../utils/orange_money');
 const notchpay = require('../utils/notchpay');
+// CamerPay per-company collection (phase 3): each bar's own token and webhook
+// secret, stored encrypted and returned only masked.
+const credentials = require('../utils/companyPaymentCredentials');
+const publicUrl = require('../utils/publicUrl');
 const { rawBodyOf } = require('../utils/requestBody');
 // Shared secret for verifying /api/payment/webhook calls (set in env).
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
@@ -279,6 +283,198 @@ router.patch('/company-settings', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// ============================================================
+// 🇨🇲 CamerPay per-company collection (phase 3)
+// ------------------------------------------------------------
+// A bar's customers pay the BAR, so the token and webhook secret below belong to
+// this company and are stored encrypted (utils/companyPaymentCredentials.js →
+// utils/credentialVault.js). They are WRITE-ONLY from the app's point of view:
+// the app only ever receives a masked view, never a usable secret.
+// Collection itself is POST /payment/campay-initiate, and CamerPay notifies us on
+// POST /payment/campay-webhook/:companyToken (see below).
+// ============================================================
+
+/** Columns the CamerPay settings/health endpoints need, in one place. */
+const CAMPAY_SELECT = `id,
+        campay_enabled,
+        campay_token_enc,
+        campay_webhook_token,
+        campay_webhook_secret_enc,
+        campay_connected_at`;
+
+/** Roles allowed to see or change a company's payment credentials. */
+function canManagePaymentSettings(role) {
+  return ['Manager', 'Administrator', 'Admin', 'Owner'].includes(role);
+}
+
+router.get('/payment/campay-settings', async (req, res) => {
+  try {
+    const user = await requireSessionUser(req);
+    if (!user) return res.status(401).json({ error: 'Invalid or expired session' });
+    if (!user.company_id) {
+      return res.status(400).json({ error: 'User does not belong to a company' });
+    }
+
+    const result = await req.db.query(
+      `SELECT ${CAMPAY_SELECT} FROM companies WHERE id = $1`,
+      [user.company_id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Company not found' });
+
+    const company = result.rows[0];
+    // Anyone may learn whether CamerPay is available at this till — the till
+    // needs that to decide what to offer. The connection detail (which includes
+    // the webhook URL's opaque token) is for managers.
+    if (!canManagePaymentSettings(user.role)) {
+      return res.json({
+        success: true,
+        data: { provider: 'campay', connected: credentials.isConnected(company) },
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        provider: 'campay',
+        ...credentials.healthFor(company, {
+          baseUrl: publicUrl.publicBaseUrl(),
+          accountDeclaredLive: String(process.env.CAMERPAY_ACCOUNT_LIVE || 'false').toLowerCase() === 'true',
+        }),
+      },
+    });
+  } catch (error) {
+    console.error('GET /payment/campay-settings error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.patch('/payment/campay-settings', async (req, res) => {
+  try {
+    const user = await requireSessionUser(req);
+    if (!user) return res.status(401).json({ error: 'Invalid or expired session' });
+    if (!user.company_id) {
+      return res.status(400).json({ error: 'User does not belong to a company' });
+    }
+    if (!canManagePaymentSettings(user.role)) {
+      return res.status(403).json({ error: 'Only managers can change payment settings' });
+    }
+
+    const { campayEnabled, token, webhookSecret, rotateWebhookToken } = req.body || {};
+
+    const current = await req.db.query(
+      `SELECT ${CAMPAY_SELECT} FROM companies WHERE id = $1`,
+      [user.company_id]
+    );
+    if (current.rows.length === 0) return res.status(404).json({ error: 'Company not found' });
+    const company = current.rows[0];
+
+    // A masked or empty value means "leave it as it is": the app round-trips what
+    // it was shown, so a mask must never overwrite a real secret.
+    const newToken = token !== undefined && !isMaskedOrEmpty(token) ? String(token).trim() : '';
+    const newSecret = webhookSecret !== undefined && !isMaskedOrEmpty(webhookSecret)
+      ? String(webhookSecret).trim()
+      : '';
+
+    if (newToken) {
+      const check = credentials.validateConnection({ token: newToken });
+      if (!check.ok) {
+        return res.status(400).json({
+          error: `Invalid CamerPay API token (${check.reason})`,
+          code: check.reason,
+        });
+      }
+    }
+    if (newSecret && newSecret.length < credentials.MIN_SECRET_LENGTH) {
+      return res.status(400).json({
+        error: 'Invalid CamerPay webhook secret',
+        code: 'webhook_secret_too_short',
+      });
+    }
+
+    const willHaveToken = Boolean(newToken) || Boolean(company[credentials.COLUMNS.token]);
+    if (campayEnabled === true && !willHaveToken) {
+      return res.status(400).json({
+        error: 'Cannot enable CamerPay without an API token',
+        code: 'token_required',
+      });
+    }
+
+    // Storing a secret without the storage key would mean writing it in the clear,
+    // so refuse loudly instead. maskedView(null) is used here purely as the
+    // storage-key readiness probe — it needs no row.
+    const vaultReady = credentials.maskedView(null).vaultReady;
+    if ((newToken || newSecret) && !vaultReady) {
+      return res.status(503).json({
+        error: 'Payment credentials cannot be stored: set PAYMENT_CREDENTIALS_KEY on the server',
+        code: 'vault_key_missing',
+      });
+    }
+
+    // Column names come from our own constants, never from the request body.
+    const updates = {};
+    if (newToken) {
+      const { tokenEnc } = credentials.encryptConnection({ token: newToken });
+      updates[credentials.COLUMNS.token] = tokenEnc;
+      updates[credentials.COLUMNS.connectedAt] = new Date();
+      // Connecting implies enabling, unless the caller says otherwise.
+      if (campayEnabled === undefined) updates[credentials.COLUMNS.enabled] = true;
+    }
+    if (newSecret) {
+      const { webhookSecretEnc } = credentials.encryptConnection({ webhookSecret: newSecret });
+      updates[credentials.COLUMNS.webhookSecret] = webhookSecretEnc;
+    }
+    if (
+      rotateWebhookToken === true
+      || (newToken && !company[credentials.COLUMNS.webhookToken])
+    ) {
+      updates[credentials.COLUMNS.webhookToken] = credentials.newWebhookToken();
+    }
+    if (campayEnabled !== undefined) {
+      updates[credentials.COLUMNS.enabled] = Boolean(campayEnabled);
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'Nothing to update' });
+    }
+
+    const setClauses = [];
+    const values = [];
+    let paramIndex = 1;
+    for (const [column, value] of Object.entries(updates)) {
+      setClauses.push(`${column} = $${paramIndex}`);
+      values.push(value);
+      paramIndex += 1;
+    }
+    values.push(user.company_id);
+
+    await req.db.query(
+      `UPDATE companies SET ${setClauses.join(', ')} WHERE id = $${paramIndex}`,
+      values
+    );
+
+    const after = await req.db.query(
+      `SELECT ${CAMPAY_SELECT} FROM companies WHERE id = $1`,
+      [user.company_id]
+    );
+    const view = credentials.healthFor(after.rows[0], {
+      baseUrl: publicUrl.publicBaseUrl(),
+      accountDeclaredLive: String(process.env.CAMERPAY_ACCOUNT_LIVE || 'false').toLowerCase() === 'true',
+    });
+
+    // The response never contains a usable secret — only the masked view and the
+    // webhook URL to paste into the CamerPay dashboard.
+    return res.json({
+      success: true,
+      message: 'CamerPay settings updated',
+      data: { provider: 'campay', ...view },
+    });
+  } catch (error) {
+    console.error('PATCH /payment/campay-settings error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 // ============================================================
 // 💰 INITIATE PAYMENT
