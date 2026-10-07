@@ -97,9 +97,22 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       // type — Notch Pay's checkout is locked to that channel and collects
       // the customer's number.
       final channel = provider == 'mtn' ? 'cm.mtn' : 'cm.orange';
+
+      // Ask for the number to charge BEFORE starting: a mobile-money rail cannot be
+      // opened without it, and locking one without a number makes the operator reject
+      // the payment (MTN answers "subscriberMsisdn: Input should be a valid string").
+      // A profile phone is often missing, so we always ask — and the direct-operator
+      // fallback below reuses this answer instead of prompting a second time.
+      final payerPhone = await _promptPhone(provider);
+      if (payerPhone == null || payerPhone.isEmpty) return;
+
       Map<String, dynamic>? notch;
       try {
-        notch = await planProvider.notchpayInitiate(plan: plan, channel: channel);
+        notch = await planProvider.notchpayInitiate(
+          plan: plan,
+          channel: channel,
+          customerPhone: payerPhone,
+        );
       } catch (_) {
         notch = null;
       }
@@ -121,7 +134,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
       // ⬇️ Fallback: direct operator integration (used only when Notch Pay is
       // not configured on the server).
-      final phone = await _promptPhone(provider);
+      final phone = payerPhone; // already collected above — never prompt twice
       if (phone == null || phone.isEmpty) return;
 
       final data = await planProvider.momoInitiate(

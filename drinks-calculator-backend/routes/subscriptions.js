@@ -1019,7 +1019,7 @@ router.post('/subscriptions/campay-initiate', async (req, res) => {
     if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired session' });
     if (!user.company_id) return res.status(400).json({ success: false, error: 'No company' });
 
-    const { plan, rail } = req.body || {};
+    const { plan, rail, customerPhone } = req.body || {};
     if (!VALID_PLANS.includes(plan)) {
       return res.status(400).json({ success: false, error: 'Invalid plan' });
     }
@@ -1048,7 +1048,10 @@ router.post('/subscriptions/campay-initiate', async (req, res) => {
     // production on 2026-10-07, for a user whose profile had no phone). Card and
     // PayPal need no number, so those stay lockable; for mobile money without a
     // number we do not lock a rail and let the payer type it on CamerPay's own page.
-    const payerPhone = String(user.phone || '').trim();
+    // The purchase sheet collects the number to charge; the profile phone is only a
+    // fallback. Without a number a mobile-money rail cannot be locked (MTN rejects
+    // the initiation), so the payer then chooses and enters it on CamerPay's page.
+    const payerPhone = String(customerPhone || user.phone || '').trim();
     const needsPayerPhone = requestedMethod === 'mtn_momo' || requestedMethod === 'orange_money';
     const method = needsPayerPhone && !payerPhone ? null : requestedMethod;
 

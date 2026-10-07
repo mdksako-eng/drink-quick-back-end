@@ -178,6 +178,7 @@ class SubscriptionService {
   static Future<Map<String, dynamic>?> notchpayInitiate({
     required String plan,
     String? channel,
+    String? customerPhone,
   }) async {
     try {
       final token = await SecureStorageService.getSessionToken();
@@ -190,7 +191,14 @@ class SubscriptionService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({'plan': plan, if (rail != null) 'rail': rail}),
+        body: jsonEncode({
+          'plan': plan,
+          if (rail != null) 'rail': rail,
+          // The number to charge. Sent only when the payer typed one, so the server
+          // falls back to the profile phone and, failing that, lets CamerPay ask.
+          if (customerPhone != null && customerPhone.trim().isNotEmpty)
+            'customerPhone': customerPhone.trim(),
+        }),
       );
 
       if (response.statusCode == 200) {

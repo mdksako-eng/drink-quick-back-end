@@ -121,8 +121,10 @@ class PlanProvider extends ChangeNotifier {
   Future<Map<String, dynamic>?> notchpayInitiate({
     required String plan,
     String? channel,
+    String? customerPhone,
   }) {
-    return SubscriptionService.notchpayInitiate(plan: plan, channel: channel);
+    return SubscriptionService.notchpayInitiate(
+        plan: plan, channel: channel, customerPhone: customerPhone);
   }
 
   /// Which rails can be charged right now (card / MTN / Orange), as reported by
