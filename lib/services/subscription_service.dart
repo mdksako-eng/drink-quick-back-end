@@ -221,15 +221,27 @@ class SubscriptionService {
     }
   }
 
-  /// Rail slug the caller used ('cm.mtn' / 'cm.orange') → CamerPay's rail name.
+  /// Rail the caller picked → CamerPay's rail name, so tapping MTN lands on MTN,
+  /// Orange on Orange and Card on card instead of CamerPay's menu.
+  ///
+  /// Accepts both the raw enum values ('mtn' / 'orange' / 'card') and the older
+  /// Notch Pay slugs ('cm.mtn' / 'cm.orange'). Anything unknown returns null, which
+  /// means "do not lock" and the payer chooses on CamerPay's own page.
   static String? _campayRailFor(String? channel) {
     switch (channel) {
       case 'cm.mtn':
+      case 'mtn':
         return 'mtn';
       case 'cm.orange':
+      case 'orange':
         return 'orange';
+      case 'card':
+      case 'cm.card':
+      case 'stripe':
+      case 'visa':
+        return 'card';
       default:
-        return null; // card / anything else: the payer chooses on CamerPay.
+        return null;
     }
   }
 
