@@ -135,6 +135,11 @@ class ApiConfig {
       '$apiBase/subscriptions/notchpay-status';
   static const String subscriptionNotchpayChannels =
       '$apiBase/subscriptions/notchpay-channels';
+  // ✅ CamerPay is the live subscription rail (Notch Pay is being removed).
+  static const String subscriptionCampayInitiate =
+      '$apiBase/subscriptions/campay-initiate';
+  static const String subscriptionCampayStatus =
+      '$apiBase/subscriptions/campay-status';
 
   // Supabase headers (anon key) — legacy direct access only.
   static Map<String, String> get supabaseHeaders => {

@@ -166,8 +166,15 @@ class SubscriptionService {
     }
   }
 
-  /// Initiate a Notch Pay payment (unified MoMo/OM/card) and return the
-  /// checkout URL + reference.
+  /// Start a subscription payment through **CamerPay** (Mobile Money, card,
+  /// PayPal). The method names are kept for now so the screen needs no change;
+  /// they are renamed when the Notch Pay code is deleted.
+  ///
+  /// CamerPay replaces the old Notch Pay checkout: one hosted page per rail, and
+  /// the plan activates only when the server confirms a REAL (non-sandbox)
+  /// transaction — a sandbox payment can never hand out a paid plan.
+  /// [channel] keeps the caller's rail slug ('cm.mtn' / 'cm.orange'); anything
+  /// else means "let the customer choose on CamerPay's page".
   static Future<Map<String, dynamic>?> notchpayInitiate({
     required String plan,
     String? channel,
@@ -176,13 +183,14 @@ class SubscriptionService {
       final token = await SecureStorageService.getSessionToken();
       if (token == null) return null;
 
+      final rail = _campayRailFor(channel);
       final response = await http.post(
-        Uri.parse(ApiConfig.subscriptionNotchpayInitiate),
+        Uri.parse(ApiConfig.subscriptionCampayInitiate),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({'plan': plan, 'channel': channel}),
+        body: jsonEncode({'plan': plan, if (rail != null) 'rail': rail}),
       );
 
       if (response.statusCode == 200) {
@@ -190,40 +198,39 @@ class SubscriptionService {
         if (data['success'] == true) {
           return Map<String, dynamic>.from(data['data'] ?? {});
         }
-        if (data['error'] != null) throw Exception(data['error']);
+      } else {
+        // 402 (KYC / plan quota) and 503 (not ready) carry a message worth showing.
+        final data = jsonDecode(response.body);
+        if (data is Map && data['message'] != null) {
+          throw Exception(data['message']);
+        }
+        if (data is Map && data['error'] != null) throw Exception(data['error']);
       }
       return null;
     } catch (e) {
-      debugPrint('SubscriptionService.notchpayInitiate error: $e');
+      debugPrint('SubscriptionService.campayInitiate error: $e');
       rethrow;
     }
   }
 
-  /// Which rails the platform can actually charge (card / MTN / Orange).
-  /// Returns null when unauthenticated or when the server cannot say.
-  static Future<Map<String, dynamic>?> notchpayChannels() async {
-    try {
-      final token = await SecureStorageService.getSessionToken();
-      if (token == null) return null;
-
-      final response = await http.get(
-        Uri.parse(ApiConfig.subscriptionNotchpayChannels),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          return Map<String, dynamic>.from(data['data'] ?? {});
-        }
-      }
-      return null;
-    } catch (e) {
-      debugPrint('SubscriptionService.notchpayChannels error: $e');
-      return null;
+  /// Rail slug the caller used ('cm.mtn' / 'cm.orange') → CamerPay's rail name.
+  static String? _campayRailFor(String? channel) {
+    switch (channel) {
+      case 'cm.mtn':
+        return 'mtn';
+      case 'cm.orange':
+        return 'orange';
+      default:
+        return null; // card / anything else: the payer chooses on CamerPay.
     }
   }
 
-  /// Poll Notch Pay payment status. Returns { active, status, ... }.
+  /// CamerPay publishes no per-rail availability list — every method the account
+  /// can charge is offered on its own page — so this returns null, which the
+  /// screen already treats as "unknown: keep every rail enabled".
+  static Future<Map<String, dynamic>?> notchpayChannels() async => null;
+
+  /// Poll a CamerPay subscription payment. Returns { active, status, reason, ... }.
   static Future<Map<String, dynamic>?> notchpayStatus({
     required String reference,
   }) async {
@@ -231,7 +238,7 @@ class SubscriptionService {
       final token = await SecureStorageService.getSessionToken();
       if (token == null) return null;
 
-      final uri = Uri.parse(ApiConfig.subscriptionNotchpayStatus)
+      final uri = Uri.parse(ApiConfig.subscriptionCampayStatus)
           .replace(queryParameters: {'reference': reference});
 
       final response = await http.get(
@@ -250,7 +257,7 @@ class SubscriptionService {
       }
       return null;
     } catch (e) {
-      debugPrint('SubscriptionService.notchpayStatus error: $e');
+      debugPrint('SubscriptionService.campayStatus error: $e');
       return null;
     }
   }
