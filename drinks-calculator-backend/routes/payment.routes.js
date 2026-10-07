@@ -661,6 +661,12 @@ router.post('/payment/campay-webhook/:companyToken', async (req, res) => {
     const rawBody = rawBodyOf(req);
     const fields = campay.parseWebhookBody(rawBody);
     const signature = req.headers['x-camerpay-signature'] || fields.signature;
+    const matchedMode = campay.matchSignatureMode(rawBody, signature, conn.webhookSecret);
+    if (matchedMode) {
+      // Which recipe this bar's CamerPay account signs with — logged on every
+      // webhook so a mismatch is visible rather than silent.
+      console.log(`🔔 CamerPay webhook verified for company ${company.id} (signature mode: ${matchedMode}, status=${fields.status || '?'}, invoice=${fields.invoice_id || '?'})`);
+    }
     if (!campay.verifyWebhookSignature(rawBody, signature, conn.webhookSecret)) {
       console.warn(`⚠️ CamerPay webhook: invalid signature for company ${company.id}`);
       return res.status(401).json({ success: false, error: 'Invalid signature' });
@@ -677,6 +683,9 @@ router.post('/payment/campay-webhook/:companyToken', async (req, res) => {
             WHERE transaction_id = $1 AND status = 'pending'`,
           [reference]
         );
+      }
+      if (status === 'failed' || status === 'cancelled') {
+        console.warn(`⚠️ CamerPay webhook: payment ${status} for company ${company.id} (${fields.invoice_id || 'unknown'})${fields.failure_reason ? ` — ${fields.failure_reason}` : ''}${fields.failure_code ? ` (${fields.failure_code})` : ''}`);
       }
       return res.json({ success: true, ignored: true, status: fields.status || null });
     }

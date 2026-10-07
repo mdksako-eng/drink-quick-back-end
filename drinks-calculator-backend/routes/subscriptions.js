@@ -1233,7 +1233,13 @@ router.post('/subscriptions/campay-webhook', async (req, res) => {
     const fields = campay.parseWebhookBody(rawBody);
     const signature = req.headers['x-camerpay-signature'] || fields.signature;
 
-    if (!campay.verifyWebhookSignature(rawBody, signature)) {
+    const matchedMode = campay.matchSignatureMode(rawBody, signature, process.env.CAMERPAY_WEBHOOK_SECRET || '');
+    if (matchedMode) {
+      // Which documented recipe CamerPay actually signs with, logged on every
+      // webhook (success or failure) so the answer is visible instead of guessed.
+      console.log(`🔔 CamerPay webhook verified (signature mode: ${matchedMode}, status=${fields.status || '?'}, invoice=${fields.invoice_id || '?'})`);
+    }
+    if (!matchedMode) {
       console.warn('⚠️ CamerPay webhook: invalid signature');
       // CamerPay never retries an HTTP error, and a forged body deserves none.
       return res.status(401).json({ success: false, error: 'Invalid signature' });
@@ -1250,6 +1256,11 @@ router.post('/subscriptions/campay-webhook', async (req, res) => {
           `UPDATE subscriptions SET status = 'failed' WHERE reference = $1 AND status = 'pending'`,
           [reference]
         );
+      }
+      if (status === 'failed' || status === 'cancelled') {
+        // Failures used to be swallowed: the row was marked failed and nothing was
+        // logged, so an operator could not see why a payment did not go through.
+        console.warn(`⚠️ CamerPay webhook: payment ${status} for ${fields.invoice_id || 'unknown'}${fields.failure_reason ? ` — ${fields.failure_reason}` : ''}${fields.failure_code ? ` (${fields.failure_code})` : ''}`);
       }
       return res.json({ success: true, ignored: true, status: fields.status || null });
     }
