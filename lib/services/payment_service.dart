@@ -219,6 +219,86 @@ class PaymentService {
     }
   }
 
+  /// Try to collect through the company's OWN CamerPay account.
+  ///
+  /// Returns the SAME shape as [initiatePayment] (`success`, `transactionId`,
+  /// `paymentUrl`, `error`) so the till's existing flow — open the URL, poll,
+  /// confirm — works unchanged. When this bar has not connected CamerPay, it
+  /// returns `fallback: true` and the caller uses the legacy rail, so a bar that
+  /// never connected still takes money exactly as before.
+  static Future<Map<String, dynamic>> initiateCampayPayment({
+    required double amount,
+    required String customerPhone,
+    required String paymentMethod,
+    required String orderId,
+  }) async {
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      if (token == null) {
+        return {
+          'success': false,
+          'error': 'Not authenticated',
+        };
+      }
+
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/payment/campay-initiate'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'amount': amount,
+          'customerPhone': customerPhone,
+          'paymentMethod': paymentMethod,
+          'orderId': orderId,
+        }),
+      );
+
+      final decoded = jsonDecode(response.body);
+      final Map<String, dynamic> data = decoded is Map && decoded['data'] is Map
+          ? Map<String, dynamic>.from(decoded['data'])
+          : (decoded is Map ? Map<String, dynamic>.from(decoded) : {});
+
+      if (response.statusCode == 200 && data.isNotEmpty) {
+        return {
+          'success': true,
+          'provider': 'campay',
+          'transactionId': data['transactionId'],
+          'paymentUrl': data['checkoutUrl'] ?? data['payUrl'],
+          'amount': data['amount'],
+          'estimatedFee': data['estimatedFee'],
+        };
+      }
+
+      // These codes mean "this bar is not ready for CamerPay", which is not a
+      // payment failure — the caller then uses the legacy rail.
+      final code =
+          (data['error'] ?? (decoded is Map ? decoded['error'] : null) ?? '')
+              .toString();
+      const fallbackCodes = {
+        'campay_not_connected',
+        'webhook_not_configured',
+        'no_public_url',
+      };
+      return {
+        'success': false,
+        'fallback': fallbackCodes.contains(code),
+        'error': code.isEmpty ? 'HTTP ${response.statusCode}' : code,
+      };
+    } catch (e) {
+      print('❌ initiateCampayPayment error: $e');
+      // Deliberately NOT a fallback: a lost response could mean CamerPay already
+      // created a collection, and retrying on the legacy rail could charge the
+      // customer twice. Surfacing the error lets the operator decide.
+      return {
+        'success': false,
+        'fallback': false,
+        'error': 'Network error: $e',
+      };
+    }
+  }
+
   /// Check payment status
   static Future<Map<String, dynamic>> checkPaymentStatus(String transactionId) async {
     try {

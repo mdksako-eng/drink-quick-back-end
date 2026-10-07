@@ -934,13 +934,27 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       return false;
     }
 
-    // ✅ Initiate payment via backend
-    final result = await PaymentService.initiatePayment(
+    // ✅ Initiate payment via backend.
+    // Prefer the company's OWN CamerPay account when it is connected — the money
+    // then reaches this bar directly. When the bar has not connected CamerPay the
+    // server says so, and we fall back to the legacy rail with the same result
+    // shape, so a bar that never connected keeps selling exactly as before.
+    var result = await PaymentService.initiateCampayPayment(
       amount: amount,
       customerPhone: customerPhone,
       paymentMethod: paymentMethod,
       orderId: orderId,
     );
+    if (result['success'] != true && result['fallback'] == true) {
+      debugPrint(
+          '↩️ CamerPay not ready for this company — using the legacy payment rail');
+      result = await PaymentService.initiatePayment(
+        amount: amount,
+        customerPhone: customerPhone,
+        paymentMethod: paymentMethod,
+        orderId: orderId,
+      );
+    }
 
     if (!result['success']) {
       setState(() {
