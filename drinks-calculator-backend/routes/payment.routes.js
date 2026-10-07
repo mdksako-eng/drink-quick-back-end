@@ -854,7 +854,7 @@ router.post('/payment/initiate', async (req, res) => {
     let paymentUrl = null;
 
     // ✅ Notch Pay Sync: money routes to the COMPANY's connected account.
-    if (notchpay.isConfigured() && company.notchpay_sync_id) {
+    if (notchpay.status().mode === 'live' && company.notchpay_sync_id) {
       try {
         const baseUrl =
           process.env.APP_BASE_URL || 'https://drink-quick-cal-kja1.onrender.com';

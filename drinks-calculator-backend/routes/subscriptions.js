@@ -719,11 +719,15 @@ router.post('/subscriptions/notchpay-initiate', async (req, res) => {
     if (!VALID_PLANS.includes(plan)) return res.status(400).json({ success: false, error: 'Invalid plan' });
     if (!notchpay.isConfigured()) return res.status(503).json({ success: false, error: 'Notch Pay not configured' });
     // Opt-in production guard: never start a payment that cannot collect money.
-    if (paymentGuard.liveKeyRequired() && notchpay.status().mode !== 'live') {
+    // The Notch Pay rail is RETIRED — CamerPay is the subscription rail now. It
+    // stays reachable only so an app build that predates that switch fails loudly
+    // instead of being handed a plan nobody paid for. With test keys this always
+    // answers 503, so no plan can be activated through it, free or otherwise.
+    if (notchpay.status().mode !== 'live') {
       return res.status(503).json({
         success: false,
         error:
-          'Payments are disabled while the platform keys are in test mode (NOTCHPAY_REQUIRE_LIVE=true).',
+          'This payment rail is retired. Update the app and pay through CamerPay.',
       });
     }
 
