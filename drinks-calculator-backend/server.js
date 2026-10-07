@@ -168,6 +168,17 @@ app.use(async (req, res, next) => {
         await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS notchpay_sync_id TEXT`);
         await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS notchpay_webhook_hash TEXT`);
         await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS card_enabled BOOLEAN DEFAULT false`);
+    // CamerPay per-company collection (phase 3). The *_enc columns MUST hold vault
+    // ciphertext (utils/companyPaymentCredentials.js → utils/credentialVault.js):
+    // these are the credentials that move a bar's own money.
+    await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS campay_enabled BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS campay_token_enc TEXT`);
+    await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS campay_webhook_token TEXT`);
+    await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS campay_webhook_secret_enc TEXT`);
+    await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS campay_connected_at TIMESTAMPTZ`);
+    // The webhook path resolves the company BY this token, so it must be unique;
+    // NULLs (companies that never connected) are excluded from the constraint.
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS companies_campay_webhook_token_idx ON companies (campay_webhook_token) WHERE campay_webhook_token IS NOT NULL`);
         console.log('✅ Company Notch Pay columns ensured');
       } catch (notchColErr) {
         console.log('⚠️ Notch Pay columns warning:', notchColErr.message);
