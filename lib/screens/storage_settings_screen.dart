@@ -121,6 +121,17 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
   final TextEditingController _notchpaySyncIdController =
       TextEditingController();
 
+  // 🇨🇲 CamerPay — the company's own account. Secrets are WRITE-ONLY: the server
+  // only ever returns a masked view, so nothing here can leak a token.
+  bool _campayConnected = false;
+  bool _campayEnabled = false;
+  bool _campaySecretSet = false;
+  String _campayWebhookUrl = '';
+  List<String> _campayBlockers = const [];
+  bool _campaySaving = false;
+  final TextEditingController _campayTokenController = TextEditingController();
+  final TextEditingController _campaySecretController = TextEditingController();
+
   // Country selection variables
   String _selectedCountry = 'CM';
   String _selectedCountryCode = '+237';
@@ -248,6 +259,20 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               _orangeSecretKey = paymentSettings['orangeSecretKey'] ?? '';
               _cardEnabled = paymentSettings['cardEnabled'] ?? false;
               _notchpaySyncId = paymentSettings['notchpaySyncId'] ?? '';
+            }
+
+            // 🇨🇲 CamerPay connection (masked — the server never returns secrets).
+            final campaySettings = await PaymentService.getCampaySettings();
+            if (campaySettings != null) {
+              _campayConnected = campaySettings['connected'] == true;
+              _campayEnabled = campaySettings['enabled'] == true;
+              _campaySecretSet = campaySettings['webhookSecretSet'] == true;
+              _campayWebhookUrl =
+                  (campaySettings['webhookUrl'] ?? '').toString();
+              _campayBlockers =
+                  ((campaySettings['blockers'] ?? const []) as List)
+                      .map((entry) => entry.toString())
+                      .toList();
             }
           } catch (e) {
             debugPrint('❌ Error loading payment settings from backend: $e');
@@ -509,6 +534,45 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               '🔐 Payment secrets saved to backend: $secretsSaved');
         } catch (e) {
           debugPrint('❌ Error saving payment secrets to backend: $e');
+        }
+
+        // 🇨🇲 CamerPay: send ONLY what the manager actually typed. Untouched fields
+        // are omitted, so the mask shown in the UI can never overwrite a live secret.
+        try {
+          final campayTokenTyped = _campayTokenController.text.trim();
+          final campaySecretTyped = _campaySecretController.text.trim();
+          final campayResult = await PaymentService.updateCampaySettings(
+            campayEnabled: _campayEnabled,
+            token: campayTokenTyped.isEmpty ? null : campayTokenTyped,
+            webhookSecret: campaySecretTyped.isEmpty ? null : campaySecretTyped,
+          );
+          if (campayResult['success'] == true) {
+            _campayTokenController.clear();
+            _campaySecretController.clear();
+            final refreshed = await PaymentService.getCampaySettings();
+            if (refreshed != null && mounted) {
+              setState(() {
+                _campayConnected = refreshed['connected'] == true;
+                _campayEnabled = refreshed['enabled'] == true;
+                _campaySecretSet = refreshed['webhookSecretSet'] == true;
+                _campayWebhookUrl = (refreshed['webhookUrl'] ?? '').toString();
+                _campayBlockers = ((refreshed['blockers'] ?? const []) as List)
+                    .map((entry) => entry.toString())
+                    .toList();
+              });
+            }
+          } else {
+            final reason = (campayResult['error'] ?? '').toString();
+            debugPrint('❌ CamerPay settings refused: $reason');
+            if (mounted) {
+              Helpers.showToast(
+                reason.isEmpty ? t('error') : reason,
+                isError: true,
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('❌ Error saving CamerPay settings: $e');
         }
       } catch (e) {
         debugPrint('❌❌❌ Error saving company settings: $e');
@@ -991,6 +1055,10 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     if (!isStaff) ...[
                       _buildBusinessPaymentSettingsCard(
                           theme, primaryColorValue),
+                      const SizedBox(height: 20),
+                      // 🇨🇲 The company's own CamerPay account (managers/owners
+                      // only — staff never see payment credentials).
+                      _buildCampaySettingsCard(theme, primaryColorValue),
                       const SizedBox(height: 20),
                     ],
                     if (canSeePaymentSettings) ...[
@@ -2308,6 +2376,223 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
   // ============================================================
   // Business Payment Settings Card
   // ============================================================
+  // ============================================================
+  // 🇨🇲 CamerPay card — the company's own collecting account
+  // ============================================================
+  Widget _buildCampaySettingsCard(ThemeData theme, Color primaryColorValue) {
+    return Card(
+      elevation: 2,
+      color: theme.cardColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.account_balance, size: 20, color: primaryColorValue),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    t('campayTitle'),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _campayConnected
+                        ? Colors.green.shade100
+                        : Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _campayConnected
+                        ? t('campayConnected')
+                        : t('campayNotConnected'),
+                    style: const TextStyle(
+                        fontSize: 10, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              t('campaySubtitle'),
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _campayTokenController,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: t('campayTokenLabel'),
+                helperText: t('campayTokenHint'),
+                helperMaxLines: 3,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _campaySecretController,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: t('campaySecretLabel'),
+                helperText: t('campaySecretHint'),
+                helperMaxLines: 3,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            if (_campaySecretSet)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.verified_user,
+                        size: 13, color: Colors.green.shade700),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        t('campaySecretSaved'),
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.green.shade800),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title:
+                  Text(t('campayEnable'), style: const TextStyle(fontSize: 14)),
+              value: _campayEnabled,
+              onChanged: _campayConnected
+                  ? (value) => setState(() {
+                        _campayEnabled = value;
+                        _markUnsaved();
+                      })
+                  : null,
+            ),
+            if (_campayWebhookUrl.isNotEmpty) ...[
+              Text(
+                t('campayWebhookLabel'),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: theme.brightness == Brightness.dark
+                      ? Colors.black26
+                      : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SelectableText(
+                  _campayWebhookUrl,
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
+            ..._campayBlockers.map(
+              (blocker) => Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline,
+                        size: 14, color: Colors.orange.shade700),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _campayBlockerText(blocker),
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.orange.shade800),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _campaySaving ? null : _saveCampaySettings,
+                icon: _campaySaving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save, size: 18),
+                label: Text(t('campaySave')),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Server blocker codes → a sentence the owner can act on.
+  String _campayBlockerText(String blocker) {
+    switch (blocker) {
+      case 'vault_key_missing':
+        return t('campayBlockerVault');
+      case 'no_token':
+        return t('campayBlockerToken');
+      case 'no_webhook_secret':
+        return t('campayBlockerSecret');
+      default:
+        return blocker;
+    }
+  }
+
+  /// Save the CamerPay part on its own (the main Save button sends it too).
+  Future<void> _saveCampaySettings() async {
+    setState(() => _campaySaving = true);
+    try {
+      final tokenTyped = _campayTokenController.text.trim();
+      final secretTyped = _campaySecretController.text.trim();
+      final result = await PaymentService.updateCampaySettings(
+        campayEnabled: _campayEnabled,
+        token: tokenTyped.isEmpty ? null : tokenTyped,
+        webhookSecret: secretTyped.isEmpty ? null : secretTyped,
+      );
+      if (!mounted) return;
+      if (result['success'] != true) {
+        final reason = (result['error'] ?? '').toString();
+        Helpers.showToast(reason.isEmpty ? t('error') : reason, isError: true);
+        return;
+      }
+      _campayTokenController.clear();
+      _campaySecretController.clear();
+      final refreshed = await PaymentService.getCampaySettings();
+      if (!mounted) return;
+      setState(() {
+        if (refreshed != null) {
+          _campayConnected = refreshed['connected'] == true;
+          _campayEnabled = refreshed['enabled'] == true;
+          _campaySecretSet = refreshed['webhookSecretSet'] == true;
+          _campayWebhookUrl = (refreshed['webhookUrl'] ?? '').toString();
+          _campayBlockers = ((refreshed['blockers'] ?? const []) as List)
+              .map((entry) => entry.toString())
+              .toList();
+        }
+      });
+      Helpers.showToast(t('campaySaved'));
+    } finally {
+      if (mounted) setState(() => _campaySaving = false);
+    }
+  }
+
   Widget _buildBusinessPaymentSettingsCard(
       ThemeData theme, Color primaryColorValue) {
     final authProvider = Provider.of<AuthProvider>(context);

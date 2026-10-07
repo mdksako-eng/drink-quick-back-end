@@ -77,6 +77,96 @@ class PaymentService {
   }
 
   // ============================================================
+  // 🇨🇲 CAMERPAY — the company's own account (phase 3)
+  // ============================================================
+
+  /// Read this company's CamerPay connection state. The server only ever returns
+  /// a MASKED view, so there is no secret to leak here.
+  static Future<Map<String, dynamic>?> getCampaySettings() async {
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      if (token == null) {
+        print('❌ No auth token found');
+        return null;
+      }
+
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/payment/campay-settings'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return data['data'];
+        }
+        return null;
+      }
+      print('❌ Failed to get CamerPay settings: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      print('❌ getCampaySettings error: $e');
+      return null;
+    }
+  }
+
+  /// Connect, update, or disconnect this company's CamerPay account (manager only).
+  ///
+  /// [token] and [webhookSecret] are WRITE-ONLY: pass the real value to set or
+  /// rotate them, or omit them to leave what the server already holds untouched —
+  /// so a masked value shown in the UI can never overwrite a live secret.
+  ///
+  /// Returns the server's answer so the screen can explain a refusal instead of
+  /// silently doing nothing: `vault_key_missing` means the server has no storage
+  /// key, `token_required` means CamerPay cannot be enabled without a token, etc.
+  static Future<Map<String, dynamic>> updateCampaySettings({
+    bool? campayEnabled,
+    String? token,
+    String? webhookSecret,
+    bool? rotateWebhookToken,
+  }) async {
+    try {
+      final sessionToken = await SecureStorageService.getSessionToken();
+      if (sessionToken == null) {
+        return {'success': false, 'error': 'Not signed in'};
+      }
+
+      final body = <String, dynamic>{};
+      if (campayEnabled != null) body['campayEnabled'] = campayEnabled;
+      if (token != null) body['token'] = token;
+      if (webhookSecret != null) body['webhookSecret'] = webhookSecret;
+      if (rotateWebhookToken != null) {
+        body['rotateWebhookToken'] = rotateWebhookToken;
+      }
+
+      final response = await http.patch(
+        Uri.parse('$_baseUrl/api/payment/campay-settings'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $sessionToken',
+        },
+        body: jsonEncode(body),
+      );
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded['success'] == true) {
+        return {'success': true, 'data': decoded['data']};
+      }
+      return {
+        'success': false,
+        'error': (decoded is Map ? decoded['error'] : null) ??
+            'HTTP ${response.statusCode}',
+      };
+    } catch (e) {
+      print('❌ updateCampaySettings error: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // ============================================================
   // 💰 PAYMENT INITIATION
   // ============================================================
 

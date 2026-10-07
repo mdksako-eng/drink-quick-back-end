@@ -40,6 +40,29 @@ class LanguageService {
 /// then to the key itself if missing.
 
 const Map<String, String> _en = {
+  // 🇨🇲 CamerPay (the company's own account — phase 4)
+  'campayTitle': 'CamerPay (card, MTN, Orange, PayPal)',
+  'campaySubtitle':
+      'Connect your own CamerPay account so your customers pay you directly.',
+  'campayConnected': 'Connected',
+  'campayNotConnected': 'Not connected',
+  'campayTokenLabel': 'CamerPay API token',
+  'campayTokenHint':
+      'Paste the token from your CamerPay dashboard (Access tokens). Leave empty to keep the current one.',
+  'campaySecretLabel': 'CamerPay webhook secret',
+  'campaySecretHint':
+      'The webhook secret from your CamerPay dashboard. Required to trust payment confirmations.',
+  'campayWebhookLabel': 'Give this URL to CamerPay as your webhook',
+  'campayEnable': 'Accept CamerPay in the app',
+  'campaySave': 'Save CamerPay settings',
+  'campaySaved': 'CamerPay settings saved',
+  'campaySecretSaved': 'Webhook secret saved on the server',
+  'campayBlockerVault':
+      'The server has no credential storage key (PAYMENT_CREDENTIALS_KEY). Ask support to set it before connecting.',
+  'campayBlockerToken':
+      'Add your CamerPay API token to start accepting payments.',
+  'campayBlockerSecret':
+      'Add your CamerPay webhook secret, or payments arrive but are never confirmed.',
   // Auth
   'appName': 'Drink Quick Cal',
   'signIn': 'Sign In',
@@ -1215,6 +1238,29 @@ const Map<String, String> _en = {
 };
 
 const Map<String, String> _fr = {
+  // 🇨🇲 CamerPay (le compte de l'établissement — phase 4)
+  'campayTitle': 'CamerPay (carte, MTN, Orange, PayPal)',
+  'campaySubtitle':
+      'Connectez votre propre compte CamerPay pour que vos clients vous paient directement.',
+  'campayConnected': 'Connecté',
+  'campayNotConnected': 'Non connecté',
+  'campayTokenLabel': 'Jeton API CamerPay',
+  'campayTokenHint':
+      'Collez le jeton de votre tableau de bord CamerPay (Jetons d\'accès). Laissez vide pour conserver le jeton actuel.',
+  'campaySecretLabel': 'Secret de webhook CamerPay',
+  'campaySecretHint':
+      'Le secret de webhook affiché dans votre tableau de bord CamerPay. Nécessaire pour faire confiance aux confirmations de paiement.',
+  'campayWebhookLabel': 'Fournissez cette URL à CamerPay comme webhook',
+  'campayEnable': 'Accepter CamerPay dans l\'application',
+  'campaySave': 'Enregistrer les réglages CamerPay',
+  'campaySaved': 'Réglages CamerPay enregistrés',
+  'campaySecretSaved': 'Secret de webhook enregistré sur le serveur',
+  'campayBlockerVault':
+      'Le serveur n\'a pas de clé de stockage des identifiants (PAYMENT_CREDENTIALS_KEY). Demandez à l\'assistance de la définir avant de connecter.',
+  'campayBlockerToken':
+      'Ajoutez votre jeton API CamerPay pour commencer à accepter des paiements.',
+  'campayBlockerSecret':
+      'Ajoutez votre secret de webhook CamerPay, sinon les paiements seront reçus mais jamais confirmés.',
   // Auth
   'appName': 'Drink Quick Cal',
   'signIn': 'Se connecter',
