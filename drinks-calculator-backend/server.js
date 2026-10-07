@@ -52,6 +52,7 @@ const SERVER_STARTED_AT = new Date();
 // Notch Pay is the legacy one still in place (see memory-bank/activeContext.md).
 const campayStatus = require('./utils/campay');
 const publicUrlStatus = require('./utils/publicUrl');
+const credentialVaultStatus = require('./utils/credentialVault');
 
 const databaseUrl = process.env.DATABASE_URL;
 console.log('🔍 DATABASE_URL is set:', databaseUrl ? 'YES' : 'NO');
@@ -186,11 +187,13 @@ app.use(async (req, res, next) => {
     try {
       await pool.query(`ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS provider TEXT`);
       await pool.query(`UPDATE payment_transactions SET provider = 'legacy' WHERE provider IS NULL`);
+      await pool.query(`ALTER TABLE payment_transactions ALTER COLUMN provider SET DEFAULT 'legacy'`);
+      console.log('✅ payment_transactions.provider column ensured (legacy rows labelled)');
     } catch (e) {
       // The table is created lazily elsewhere; never block startup over this.
       console.warn('⚠️ payment_transactions.provider migration skipped:', e.message);
     }
-        console.log('✅ Company Notch Pay columns ensured');
+        console.log('✅ Company payment columns ensured (Notch Pay + CamerPay)');
       } catch (notchColErr) {
         console.log('⚠️ Notch Pay columns warning:', notchColErr.message);
       }
@@ -2741,6 +2744,16 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('   Mode is NOT readable from the token — every payment is checked via is_sandbox.');
     console.log(`   Account declared live: ${declaredLive ? 'yes' : 'NO (set CAMERPAY_ACCOUNT_LIVE=true once KYC is approved)'}`);
     console.log(`   Webhook: ${publicUrlStatus.providerCallbackUrl('/api/subscriptions/campay-webhook') || 'UNSET (set APP_BASE_URL)'}`);
+  }
+
+  // Per-company CamerPay credentials are encrypted with this key. Without it, a
+  // manager connecting a bar's account is refused (vault_key_missing) — better to
+  // see that here than to discover it when a bar tries to connect.
+  if (!credentialVaultStatus.isVaultConfigured()) {
+    console.log('🔐 Company payment credentials: NO storage key — set PAYMENT_CREDENTIALS_KEY');
+    console.log('   Without it, bars cannot connect their own CamerPay account.\n');
+  } else {
+    console.log('🔐 Company payment credentials: encrypted at rest (PAYMENT_CREDENTIALS_KEY set)\n');
   }
 
   // A provider can only call us back on a public HTTPS URL — CamerPay explicitly
