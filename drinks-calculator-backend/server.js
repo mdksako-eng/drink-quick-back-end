@@ -46,8 +46,12 @@ console.log('🔌 Connecting to PostgreSQL (Supabase)...');
 // 🏷️ Build identity, reported by GET /health. Bump RELEASE when you want to
 // confirm from the outside that a deploy actually went through; SERVER_STARTED_AT
 // resets on every restart (uptimeSeconds in the health payload).
-const RELEASE = '2026-09-20-phase8';
+const RELEASE = '2026-10-07-campay-phase2';
 const SERVER_STARTED_AT = new Date();
+// Used by the startup banner below. CamerPay is the rail being migrated to;
+// Notch Pay is the legacy one still in place (see memory-bank/activeContext.md).
+const campayStatus = require('./utils/campay');
+const publicUrlStatus = require('./utils/publicUrl');
 
 const databaseUrl = process.env.DATABASE_URL;
 console.log('🔍 DATABASE_URL is set:', databaseUrl ? 'YES' : 'NO');
@@ -2700,8 +2704,31 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('💳 Subscriptions: LIVE keys — real money WILL be collected');
     console.log(`🪙 Rails: ${paymentRails.PROVIDERS.join(', ')}\n`);
   } else {
-    console.log(`🛑 Subscriptions: ${notch.mode.toUpperCase()} KEYS — real money will NOT be collected`);
+    console.log(`🛑 Subscriptions (Notch Pay, legacy): ${notch.mode.toUpperCase()} KEYS — real money will NOT be collected`);
     console.log('   A plan upgrade would activate without charging anyone.');
-    console.log('   Set NOTCHPAY_PUBLIC_KEY / NOTCHPAY_PRIVATE_KEY to pk_live_ / sk_live_ keys\n');
+    console.log('   Set NOTCHPAY_PUBLIC_KEY / NOTCHPAY_PRIVATE_KEY to pk_live_ / sk_live_ keys');
+  }
+
+  // CamerPay is the rail we are migrating to (utils/campay.js).
+  if (!campayStatus.isConfigured()) {
+    console.log('🇨🇲 CamerPay: no token — subscribers cannot pay by CamerPay yet');
+    console.log('   Set CAMERPAY_TOKEN (dashboard > /client/api) and CAMERPAY_WEBHOOK_SECRET.');
+  } else {
+    const declaredLive = String(process.env.CAMERPAY_ACCOUNT_LIVE || 'false').toLowerCase() === 'true';
+    console.log('🇨🇲 CamerPay: token present');
+    console.log('   Mode is NOT readable from the token — every payment is checked via is_sandbox.');
+    console.log(`   Account declared live: ${declaredLive ? 'yes' : 'NO (set CAMERPAY_ACCOUNT_LIVE=true once KYC is approved)'}`);
+    console.log(`   Webhook: ${publicUrlStatus.providerCallbackUrl('/api/subscriptions/campay-webhook') || 'UNSET (set APP_BASE_URL)'}`);
+  }
+
+  // A provider can only call us back on a public HTTPS URL — CamerPay explicitly
+  // blocks localhost and private addresses, so this must be visible at startup
+  // rather than discovered when a live payment silently fails.
+  const reach = publicUrlStatus.isProviderReachable(publicUrlStatus.publicBaseUrl());
+  if (!reach.ok) {
+    console.log(`⚠️  Provider callbacks unusable: ${reach.reason}.`);
+    console.log('   Set APP_BASE_URL to the public HTTPS URL (Render also exposes RENDER_EXTERNAL_URL).\n');
+  } else {
+    console.log(`🔗 Public base URL: ${publicUrlStatus.publicBaseUrl()}\n`);
   }
 });

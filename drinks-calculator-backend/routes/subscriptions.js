@@ -14,6 +14,10 @@ const notchpay = require('../utils/notchpay');
 const campay = require('../utils/campay');
 const paymentFees = require('../utils/paymentFees');
 const subscriptionPayment = require('../utils/subscriptionPayment');
+// Provider callbacks must be reachable from the internet: CamerPay blocks
+// localhost/private URLs, so a localhost fallback silently breaks live payments
+// (see utils/publicUrl.js).
+const publicUrl = require('../utils/publicUrl');
 const paymentChannels = require('../utils/paymentChannels');
 const paymentGuard = require('../utils/paymentGuard');
 const { rawBodyOf } = require('../utils/requestBody');
@@ -177,9 +181,9 @@ router.post('/subscriptions/initiate', async (req, res) => {
 
     const price = PLAN_PRICES[plan];
     const reference = generateReference(user.company_id);
-    const redirectUrl =
-      process.env.FLUTTERWAVE_REDIRECT_URL ||
-      `${process.env.APP_BASE_URL || 'http://localhost:3000'}/api/subscriptions/return`;
+    const redirectUrl = process.env.FLUTTERWAVE_REDIRECT_URL
+      || publicUrl.providerCallbackUrl('/api/subscriptions/return')
+      || `${process.env.APP_BASE_URL || 'http://localhost:3000'}/api/subscriptions/return`;
 
     const data = await flutterwave.initiatePayment({
       txRef: reference,
@@ -735,7 +739,6 @@ router.post('/subscriptions/notchpay-initiate', async (req, res) => {
 
     const price = PLAN_PRICES[plan];
     const reference = generateReference(user.company_id);
-    const baseUrl = process.env.APP_BASE_URL || 'http://localhost:3000';
 
     const data = await notchpay.initiatePayment({
       amount: price.amount,
@@ -746,7 +749,7 @@ router.post('/subscriptions/notchpay-initiate', async (req, res) => {
       // A locked channel must lock its country too, or Notch Pay rejects it.
       country: resolved.lockCountry || undefined,
       description: `Drink Quick Cal ${plan} subscription`,
-      callback: `${baseUrl}/api/subscriptions/notchpay-return`,
+      callback: publicUrl.providerCallbackUrl('/api/subscriptions/notchpay-return') || undefined,
     });
 
     await req.db.query(
@@ -1051,7 +1054,16 @@ router.post('/subscriptions/campay-initiate', async (req, res) => {
       };
 
     const reference = generateReference(user.company_id);
-    const baseUrl = process.env.APP_BASE_URL || 'http://localhost:3000';
+    const baseUrl = publicUrl.publicBaseUrl();
+    if (!baseUrl) {
+      // Without a public URL the provider cannot reach us back (CamerPay blocks
+      // localhost and private addresses), so refusing now beats taking a payment
+      // that can never activate the plan.
+      return res.status(503).json({
+        success: false,
+        error: 'APP_BASE_URL is not configured — the CamerPay callback URL would be unreachable.',
+      });
+    }
 
     const data = await campay.initiatePayment({
       amount: charge.charge,
@@ -1304,7 +1316,7 @@ router.get('/subscriptions/campay/health', (req, res) => {
     feeRatesConfigured,
     methods: paymentFees.METHODS,
     rails: Object.keys(CAMPAY_METHODS),
-    webhookUrl: `${process.env.APP_BASE_URL || 'http://localhost:3000'}/api/subscriptions/campay-webhook`,
+    webhookUrl: publicUrl.providerCallbackUrl('/api/subscriptions/campay-webhook') || null,
     // True only when the operator has declared the account live; the real gate is
     // still the transaction's own is_sandbox flag.
     liveReady: campay.isConfigured() && accountDeclaredLive,
