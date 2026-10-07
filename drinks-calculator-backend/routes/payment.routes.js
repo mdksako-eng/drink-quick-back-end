@@ -10,6 +10,11 @@ const notchpay = require('../utils/notchpay');
 // secret, stored encrypted and returned only masked.
 const credentials = require('../utils/companyPaymentCredentials');
 const publicUrl = require('../utils/publicUrl');
+// CamerPay collection (phase 3.2b): the company's own token charges its customer,
+// and the signature is verified over the raw bytes the provider sent.
+const campay = require('../utils/campay');
+const paymentFees = require('../utils/paymentFees');
+const paymentGuard = require('../utils/paymentGuard');
 const { rawBodyOf } = require('../utils/requestBody');
 // Shared secret for verifying /api/payment/webhook calls (set in env).
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
@@ -473,6 +478,257 @@ router.patch('/payment/campay-settings', async (req, res) => {
     console.error('PATCH /payment/campay-settings error:', error.message);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+
+// ============================================================
+// 🇨🇲 CamerPay collection for a company's own customers (phase 3.2b)
+// ------------------------------------------------------------
+// Uses the COMPANY's own token, so the money reaches that bar and the platform
+// account is never involved. The customer pays the SALE amount: CamerPay's
+// commission is the bar's cost, deducted from its settlement, never added to what
+// the customer is charged (that would corrupt the till's change/balance maths)
+// and never booked as revenue. The estimated fee is reported for the books.
+// ============================================================
+
+/** Rails a till may offer → CamerPay's payment_method. */
+const CAMPAY_RAIL_METHODS = {
+  mtn: 'mtn_momo',
+  momo: 'mtn_momo',
+  orange: 'orange_money',
+  card: 'stripe',
+  visa: 'stripe',
+  paypal: 'paypal',
+};
+
+router.post('/payment/campay-initiate', async (req, res) => {
+  try {
+    const user = await requireSessionUser(req);
+    if (!user) return res.status(401).json({ error: 'Invalid or expired session' });
+    if (!user.company_id) {
+      return res.status(400).json({ error: 'User does not belong to a company' });
+    }
+
+    const { amount, customerPhone, paymentMethod, orderId } = req.body || {};
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+    const rail = String(paymentMethod || '').toLowerCase();
+    const method = CAMPAY_RAIL_METHODS[rail] || null;
+    if (rail && !method) {
+      return res.status(400).json({
+        error: `Unsupported payment method. Use one of: ${Object.keys(CAMPAY_RAIL_METHODS).join(', ')}.`,
+      });
+    }
+
+    const companyRes = await req.db.query(
+      `SELECT ${CAMPAY_SELECT} FROM companies WHERE id = $1`,
+      [user.company_id]
+    );
+    if (companyRes.rows.length === 0) return res.status(404).json({ error: 'Company not found' });
+
+    // Decrypted for this call only; the platform's token is never a fallback.
+    const conn = credentials.connectionFor(companyRes.rows[0]);
+    if (!conn) {
+      return res.status(503).json({
+        error: 'CamerPay is not connected for this company — a manager must add the API token first',
+        code: 'campay_not_connected',
+      });
+    }
+    if (!conn.webhookToken) {
+      return res.status(503).json({
+        error: 'CamerPay is connected but its webhook is not set up',
+        code: 'webhook_not_configured',
+      });
+    }
+
+    const baseUrl = publicUrl.publicBaseUrl();
+    if (!baseUrl) {
+      return res.status(503).json({
+        error: 'APP_BASE_URL is not configured — the CamerPay callback URL would be unreachable.',
+        code: 'no_public_url',
+      });
+    }
+
+    const amountXaf = Math.round(value);
+    const transactionId = generateTransactionId();
+    const rates = paymentFees.ratesFromEnv();
+    const fee = paymentFees.feeFor(method || 'mtn_momo', amountXaf, rates);
+
+    const data = await campay.initiatePayment({
+      token: conn.token,
+      amount: amountXaf,
+      paymentMethod: method || undefined,
+      customerPhone,
+      merchantInvoiceId: transactionId,
+      callbackUrl: `${baseUrl}${credentials.webhookPath(conn.webhookToken)}`,
+      returnUrl: `${baseUrl}/api/payment/campay-return`,
+      source: 'drinkquickcal',
+      idempotencyKey: transactionId,
+    });
+
+    await req.db.query(
+      `INSERT INTO payment_transactions
+         (order_id, company_id, customer_phone, amount, payment_method, transaction_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
+      [
+        orderId || null,
+        user.company_id,
+        customerPhone || '',
+        amountXaf,
+        rail || 'campay',
+        transactionId,
+      ]
+    );
+
+    console.log(`📲 CamerPay collection started: company ${user.company_id}, ${amountXaf} XAF, ${rail || 'any rail'}`);
+
+    return res.json({
+      success: true,
+      data: {
+        provider: 'campay',
+        transactionId,
+        checkoutUrl: data.payUrl || data.redirectUrl || null,
+        amount: amountXaf,
+        currency: 'XAF',
+        rail: rail || null,
+        // Informational: the bar's estimated commission cost, never added to the
+        // amount the customer pays.
+        estimatedFee: fee.fee,
+        estimatedNet: fee.net,
+      },
+    });
+  } catch (error) {
+    if (error && error.name === 'CampayError') {
+      console.warn(`⚠️ CamerPay collection failed: ${error.status} ${error.code || ''} — ${error.message}`);
+      // 402 is a KYC-tier or plan quota refusal: pass the upgrade path through.
+      if (error.status === 402) {
+        return res.status(402).json({
+          success: false,
+          error: error.code || 'quota_exceeded',
+          message: error.message,
+          nextAction: (error.payload && error.payload.next_action) || null,
+          upgradeUrl: (error.payload && error.payload.upgrade_url) || null,
+        });
+      }
+      if (error.status === 422) {
+        return res.status(400).json({ success: false, error: error.message, code: error.code });
+      }
+      if (error.status === 401) {
+        return res.status(503).json({
+          success: false,
+          error: 'CamerPay rejected this company API token — a manager must issue a new one',
+          code: 'invalid_token',
+        });
+      }
+      return res.status(502).json({ success: false, error: error.message, code: error.code });
+    }
+    console.error('POST /payment/campay-initiate error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// CamerPay notifies this bar's collections here. Three rules:
+//  1. the company is resolved from the opaque token in the PATH (never the body),
+//     and the signature is checked with THAT company's own secret;
+//  2. the body is only a trigger — the authoritative facts (status and, above all,
+//     is_sandbox) come from re-reading the transaction with the company's token;
+//  3. a sandbox payment never marks an order paid, because no money moved.
+router.post('/payment/campay-webhook/:companyToken', async (req, res) => {
+  try {
+    const webhookToken = String(req.params.companyToken || '');
+    if (!webhookToken) return res.status(404).json({ success: false, error: 'Unknown webhook token' });
+
+    const found = await req.db.query(
+      `SELECT ${CAMPAY_SELECT} FROM companies WHERE campay_webhook_token = $1`,
+      [webhookToken]
+    );
+    // The SQL lookup already narrowed it; the constant-time check is defence in depth.
+    const company = credentials.findByWebhookToken(found.rows, webhookToken);
+    if (!company) {
+      console.warn('⚠️ CamerPay webhook: unknown company token');
+      return res.status(404).json({ success: false, error: 'Unknown webhook token' });
+    }
+
+    const conn = credentials.connectionFor(company);
+    if (!conn || !conn.webhookSecret) {
+      console.warn(`⚠️ CamerPay webhook: company ${company.id} cannot verify signatures`);
+      return res.status(503).json({ success: false, error: 'Company cannot verify webhooks' });
+    }
+
+    // The body is application/x-www-form-urlencoded and the HMAC covers the raw bytes.
+    const rawBody = rawBodyOf(req);
+    const fields = campay.parseWebhookBody(rawBody);
+    const signature = req.headers['x-camerpay-signature'] || fields.signature;
+    if (!campay.verifyWebhookSignature(rawBody, signature, conn.webhookSecret)) {
+      console.warn(`⚠️ CamerPay webhook: invalid signature for company ${company.id}`);
+      return res.status(401).json({ success: false, error: 'Invalid signature' });
+    }
+
+    const reference = fields.invoice_id;
+    if (!reference) return res.json({ success: true, ignored: true, reason: 'missing invoice_id' });
+
+    const status = campay.normalizeStatus(fields.status);
+    if (status !== 'completed') {
+      if (status === 'failed' || status === 'cancelled') {
+        await req.db.query(
+          `UPDATE payment_transactions SET status = 'failed'
+            WHERE transaction_id = $1 AND status = 'pending'`,
+          [reference]
+        );
+      }
+      return res.json({ success: true, ignored: true, status: fields.status || null });
+    }
+
+    if (!fields.uuid) return res.json({ success: true, ignored: true, reason: 'missing uuid' });
+
+    // Authoritative re-read, with this company's token.
+    const tx = await campay.getPaymentStatus(fields.uuid, { token: conn.token });
+    if (!tx) {
+      return res.status(500).json({ success: false, error: 'Could not verify the transaction' });
+    }
+    if (!campay.isVerifiablePaidTransaction(tx)) {
+      const reason = tx.isSandbox ? 'sandbox_payment' : 'not_completed';
+      console.warn(`⚠️ CamerPay ${reference}: ${reason} — order not marked paid`);
+      return res.json({ success: true, ignored: true, reason });
+    }
+
+    const local = await req.db.query(
+      `SELECT amount FROM payment_transactions WHERE transaction_id = $1 AND status = 'pending'`,
+      [reference]
+    );
+    const guard = paymentGuard.paidAmountMatches({
+      paidAmount: tx.amount,
+      paidCurrency: tx.currency,
+      expectedAmount: local.rows[0] ? local.rows[0].amount : undefined,
+      expectedCurrency: 'XAF',
+    });
+    if (!guard.ok && paymentGuard.shouldEnforce()) {
+      console.warn(
+        `⚠️ CamerPay ${reference}: ${guard.reason} (paid ${guard.paid} / expected ${guard.expected}) — not marked paid`
+      );
+      return res.json({ success: true, ignored: true, reason: guard.reason });
+    }
+
+    await req.db.query(
+      `UPDATE payment_transactions SET status = 'completed', confirmed_at = NOW()
+        WHERE transaction_id = $1`,
+      [reference]
+    );
+    console.log(`✅ CamerPay collection completed for company ${company.id} (${reference})`);
+    return res.json({ success: true });
+  } catch (error) {
+    // 5xx on purpose: CamerPay retries only network errors, so an HTTP error is
+    // final here and the manual replay in its dashboard is the recovery path.
+    console.error('POST /payment/campay-webhook error:', error.message);
+    return res.status(500).json({ success: false, error: 'Webhook processing failed' });
+  }
+});
+
+/** Where the customer lands after paying. */
+router.get('/payment/campay-return', (req, res) => {
+  res.send('<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Payment Complete</title></head><body style="font-family:system-ui,sans-serif;background:#f7f8fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center;background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,0.08);max-width:420px"><div style="font-size:48px">✅</div><h2 style="margin:16px 0 8px">Payment received</h2><p style="color:#555;margin:0 0 24px">Return to the app and tap Refresh to confirm the order.</p></div></body></html>');
 });
 
 
