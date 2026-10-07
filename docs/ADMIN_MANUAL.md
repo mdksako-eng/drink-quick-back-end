@@ -159,7 +159,7 @@ You are the **data controller** for your own company's records, including your c
 - **Use data only for business purposes** — no selling, no marketing to customers without their agreement.
 - **Honour requests**: a customer asking for their data or its deletion should be handled by the company first. Export or delete what you can; if you cannot, write to us and we will assist.
 - **Respect retention**: keep business records for the period your accountant and the law require; when a customer leaves, you do not have to keep their tab history forever.
-- **Sub-processors** used to run the service: managed PostgreSQL database (Supabase), hosting (Render) and the payment operators (for example Notch Pay with MTN/Orange/card rails). Give notice to your customers if a sub-processor changes.
+- **Sub-processors** used to run the service: managed PostgreSQL database (Supabase), hosting (Render) and the payment operators (for example CamerPay — MTN MoMo, Orange Money, card and PayPal rails). Give notice to your customers if a sub-processor changes.
 
 Full commitments, including retention periods and rights, are in the Privacy Policy shipped in the app (`/privacy.html`, French: `/privacy.fr.html`) and in the Terms of Service (`/terms.html`, `/terms.fr.html`).
 ## 13. Troubleshooting for administrators

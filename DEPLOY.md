@@ -122,7 +122,16 @@ manager only). That logo is used in the drawer, the invoice PDF and every export
 
 ### Step 1e — Are we taking REAL money yet?
 
-Subscription payments run through Notch Pay (and optionally Flutterwave / direct
+> ⚠️ **The Notch Pay rail is RETIRED.** Subscriptions now run through **CamerPay**
+> (MTN MoMo, Orange Money, card, PayPal). The live variables are `CAMERPAY_TOKEN`,
+> `CAMERPAY_WEBHOOK_SECRET`, `CAMERPAY_ACCOUNT_LIVE=true` and `PAYMENT_CREDENTIALS_KEY`;
+> the endpoints are `/api/subscriptions/campay-initiate`, `/subscriptions/campay-status`,
+> `/subscriptions/campay-webhook` and `/subscriptions/campay/health`. Register
+> `https://<your-service>/api/subscriptions/campay-webhook` in the CamerPay dashboard.
+> The Notch Pay text below is kept as history for the Flutterwave / direct-operator paths,
+> and because `utils/notchpay.js` still exists in the code until the deletion slice lands.
+
+Subscription payments run through Notch Pay (retired) (and optionally Flutterwave / direct
 MoMo). The code supports both modes; what decides is the keys you set. Check the
 live service any time:
 
