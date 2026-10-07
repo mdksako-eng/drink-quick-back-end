@@ -179,6 +179,17 @@ app.use(async (req, res, next) => {
     // The webhook path resolves the company BY this token, so it must be unique;
     // NULLs (companies that never connected) are excluded from the constraint.
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS companies_campay_webhook_token_idx ON companies (campay_webhook_token) WHERE campay_webhook_token IS NOT NULL`);
+    // Which gateway actually took the money. A CamerPay row is confirmed ONLY by
+    // its verified webhook, so /payment/status must not run the legacy MTN/Orange
+    // auto-verification against it (that would query the wrong provider with our
+    // transaction id).
+    try {
+      await pool.query(`ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS provider TEXT`);
+      await pool.query(`UPDATE payment_transactions SET provider = 'legacy' WHERE provider IS NULL`);
+    } catch (e) {
+      // The table is created lazily elsewhere; never block startup over this.
+      console.warn('⚠️ payment_transactions.provider migration skipped:', e.message);
+    }
         console.log('✅ Company Notch Pay columns ensured');
       } catch (notchColErr) {
         console.log('⚠️ Notch Pay columns warning:', notchColErr.message);

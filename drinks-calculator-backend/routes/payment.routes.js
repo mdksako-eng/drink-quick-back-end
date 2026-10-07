@@ -570,8 +570,8 @@ router.post('/payment/campay-initiate', async (req, res) => {
 
     await req.db.query(
       `INSERT INTO payment_transactions
-         (order_id, company_id, customer_phone, amount, payment_method, transaction_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
+         (order_id, company_id, customer_phone, amount, payment_method, transaction_id, status, provider)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending', 'campay')`,
       [
         orderId || null,
         user.company_id,
@@ -982,7 +982,13 @@ router.get('/payment/status/:transactionId', async (req, res) => {
 
     // ✅ Get from database
     const result = await req.db.query(
-      `SELECT status, error_message, confirmed_at, created_at, payment_method
+      `SELECT status, error_message, confirmed_at, created_at,
+              provider,
+              -- A CamerPay row must never reach the legacy MTN/Orange
+              -- auto-verification below: that would ask the wrong provider about
+              -- our transaction id. Reporting it as its own gateway skips both
+              -- branches; CamerPay rows are confirmed by their verified webhook.
+              CASE WHEN provider = 'campay' THEN 'campay' ELSE payment_method END AS payment_method
        FROM payment_transactions 
        WHERE transaction_id = $1 AND company_id = $2`,
       [transactionId, companyId]
