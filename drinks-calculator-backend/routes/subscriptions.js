@@ -1034,13 +1034,23 @@ router.post('/subscriptions/campay-initiate', async (req, res) => {
       });
     }
 
-    const method = campayMethodFromRail(rail);
-    if (rail && !method) {
+    const requestedMethod = campayMethodFromRail(rail);
+    if (rail && !requestedMethod) {
       return res.status(400).json({
         success: false,
         error: `Unsupported payment rail. Use one of: ${Object.keys(CAMPAY_METHODS).join(', ')}.`,
       });
     }
+
+    // A mobile-money rail can only be LOCKED if we hold the payer's number: CamerPay
+    // forwards it to the operator, which rejects the initiation with
+    // "subscriberMsisdn: Input should be a valid string" when it is missing (seen in
+    // production on 2026-10-07, for a user whose profile had no phone). Card and
+    // PayPal need no number, so those stay lockable; for mobile money without a
+    // number we do not lock a rail and let the payer type it on CamerPay's own page.
+    const payerPhone = String(user.phone || '').trim();
+    const needsPayerPhone = requestedMethod === 'mtn_momo' || requestedMethod === 'orange_money';
+    const method = needsPayerPhone && !payerPhone ? null : requestedMethod;
 
     const price = PLAN_PRICES[plan];
     const rates = paymentFees.ratesFromEnv();
@@ -1073,7 +1083,7 @@ router.post('/subscriptions/campay-initiate', async (req, res) => {
       amount: charge.charge,
       currency: price.currency,
       paymentMethod: method || undefined,
-      customerPhone: user.phone || undefined,
+      customerPhone: payerPhone || undefined,
       customerEmail: user.email || undefined,
       customerName: user.username || undefined,
       merchantInvoiceId: reference,
