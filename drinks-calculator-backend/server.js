@@ -638,7 +638,19 @@ app.use(express.json({
     req.rawBody = buf && buf.length ? buf.toString('utf8') : '';
   },
 }));
-app.use(express.urlencoded({ extended: true, limit: '12mb' }));
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: '12mb',
+    // CamerPay signs its webhook over the RAW form-encoded bytes, exactly like the
+    // JSON providers sign over the raw JSON body, so capture them the same way —
+    // without this, utils/requestBody.js falls back to a re-serialisation and every
+    // signature check fails (the bug that broke the Notch Pay webhooks).
+    verify: (req, _res, buf) => {
+      req.rawBody = buf && buf.length ? buf.toString('utf8') : '';
+    },
+  })
+);
 app.use(express.static(path.join(__dirname, 'public')));
 // ✅ Database connection middleware - MUST BE BEFORE ROUTES
 app.use(async (req, res, next) => {

@@ -69,23 +69,35 @@ function paidAmountMatches({
 }
 
 /**
- * Is underpayment enforcement switched on? On by default; an operator can turn
- * it off with `NOTCHPAY_ALLOW_UNDERPAYMENT=true` if a provider ever reports a
- * net (fee-deducted) amount, which would otherwise refuse honest payments.
+ * Is underpayment enforcement switched on? On by default.
+ *
+ * `PAYMENTS_ALLOW_UNDERPAYMENT=true` turns it off for every provider. The older
+ * per-provider name keeps working, so a deployment already using it does not
+ * change behaviour when this code lands.
  */
 function shouldEnforce() {
-  return String(process.env.NOTCHPAY_ALLOW_UNDERPAYMENT || 'false').toLowerCase() !== 'true';
+  const legacy = String(process.env.NOTCHPAY_ALLOW_UNDERPAYMENT || 'false').toLowerCase() === 'true';
+  const general = String(process.env.PAYMENTS_ALLOW_UNDERPAYMENT || 'false').toLowerCase() === 'true';
+  return !(legacy || general);
 }
 
 /**
  * Must real money actually move for a payment to be started?
  *
  * Off by default, because test keys are useful for demos and dry runs. Set
- * `NOTCHPAY_REQUIRE_LIVE=true` on a production service so a test key can never
+ * `PAYMENTS_REQUIRE_LIVE=true` on a production service so a test key can never
  * silently hand out a paid plan without collecting anything.
+ * `NOTCHPAY_REQUIRE_LIVE` stays supported for existing deployments.
+ *
+ * NOTE for CamerPay: its token cannot reveal the mode (the account decides), so
+ * this flag is only an operator assertion that the account is expected to be
+ * live. The activation gate never trusts it — it reads `is_sandbox` from the
+ * transaction (see utils/subscriptionPayment.js).
  */
 function liveKeyRequired() {
-  return String(process.env.NOTCHPAY_REQUIRE_LIVE || 'false').toLowerCase() === 'true';
+  const legacy = String(process.env.NOTCHPAY_REQUIRE_LIVE || 'false').toLowerCase() === 'true';
+  const general = String(process.env.PAYMENTS_REQUIRE_LIVE || 'false').toLowerCase() === 'true';
+  return legacy || general;
 }
 
 module.exports = {

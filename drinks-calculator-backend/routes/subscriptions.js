@@ -8,6 +8,12 @@ const flutterwave = require('../utils/flutterwave');
 const momo = require('../utils/momo');
 const orangeMoney = require('../utils/orange_money');
 const notchpay = require('../utils/notchpay');
+// CamerPay is the replacement rail for both subscription and per-company
+// collection. It is additive here: the Notch Pay path keeps working until every
+// company has moved (see memory-bank/activeContext.md, phase 2).
+const campay = require('../utils/campay');
+const paymentFees = require('../utils/paymentFees');
+const subscriptionPayment = require('../utils/subscriptionPayment');
 const paymentChannels = require('../utils/paymentChannels');
 const paymentGuard = require('../utils/paymentGuard');
 const { rawBodyOf } = require('../utils/requestBody');
@@ -923,4 +929,396 @@ router.get('/subscriptions/notchpay-channels', async (req, res) => {
   }
 });
 
+// ============================================================
+// 🇨🇲 CamerPay subscriptions (Mobile Money, card via Stripe, PayPal)
+// ------------------------------------------------------------
+// Why the flow looks like this:
+//  - A CamerPay token cannot reveal test vs live (the account decides), so the
+//    real gate is the transaction's own `is_sandbox` flag, read back from
+//    GET /payment/{uuid}/status — never the webhook body alone.
+//  - CamerPay only retries on NETWORK errors, so the webhook must answer quickly
+//    and must never claim a success it did not get.
+// ============================================================
+
+/** Rails the app may ask for → CamerPay's payment_method. */
+const CAMPAY_METHODS = {
+  mtn: 'mtn_momo',
+  momo: 'mtn_momo',
+  orange: 'orange_money',
+  card: 'stripe',
+  visa: 'stripe',
+  paypal: 'paypal',
+};
+
+/** The operator's fee policy: 'absorbed' (default) or 'gross_up'. */
+function campayFeeMode() {
+  return String(process.env.CAMERPAY_FEE_MODE || 'absorbed').toLowerCase() === 'gross_up'
+    ? paymentFees.FEE_MODES.GROSS_UP
+    : paymentFees.FEE_MODES.ABSORBED;
+}
+
+/**
+ * The operator asserts the CamerPay account is in live mode. Unlike Notch Pay,
+ * no key prefix can tell us, so this is an explicit declaration — and even then
+ * activation still requires a non-sandbox transaction.
+ */
+function campayAccountDeclaredLive() {
+  return String(process.env.CAMERPAY_ACCOUNT_LIVE || 'false').toLowerCase() === 'true';
+}
+
+/** @returns {string|null} CamerPay method for a rail name or raw method. */
+function campayMethodFromRail(rail) {
+  if (!rail) return null;
+  const key = String(rail).toLowerCase();
+  if (CAMPAY_METHODS[key]) return CAMPAY_METHODS[key];
+  return paymentFees.METHODS.includes(key) ? key : null;
+}
+
+/** Map a CampayError onto an answer the app can act on. */
+function campayErrorResponse(res, error, context) {
+  if (error && error.name === 'CampayError') {
+    console.warn(`⚠️ CamerPay ${context}: ${error.status} ${error.code || ''} — ${error.message}`);
+    if (error.status === 402) {
+      // KYC tier or plan quota: hand the upgrade path back verbatim so the app can
+      // tell the owner exactly which document unlocks the next limit.
+      return res.status(402).json({
+        success: false,
+        error: error.code || 'quota_exceeded',
+        message: error.message,
+        nextAction: (error.payload && error.payload.next_action) || null,
+        upgradeUrl: (error.payload && error.payload.upgrade_url) || null,
+        remaining: (error.payload && error.payload.remaining) ?? null,
+        monthlyLimit: (error.payload && error.payload.monthly_limit) ?? null,
+      });
+    }
+    if (error.status === 422) {
+      return res.status(400).json({ success: false, error: error.message, code: error.code });
+    }
+    if (error.status === 401) {
+      return res.status(503).json({
+        success: false,
+        error: 'CamerPay rejected the API token — issue a new one in the CamerPay dashboard.',
+      });
+    }
+    return res.status(502).json({ success: false, error: error.message, code: error.code });
+  }
+  console.error(`POST ${context} error:`, error && error.message);
+  return res.status(500).json({ success: false, error: 'Internal server error' });
+}
+
+router.post('/subscriptions/campay-initiate', async (req, res) => {
+  try {
+    const user = await requireSessionUser(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+    if (!user.company_id) return res.status(400).json({ success: false, error: 'No company' });
+
+    const { plan, rail } = req.body || {};
+    if (!VALID_PLANS.includes(plan)) {
+      return res.status(400).json({ success: false, error: 'Invalid plan' });
+    }
+    if (!campay.isConfigured()) {
+      return res.status(503).json({ success: false, error: 'CamerPay not configured' });
+    }
+    // Opt-in production guard (see PAYMENTS_REQUIRE_LIVE in utils/paymentGuard.js).
+    if (paymentGuard.liveKeyRequired() && !campayAccountDeclaredLive()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Payments are disabled: PAYMENTS_REQUIRE_LIVE=true but the CamerPay account is not declared live (set CAMERPAY_ACCOUNT_LIVE=true once KYC is approved).',
+      });
+    }
+
+    const method = campayMethodFromRail(rail);
+    if (rail && !method) {
+      return res.status(400).json({
+        success: false,
+        error: `Unsupported payment rail. Use one of: ${Object.keys(CAMPAY_METHODS).join(', ')}.`,
+      });
+    }
+
+    const price = PLAN_PRICES[plan];
+    const rates = paymentFees.ratesFromEnv();
+    // Who carries the commission. Gross-up needs a chosen method (the rate differs
+    // per rail); with no rail the payer picks on CamerPay's page, so we ask for the
+    // price itself.
+    const charge = method
+      ? paymentFees.chargeFor({ netPrice: price.amount, method, rates, mode: campayFeeMode() })
+      : {
+        charge: price.amount,
+        fee: 0,
+        net: price.amount,
+        mode: paymentFees.FEE_MODES.ABSORBED,
+        method: null,
+      };
+
+    const reference = generateReference(user.company_id);
+    const baseUrl = process.env.APP_BASE_URL || 'http://localhost:3000';
+
+    const data = await campay.initiatePayment({
+      amount: charge.charge,
+      currency: price.currency,
+      paymentMethod: method || undefined,
+      customerPhone: user.phone || undefined,
+      customerEmail: user.email || undefined,
+      customerName: user.username || undefined,
+      merchantInvoiceId: reference,
+      callbackUrl: `${baseUrl}/api/subscriptions/campay-webhook`,
+      returnUrl: `${baseUrl}/api/subscriptions/campay-return`,
+      source: 'drinkquickcal-sub',
+      idempotencyKey: reference,
+    });
+
+    // The pending row records what we ASKED for, because that is what the amount
+    // guard compares the provider's report against.
+    await req.db.query(
+      `INSERT INTO subscriptions (company_id, plan, status, provider, reference, transaction_id, amount, currency)
+       VALUES ($1, $2, 'pending', 'campay', $3, $4, $5, $6)`,
+      [user.company_id, plan, reference, data.transactionUuid || null, charge.charge, price.currency]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        reference,
+        transactionId: data.transactionUuid || null,
+        checkoutUrl: data.payUrl || data.redirectUrl || null,
+        payUrl: data.payUrl || null,
+        auto: Boolean(data.payUrl),
+        amount: charge.charge,
+        fee: charge.fee,
+        net: charge.net,
+        feeMode: charge.mode,
+        currency: price.currency,
+        plan,
+        provider: 'campay',
+        method: method || null,
+      },
+    });
+  } catch (error) {
+    return campayErrorResponse(res, error, '/subscriptions/campay-initiate');
+  }
+});
+
+router.get('/subscriptions/campay-status', async (req, res) => {
+  try {
+    const user = await requireSessionUser(req);
+    if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+    if (!user.company_id) return res.status(400).json({ success: false, error: 'No company' });
+
+    const reference = String(req.query.reference || '');
+    if (!reference) return res.status(400).json({ success: false, error: 'reference is required' });
+
+    const pending = await req.db.query(
+      `SELECT id, plan, transaction_id, amount, currency FROM subscriptions
+        WHERE reference = $1 AND company_id = $2 AND status = 'pending'`,
+      [reference, user.company_id]
+    );
+    if (pending.rows.length === 0) {
+      // Already handled (or never existed): report the company's real state rather
+      // than an error, so the app can simply refresh its plan.
+      const company = await req.db.query(
+        `SELECT plan, plan_expires_at FROM companies WHERE id = $1`,
+        [user.company_id]
+      );
+      const row = company.rows[0] || {};
+      return res.json({
+        success: true,
+        data: {
+          active: false,
+          status: 'no_pending',
+          plan: row.plan || 'free',
+          expiresAt: row.plan_expires_at || null,
+          reason: 'no_pending_subscription',
+        },
+      });
+    }
+
+    const sub = pending.rows[0];
+    if (!sub.transaction_id) {
+      return res.json({
+        success: true,
+        data: { active: false, status: 'pending', reason: 'no_transaction_yet' },
+      });
+    }
+
+    const tx = await campay.getPaymentStatus(sub.transaction_id);
+    if (!tx) {
+      return res.json({
+        success: true,
+        data: { active: false, status: 'pending', reason: 'transaction_not_found' },
+      });
+    }
+
+    const decision = subscriptionPayment.decideActivation({
+      status: tx.status,
+      isSandbox: tx.isSandbox,
+      paidAmount: tx.amount,
+      paidCurrency: tx.currency,
+      expectedAmount: sub.amount,
+      expectedCurrency: sub.currency,
+      enforceUnderpayment: paymentGuard.shouldEnforce(),
+    });
+
+    if (decision.activate) {
+      const result = await activatePendingSubscription(req.db, reference, user.company_id, {
+        amount: tx.amount,
+        currency: tx.currency,
+      });
+      console.log(`✅ CamerPay subscription activated (${result.plan})`);
+      return res.json({
+        success: true,
+        data: {
+          active: true, plan: result.plan, expiresAt: result.expiresAt, reason: decision.reason,
+        },
+      });
+    }
+
+    if (subscriptionPayment.isFailureStatus(tx.status)) {
+      await req.db.query(
+        `UPDATE subscriptions SET status = 'failed' WHERE reference = $1 AND status = 'pending'`,
+        [reference]
+      );
+      return res.json({
+        success: true, data: { active: false, status: 'failed', reason: decision.reason },
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        active: false,
+        status: 'pending',
+        reason: decision.reason,
+        sandbox: tx.isSandbox,
+        message: subscriptionPayment.describeReason(decision.reason),
+      },
+    });
+  } catch (error) {
+    return campayErrorResponse(res, error, '/subscriptions/campay-status');
+  }
+});
+
+router.post('/subscriptions/campay-webhook', async (req, res) => {
+  try {
+    // The body is application/x-www-form-urlencoded, NOT JSON.
+    const rawBody = rawBodyOf(req);
+    const fields = campay.parseWebhookBody(rawBody);
+    const signature = req.headers['x-camerpay-signature'] || fields.signature;
+
+    if (!campay.verifyWebhookSignature(rawBody, signature)) {
+      console.warn('⚠️ CamerPay webhook: invalid signature');
+      // CamerPay never retries an HTTP error, and a forged body deserves none.
+      return res.status(401).json({ success: false, error: 'Invalid signature' });
+    }
+
+    const reference = fields.invoice_id;
+    if (!reference) {
+      return res.json({ success: true, ignored: true, reason: 'missing invoice_id' });
+    }
+
+    if (!subscriptionPayment.isCompletedStatus(fields.status)) {
+      if (subscriptionPayment.isFailureStatus(fields.status)) {
+        await req.db.query(
+          `UPDATE subscriptions SET status = 'failed' WHERE reference = $1 AND status = 'pending'`,
+          [reference]
+        );
+      }
+      return res.json({ success: true, ignored: true, status: fields.status || null });
+    }
+
+    // The webhook is only a TRIGGER. The authoritative facts — including
+    // `is_sandbox`, which no webhook field carries — come from the transaction.
+    if (!fields.uuid) {
+      return res.json({ success: true, ignored: true, reason: 'missing uuid' });
+    }
+    const tx = await campay.getPaymentStatus(fields.uuid);
+    if (!tx) {
+      return res.status(500).json({ success: false, error: 'Could not verify the transaction' });
+    }
+
+    const pending = await req.db.query(
+      `SELECT amount, currency FROM subscriptions WHERE reference = $1 AND status = 'pending'`,
+      [reference]
+    );
+
+    const decision = subscriptionPayment.decideActivation({
+      status: tx.status,
+      isSandbox: tx.isSandbox,
+      paidAmount: tx.amount,
+      paidCurrency: tx.currency,
+      expectedAmount: pending.rows[0] ? pending.rows[0].amount : undefined,
+      expectedCurrency: pending.rows[0] ? pending.rows[0].currency : undefined,
+      enforceUnderpayment: paymentGuard.shouldEnforce(),
+      pendingExists: pending.rows.length > 0,
+    });
+
+    if (decision.activate) {
+      const result = await activatePendingSubscription(req.db, reference, null, {
+        amount: tx.amount,
+        currency: tx.currency,
+      });
+      console.log(`✅ CamerPay subscription activated via webhook (${result.plan})`);
+      return res.json({ success: true });
+    }
+
+    console.warn(`⚠️ CamerPay webhook ${reference}: ${decision.reason} — no activation`);
+    return res.json({ success: true, ignored: true, reason: decision.reason });
+  } catch (error) {
+    // 5xx on purpose: CamerPay does not retry HTTP errors, so the only recovery is
+    // the manual "Rejouer" button in its dashboard — and a silent 200 would hide
+    // the failure from /client/webhook-logs.
+    console.error('POST /subscriptions/campay-webhook error:', error.message);
+    return res.status(500).json({ success: false, error: 'Webhook processing failed' });
+  }
+});
+
+router.get('/subscriptions/campay-return', (req, res) => {
+  res.send('<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Payment Complete</title></head><body style="font-family:system-ui,sans-serif;background:#f7f8fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center;background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,0.08);max-width:420px"><div style="font-size:48px">✅</div><h2 style="margin:16px 0 8px">Payment received</h2><p style="color:#555;margin:0 0 24px">Your subscription is being confirmed. Return to the app and tap Refresh.</p></div></body></html>');
+});
+
+//  Payment readiness for the CamerPay rail (no secrets exposed).
+//
+//  Honest reporting matters here: CamerPay cannot tell us from the token whether
+//  the account is in sandbox or live mode, so this endpoint never claims "live" on
+//  its own. `accountDeclaredLive` is the operator's assertion
+//  (CAMERPAY_ACCOUNT_LIVE=true) and every activation still requires a non-sandbox
+//  transaction (see utils/subscriptionPayment.js).
+router.get('/subscriptions/campay/health', (req, res) => {
+  const campayStatus = campay.status();
+  const rates = paymentFees.ratesFromEnv();
+  const feeRatesConfigured = Object.keys(rates).some(
+    (method) => rates[method].bps > 0 || rates[method].flat > 0
+  );
+  const accountDeclaredLive = campayAccountDeclaredLive();
+
+  res.json({
+    success: true,
+    provider: 'campay',
+    configured: campay.isConfigured(),
+    tokenSet: campayStatus.tokenSet,
+    webhookSecretSet: campayStatus.webhookSecretSet,
+    baseUrl: campayStatus.baseUrl,
+    // The token cannot reveal the mode: the ACCOUNT decides.
+    modeVerifiable: campay.canVerifyKeyMode(),
+    accountDeclaredLive,
+    feeMode: campayFeeMode(),
+    feeRatesConfigured,
+    methods: paymentFees.METHODS,
+    rails: Object.keys(CAMPAY_METHODS),
+    webhookUrl: `${process.env.APP_BASE_URL || 'http://localhost:3000'}/api/subscriptions/campay-webhook`,
+    // True only when the operator has declared the account live; the real gate is
+    // still the transaction's own is_sandbox flag.
+    liveReady: campay.isConfigured() && accountDeclaredLive,
+    hint: campay.isConfigured()
+      ? (accountDeclaredLive
+        ? 'CamerPay account declared live — a plan is activated only for a transaction with is_sandbox=false.'
+        : 'Set CAMERPAY_ACCOUNT_LIVE=true once CamerPay approves KYC and the account is in live mode.')
+      : 'Set CAMERPAY_TOKEN (dashboard > /client/api > Tokens d acces) and CAMERPAY_WEBHOOK_SECRET to take subscription payments.',
+  });
+});
+
+
+
+
+
 module.exports = router;
+
