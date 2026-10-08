@@ -656,6 +656,20 @@ app.use(async (req, res, next) => {
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_support_reports_status ON support_reports(status)`);
       console.log('✅ support_reports table ensured');
 
+      // Row Level Security: a report carries the reporter's own words, their company and
+      // a device context line, and the anon key shipped inside the app must not be able
+      // to read any of it. Idempotent, and harmless for the app because the backend
+      // connects as the table owner and bypasses RLS. Wrapped in a try/catch on purpose:
+      // the anon/authenticated roles only exist on Supabase, and a local Postgres without
+      // them must still boot. See sql/rls_support_reports.sql.
+      try {
+        await pool.query(`ALTER TABLE public.support_reports ENABLE ROW LEVEL SECURITY`);
+        await pool.query(`REVOKE ALL ON public.support_reports FROM anon, authenticated`);
+        console.log('🔒 support_reports RLS enabled');
+      } catch (rlsError) {
+        console.warn(`⚠️  Could not lock down support_reports with RLS: ${rlsError.message}`);
+      }
+
       const countResult = await pool.query('SELECT COUNT(*) FROM users');
       const userCount = parseInt(countResult.rows[0].count);
       console.log(`📊 Database has ${userCount} users`);
