@@ -27,6 +27,10 @@ class ApiConfig {
   // Admin Endpoints
   static const String adminUsers = '$apiBase/admin/users';
   static const String adminStats = '$apiBase/admin/stats';
+  // Support reports filed from the app (bug reports / complaints) — admin only.
+  static const String adminSupportReports = '$apiBase/admin/support-reports';
+  static String adminSupportReport(dynamic reference) =>
+      '$apiBase/admin/support-reports/$reference';
 
   // Drinks
   static const String drinks = '$apiBase/drinks';

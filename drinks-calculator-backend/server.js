@@ -1733,6 +1733,95 @@ app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
   }
 });
 
+// ========== SUPPORT REPORTS (platform admin) ==========
+// The reading half of the app's "Report a problem": reports are stored and emailed the
+// moment they arrive (routes/support.routes.js), and this is where they are worked
+// through. Gated like every other /api/admin route — the platform admin password.
+
+// The statuses a report can move through. 'new' is set on arrival.
+const SUPPORT_STATUSES = ['new', 'read', 'resolved'];
+
+app.get('/api/admin/support-reports', verifyAdmin, async (req, res) => {
+  try {
+    const { status, category, companyId } = req.query || {};
+    const conditions = [];
+    const params = [];
+
+    // Columns are qualified with r. because the join brings in companies, which has
+    // its own status-like columns — an unqualified name would be ambiguous.
+    if (status && SUPPORT_STATUSES.includes(String(status))) {
+      params.push(String(status));
+      conditions.push(`r.status = $${params.length}`);
+    }
+    if (category) {
+      params.push(String(category));
+      conditions.push(`r.category = $${params.length}`);
+    }
+    if (companyId && Number.isFinite(parseInt(companyId, 10))) {
+      params.push(parseInt(companyId, 10));
+      conditions.push(`r.company_id = $${params.length}`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    // Hard cap, so an admin list can never pull the whole table by accident.
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
+
+    const reports = await pool.query(
+      `SELECT r.*, c.name AS company_name
+         FROM support_reports r
+         LEFT JOIN companies c ON c.id = r.company_id
+         ${where}
+        ORDER BY r.created_at DESC
+        LIMIT ${limit}`,
+      params
+    );
+
+    const counts = await pool.query(
+      `SELECT status, COUNT(*)::int AS total FROM support_reports GROUP BY status`
+    );
+    const byStatus = { new: 0, read: 0, resolved: 0 };
+    counts.rows.forEach((row) => {
+      if (SUPPORT_STATUSES.includes(row.status)) byStatus[row.status] = row.total;
+    });
+
+    res.json({ success: true, data: { reports: reports.rows, counts: byStatus } });
+  } catch (error) {
+    console.error('GET /api/admin/support-reports error:', error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Move a report along, optionally recording what was actually done about it.
+app.patch('/api/admin/support-reports/:reference', verifyAdmin, async (req, res) => {
+  try {
+    const { status, resolutionNote } = req.body || {};
+    if (status && !SUPPORT_STATUSES.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `status must be one of: ${SUPPORT_STATUSES.join(', ')}`,
+      });
+    }
+
+    // COALESCE so a status-only or note-only update is possible without wiping the other.
+    const result = await pool.query(
+      `UPDATE support_reports
+          SET status = COALESCE($1, status),
+              resolution_note = COALESCE($2, resolution_note)
+        WHERE reference = $3
+        RETURNING *`,
+      [status || null, resolutionNote || null, req.params.reference]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Report not found' });
+    }
+
+    res.json({ success: true, data: { report: result.rows[0] } });
+  } catch (error) {
+    console.error('PATCH /api/admin/support-reports error:', error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // ========== OTHER ROUTES ==========
 
 // GET DRINKS FROM DATABASE (requires valid session)

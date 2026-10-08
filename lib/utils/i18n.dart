@@ -40,6 +40,18 @@ class LanguageService {
 /// then to the key itself if missing.
 
 const Map<String, String> _en = {
+  // 🆘 Support reports — the admin inbox (list, read, resolve)
+  'adminSupportReportsTitle': 'Support reports',
+  'supportFilterAll': 'All',
+  'supportStatusNew': 'New',
+  'supportStatusRead': 'Read',
+  'supportStatusResolved': 'Resolved',
+  'supportNoReports': 'No reports yet.',
+  'supportContext': 'Context',
+  'supportMarkRead': 'Mark as read',
+  'supportMarkResolved': 'Mark as resolved',
+  'supportResolutionNote': 'What was done (optional)',
+  'supportUpdated': 'Report updated',
   // 💳 Billing period (monthly / yearly)
   'billingMonthly': 'Monthly',
   'billingYearly': 'Yearly -20%',
@@ -1261,6 +1273,18 @@ const Map<String, String> _en = {
 };
 
 const Map<String, String> _fr = {
+  // 🆘 Signalements — la boîte de réception admin (lister, lire, résoudre)
+  'adminSupportReportsTitle': 'Signalements',
+  'supportFilterAll': 'Tous',
+  'supportStatusNew': 'Nouveau',
+  'supportStatusRead': 'Lu',
+  'supportStatusResolved': 'Résolu',
+  'supportNoReports': 'Aucun signalement pour le moment.',
+  'supportContext': 'Contexte',
+  'supportMarkRead': 'Marquer comme lu',
+  'supportMarkResolved': 'Marquer comme résolu',
+  'supportResolutionNote': 'Ce qui a été fait (facultatif)',
+  'supportUpdated': 'Signalement mis à jour',
   // 💳 Période de facturation (mensuel / annuel)
   'billingMonthly': 'Mensuel',
   'billingYearly': 'Annuel -20%',

@@ -9,6 +9,7 @@ import '../utils/helpers.dart';
 import '../config/api_config.dart';
 import '../services/secure_storage_service.dart';
 import '../utils/i18n.dart';
+import 'admin_support_reports_screen.dart';
 
 class AdminPanel extends StatefulWidget {
   const AdminPanel({Key? key}) : super(key: key);
@@ -444,6 +445,16 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
         backgroundColor: _primaryColor,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.inbox_outlined),
+            tooltip: t('adminSupportReportsTitle'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    AdminSupportReportsScreen(adminToken: _adminToken),
+              ),
+            ),
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadUsers),
           IconButton(icon: const Icon(Icons.logout), onPressed: () => setState(() => _isAuthenticated = false)),
         ],
