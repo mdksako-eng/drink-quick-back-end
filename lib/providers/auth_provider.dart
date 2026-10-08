@@ -661,6 +661,7 @@ class AuthProvider with ChangeNotifier {
             securityAnswers: backendUser.securityAnswers,
             role: backendUser.role ?? 'Staff',
             companyId: backendUser.companyId,
+            isOwner: backendUser.isOwner,
           );
           debugPrint(
               '✅ User fetched from backend: ${_user!.username} (${_user!.role})');
@@ -1065,6 +1066,9 @@ class AuthProvider with ChangeNotifier {
                 securityAnswers: backendUser.securityAnswers,
                 role: _user!.role,
                 companyId: _user?.companyId,
+                // Never downgrade: the backend is authoritative when it answers, and
+                // otherwise the flag already resolved at login is kept.
+                isOwner: backendUser.isOwner || _user!.isOwner,
               );
               debugPrint('✅ Backend validation successful');
               final prefs = await SharedPreferences.getInstance();
@@ -1388,6 +1392,10 @@ class AuthProvider with ChangeNotifier {
           companyId: _parseCompanyId(userData),
           emailVerified:
               userData['emailVerified'] ?? userData['email_verified'] ?? false,
+          // The backend sends isOwner on login (and on /auth/me). Omitting it here
+          // silently turned the company's real owner into a plain manager and hid
+          // every owner-only action — the flag defaults to false in the constructor.
+          isOwner: userData['isOwner'] == true || userData['is_owner'] == true,
         );
 
         debugPrint('✅ User object created: ${_user!.toJson()}');

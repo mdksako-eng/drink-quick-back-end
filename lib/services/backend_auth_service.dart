@@ -769,6 +769,10 @@ class User {
   final Map<String, String> securityAnswers;
   final String? role;
   final int? companyId;
+  /// True when this user owns their company. The backend sends it on login and on
+  /// /auth/me; not carrying it here is what made a shop's real owner arrive at the
+  /// app looking like a plain manager.
+  final bool isOwner;
 
   User({
     required this.id,
@@ -777,6 +781,7 @@ class User {
     required this.securityAnswers,
     this.role,
     this.companyId,
+    this.isOwner = false,
   });
 
   Map<String, dynamic> toJson() {
@@ -787,6 +792,7 @@ class User {
       'securityAnswers': securityAnswers,
       'role': role,
       'companyId': companyId,
+      'isOwner': isOwner,
     };
   }
 
@@ -824,6 +830,7 @@ class User {
           json['securityAnswers'] ?? json['securityQuestions'] ?? {}),
       role: role,
       companyId: companyId,
+      isOwner: json['isOwner'] == true || json['is_owner'] == true,
     );
   }
 }
