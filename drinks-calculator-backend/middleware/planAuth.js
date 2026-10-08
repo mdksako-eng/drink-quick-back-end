@@ -4,10 +4,17 @@
 // Usage (after the session middleware has set `req.user`):
 //   router.get('/premium', requireSession(pool), requirePlan(['pro']), handler);
 
+const { planTier } = require('../utils/planCatalog');
+
 const PLAN_RANK = { free: 0, starter: 1, pro: 2 };
 
+// A company normally holds a TIER ('pro'), but a legacy payment path may have written
+// a purchase key ('pro_yearly') into that column. Normalising here means such a row
+// still ranks as paid instead of silently falling through to 0 (= free), which would
+// lock every Pro feature for a bar that has actually paid.
 function planRank(plan) {
-  return PLAN_RANK[String(plan || 'free').toLowerCase()] ?? 0;
+  const tier = planTier(String(plan || 'free').toLowerCase());
+  return PLAN_RANK[tier] ?? 0;
 }
 
 // requirePlan(['starter','pro']) → the company's plan must be at least the

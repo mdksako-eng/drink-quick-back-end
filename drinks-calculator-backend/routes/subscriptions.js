@@ -22,22 +22,18 @@ const paymentChannels = require('../utils/paymentChannels');
 const paymentGuard = require('../utils/paymentGuard');
 const { rawBodyOf } = require('../utils/requestBody');
 
-// Plan prices (XAF — Central African CFA franc). Overridable via env.
-const PLAN_PRICES = {
-  starter: {
-    amount: parseInt(process.env.STARTER_PRICE_XAF || '5000', 10),
-    currency: 'XAF',
-    label: 'Starter',
-  },
-  pro: {
-    amount: parseInt(process.env.PRO_PRICE_XAF || '15000', 10),
-    currency: 'XAF',
-    label: 'Pro',
-  },
-};
+// Plans (monthly + yearly) live in utils/planCatalog.js — the only place that knows how
+// a purchase key ('pro_yearly') maps to a tier ('pro'). Read that file before editing.
+const {
+  PLAN_CATALOG,
+  VALID_PLAN_KEYS,
+  planTier,
+  planMonths,
+  listPlans,
+} = require('../utils/planCatalog');
 
-const SUBSCRIPTION_MONTHS = 1;
-const VALID_PLANS = ['starter', 'pro'];
+const PLAN_PRICES = PLAN_CATALOG; // the catalogue is the price list
+const VALID_PLANS = VALID_PLAN_KEYS; // monthly and yearly keys both validate
 
 // Platform-level (YOUR) Mobile Money config for subscriptions.
 // These env vars point to YOUR OWN MoMo account — NOT the company's — so
@@ -75,7 +71,14 @@ async function activateSubscription(
   { companyId, plan, provider, reference, transactionId, amount, currency }
 ) {
   const now = new Date();
-  const endsAt = new Date(now.getTime() + SUBSCRIPTION_MONTHS * 30 * 24 * 60 * 60 * 1000);
+  // Yearly keys buy 12 months, monthly keys 1.
+  const months = planMonths(plan);
+  const endsAt = new Date(now.getTime() + months * 30 * 24 * 60 * 60 * 1000);
+
+  // The subscriptions row records WHAT WAS BOUGHT (the purchase key, so a receipt can
+  // say "Pro, yearly"). The company records WHAT IS UNLOCKED (the tier): an unknown
+  // name in companies.plan would rank as free and lock out a bar that has just paid.
+  const tier = planTier(plan);
 
   await db.query(
     `INSERT INTO subscriptions
@@ -88,10 +91,10 @@ async function activateSubscription(
     `UPDATE companies
        SET plan = $1, plan_expires_at = $2, subscription_status = 'active'
      WHERE id = $3`,
-    [plan, endsAt, companyId]
+    [tier, endsAt, companyId]
   );
 
-  return { plan, expiresAt: endsAt };
+  return { plan: tier, purchasedPlan: plan, months, expiresAt: endsAt };
 }
 
 // ============================================================
@@ -116,7 +119,9 @@ router.get('/subscriptions/status', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Company not found' });
     }
 
-    let plan = company.plan || 'free';
+    // This value is shown in the app, so hand over the TIER ('pro') even if the column
+    // holds a purchase key ('pro_yearly') written by a legacy payment path.
+    let plan = planTier(company.plan);
     let status = company.subscription_status || 'none';
     let expiresAt = company.plan_expires_at;
 
@@ -137,7 +142,7 @@ router.get('/subscriptions/status', async (req, res) => {
         plan,
         status,
         expiresAt,
-        prices: PLAN_PRICES,
+        prices: listPlans(),
       },
     });
   } catch (error) {
@@ -452,7 +457,8 @@ router.post('/subscriptions/momo-confirm', async (req, res) => {
 
     const sub = pending.rows[0];
     const now = new Date();
-    const endsAt = new Date(now.getTime() + SUBSCRIPTION_MONTHS * 30 * 24 * 60 * 60 * 1000);
+    // Honour the duration that was actually bought (a yearly key buys 12 months).
+    const endsAt = new Date(now.getTime() + planMonths(sub.plan) * 30 * 24 * 60 * 60 * 1000);
 
     await req.db.query(
       `UPDATE subscriptions SET status = 'active', starts_at = $1, ends_at = $2 WHERE id = $3`,
@@ -515,7 +521,7 @@ router.get('/subscriptions/momo-status', async (req, res) => {
     const mtnStatus = String(tx.status || 'PENDING').toUpperCase();
     if (mtnStatus === 'SUCCESSFUL') {
       const now = new Date();
-      const endsAt = new Date(now.getTime() + SUBSCRIPTION_MONTHS * 30 * 24 * 60 * 60 * 1000);
+      const endsAt = new Date(now.getTime() + planMonths(sub.plan) * 30 * 24 * 60 * 60 * 1000);
       await req.db.query(
         `UPDATE subscriptions SET status = 'active', starts_at = $1, ends_at = $2 WHERE id = $3`,
         [now, endsAt, sub.id]
@@ -597,7 +603,7 @@ router.post('/subscriptions/orange-webhook', async (req, res) => {
 
     if (st === 'SUCCESS' || st === 'SUCCESSFUL' || st === 'COMPLETED') {
       const now = new Date();
-      const endsAt = new Date(now.getTime() + SUBSCRIPTION_MONTHS * 30 * 24 * 60 * 60 * 1000);
+      const endsAt = new Date(now.getTime() + planMonths(sub.plan) * 30 * 24 * 60 * 60 * 1000);
       await req.db.query(
         `UPDATE subscriptions SET status = 'active', starts_at = $1, ends_at = $2 WHERE id = $3`,
         [now, endsAt, sub.id]
@@ -694,7 +700,7 @@ async function activatePendingSubscription(db, reference, companyId, payment = {
   }
 
   const now = new Date();
-  const endsAt = new Date(now.getTime() + SUBSCRIPTION_MONTHS * 30 * 24 * 60 * 60 * 1000);
+  const endsAt = new Date(now.getTime() + planMonths(sub.plan) * 30 * 24 * 60 * 60 * 1000);
   await db.query(
     `UPDATE subscriptions SET status = 'active', starts_at = $1, ends_at = $2 WHERE id = $3`,
     [now, endsAt, sub.id]
