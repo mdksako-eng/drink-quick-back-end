@@ -48,35 +48,40 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     if (mounted) setState(() => _payments = status);
   }
 
+  /// Card payment. Uses CamerPay's hosted checkout with the card rail locked, then the
+  /// SAME authoritative status poll the mobile-money rail uses.
+  ///
+  /// This previously called the legacy Flutterwave endpoint and then only re-read our own
+  /// database (`refresh()`) until it gave up — so a payment that CamerPay had actually
+  /// accepted stayed "pending" unless its webhook arrived and was accepted. A paid
+  /// subscription must activate from the provider's own confirmation.
   Future<void> _upgrade(String plan) async {
     final provider = context.read<PlanProvider>();
     setState(() => _busy = true);
     try {
-      final result = await provider.initiate(plan);
+      // No phone number needed for card: CamerPay collects the card details on its page.
+      final data = await provider.notchpayInitiate(plan: plan, channel: 'card');
       if (!mounted) return;
 
-      final checkoutUrl = result?['checkoutUrl'] as String?;
-      if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
-        final uri = Uri.parse(checkoutUrl);
-        final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-        if (!ok) await launchUrl(uri);
-
-        // Poll for activation (the webhook activates it server-side).
-        for (var i = 0; i < 6; i++) {
-          await Future.delayed(const Duration(seconds: 3));
-          if (!mounted) return;
-          await provider.refresh();
-          if (provider.info.isActive) {
-            _showSnack(t('subscriptionActive'));
-            return;
-          }
-        }
-        _showSnack(t('payThenRefresh'));
-      } else {
+      final checkoutUrl = data?['checkoutUrl']?.toString() ?? '';
+      if (checkoutUrl.isEmpty) {
         _showSnack(t('payNotConfigured'));
+        return;
+      }
+
+      final reference = data?['reference']?.toString() ?? '';
+      final uri = Uri.parse(checkoutUrl);
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) await launchUrl(uri);
+
+      // Verify against CamerPay (authoritative), not just our own database.
+      if (reference.isNotEmpty) {
+        await _autoVerifyNotchpay(provider, reference);
+      } else {
+        await _autoVerifyPlan(provider);
       }
     } catch (e) {
-      _showSnack('${t('error')}: $e');
+      if (mounted) _showSnack('${t('error')}: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -107,14 +112,17 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       if (payerPhone == null || payerPhone.isEmpty) return;
 
       Map<String, dynamic>? notch;
+      String? camerpayError;
       try {
         notch = await planProvider.notchpayInitiate(
           plan: plan,
           channel: channel,
           customerPhone: payerPhone,
         );
-      } catch (_) {
-        notch = null;
+      } catch (e) {
+        // Keep the reason. CamerPay explains itself (a KYC volume limit, a closed rail);
+        // swallowing it is how a fixable refusal becomes a vague "pending verification".
+        camerpayError = e.toString().replaceFirst('Exception: ', '');
       }
 
       if (!mounted) return;
@@ -144,7 +152,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       );
       if (!mounted) return;
       if (data == null) {
-        _showSnack(t('payNotConfigured'));
+        // Prefer CamerPay's own explanation when it gave one.
+        _showSnack(camerpayError ?? t('payNotConfigured'));
         return;
       }
 
@@ -171,7 +180,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         final acknowledged =
             await _promptConfirm(provider, amount, currency, merchantPhone);
         if (!acknowledged || !mounted) return;
-        _showSnack(t('paymentPendingVerification'));
+        // If CamerPay refused for a concrete reason, say it rather than leaving the
+        // manager waiting on a verification that cannot arrive.
+        _showSnack(camerpayError ?? t('paymentPendingVerification'));
       }
     } catch (e) {
       if (mounted) _showSnack('$e');
