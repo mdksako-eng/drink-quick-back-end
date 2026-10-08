@@ -29,6 +29,8 @@ class SubscriptionScreen extends StatefulWidget {
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
   bool _busy = false;
+  /// Whether the plan cards show yearly prices (12 months, 20% off).
+  bool _yearly = false;
   PaymentsStatus _payments = PaymentsStatus.unknown;
 
   @override
@@ -427,22 +429,39 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             Text(t('plansSubtitle'),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+            const SizedBox(height: 16),
+            // Monthly or yearly. The 20% discount is stated on the switch itself, so
+            // nobody has to do the arithmetic to see why yearly is worth taking.
+            SegmentedButton<bool>(
+              segments: [
+                ButtonSegment(value: false, label: Text(t('billingMonthly'))),
+                ButtonSegment(value: true, label: Text(t('billingYearly'))),
+              ],
+              selected: {_yearly},
+              onSelectionChanged: _busy
+                  ? null
+                  : (selection) => setState(() => _yearly = selection.first),
+            ),
             const SizedBox(height: 24),
             LayoutBuilder(
               builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 680;
+                // Yearly buys the same tier for 12 months at 20% off, so only the key
+                // changes ('pro_yearly'); the tier it unlocks stays 'pro'.
+                final starterKey = _yearly ? 'starter_yearly' : 'starter';
+                final proKey = _yearly ? 'pro_yearly' : 'pro';
                 final cards = [
                   _pricingCard('free', t('free'), '', [
                     t('calcFree1'),
                     t('calcFree2'),
                     t('calcFree3'),
                   ], Icons.calculate_outlined, false),
-                  _pricingCard('starter', t('starter'),
-                      provider.priceLabel('starter'), [
+                  _pricingCard(starterKey, t('starter'),
+                      provider.priceLabel(starterKey), [
                     t('starterFeature1'),
                     t('starterFeature2'),
                   ], Icons.people_outline, false),
-                  _pricingCard('pro', t('pro'), provider.priceLabel('pro'), [
+                  _pricingCard(proKey, t('pro'), provider.priceLabel(proKey), [
                     t('proFeature1'),
                     t('proFeature2'),
                     t('proFeature3'),
@@ -566,7 +585,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   Widget _pricingCard(String plan, String title, String price,
       List<String> features, IconData icon, bool highlighted) {
     final provider = context.watch<PlanProvider>();
-    final isCurrent = provider.plan == plan;
+    // A yearly key ('pro_yearly') still belongs to the 'pro' tier, and the company
+    // stores the tier — so compare tiers, or the current plan would look unowned here.
+    final tier = plan.endsWith('_yearly')
+        ? plan.substring(0, plan.length - '_yearly'.length)
+        : plan;
+    final isCurrent = provider.plan == tier;
     final primary = Theme.of(context).colorScheme.primary;
     final accent = highlighted ? primary : null;
     final canUpgrade = plan != 'free' && !isCurrent;
@@ -628,7 +652,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               const SizedBox(width: 6),
               Padding(
                   padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(t('perMonth'),
+                  child: Text(
+                      plan.endsWith('_yearly') ? t('perYear') : t('perMonth'),
                       style: TextStyle(fontSize: 13, color: Colors.grey[600]))),
             ]),
           const SizedBox(height: 16),

@@ -40,6 +40,10 @@ class LanguageService {
 /// then to the key itself if missing.
 
 const Map<String, String> _en = {
+  // 💳 Billing period (monthly / yearly)
+  'billingMonthly': 'Monthly',
+  'billingYearly': 'Yearly -20%',
+  'perYear': 'per year',
   // 🆘 Support reports (bug / complaint) — Help & Support
   'reportProblem': 'Report a problem',
   'supportReportTitle': 'Report a problem',
@@ -1257,6 +1261,10 @@ const Map<String, String> _en = {
 };
 
 const Map<String, String> _fr = {
+  // 💳 Période de facturation (mensuel / annuel)
+  'billingMonthly': 'Mensuel',
+  'billingYearly': 'Annuel -20%',
+  'perYear': 'par an',
   // 🆘 Signalements (bug / réclamation) — Aide et assistance
   'reportProblem': 'Signaler un problème',
   'supportReportTitle': 'Signaler un problème',
