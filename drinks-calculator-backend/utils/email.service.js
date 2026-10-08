@@ -1,5 +1,10 @@
-const sgMail = require('@sendgrid/mail');
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// Email goes through Resend (https://resend.com), over its REST API with the
+// built-in fetch — so this file needs no email SDK and no extra dependency.
+//
+// Required env vars:
+//   RESEND_API_KEY  your key (re_...)                     — without it, sending fails loudly
+//   EMAIL_FROM      a sender on a domain verified in Resend, e.g.
+//                   "Drink Quick Cal <notifications@yourdomain.com>"
 const winston = require('winston');
 
 const logger = winston.createLogger({
@@ -8,20 +13,51 @@ const logger = winston.createLogger({
     transports: [new winston.transports.File({ filename: 'logs/email.log' })],
 });
 
+const RESEND_ENDPOINT = 'https://api.resend.com/emails';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+// Resend only accepts a sender on a domain you have verified there. Until that is
+// done, 'onboarding@resend.dev' works but only delivers to your own account address.
+const EMAIL_FROM = process.env.EMAIL_FROM || 'Drink Quick Cal <onboarding@resend.dev>';
+
+/** Whether email can be sent at all — surfaced at startup so it cannot surprise us. */
+const isEmailConfigured = () => Boolean(RESEND_API_KEY);
+
+/**
+ * The exact body Resend expects. Pure, so the request shape is testable.
+ * @param {object} params { to, subject, html, from }
+ * @returns {{from: string, to: string[], subject: string, html: string}}
+ */
+const buildEmailPayload = ({ to, subject, html, from }) => ({
+  from: from || EMAIL_FROM,
+  // Resend takes an array; a single address is normalised to one so a stray comma
+  // can never turn one recipient into several.
+  to: Array.isArray(to) ? to : [String(to)],
+  subject: String(subject || ''),
+  html: String(html || ''),
+});
+
+/** Send one email through Resend. Throws on failure — a silent drop is worse. */
 const sendEmail = async (to, subject, html) => {
+  if (!RESEND_API_KEY) {
+    throw new Error('RESEND_API_KEY is not set — cannot send email');
+  }
   try {
-    const msg = {
-      to,
-      from: {
-        email: process.env.EMAIL_FROM || 'm.derick@africet.org',
-        name: 'Drink Quick Cal'
+    const response = await fetch(RESEND_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
       },
-      subject,
-      html,
-    };
-    await sgMail.send(msg);
-    logger.info('Email sent', { to, subject });
-    return { success: true };
+      body: JSON.stringify(buildEmailPayload({ to, subject, html })),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.message || data.error || `Resend HTTP ${response.status}`);
+    }
+
+    logger.info('Email sent', { to, subject, id: data.id });
+    return { success: true, id: data.id };
   } catch (error) {
     logger.error('Email failed', { to, error: error.message });
     throw new Error('Failed to send email: ' + error.message);
@@ -119,4 +155,4 @@ const sendJoinRequestEmail = async (ownerEmail, ownerName, requesterName, compan
 // Support report (bug / complaint) forwarded to the support inbox.
 const sendSupportReportEmail = async ({ to, subject, html }) => sendEmail(to, subject, html);
 
-module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail, sendSupportReportEmail };
+module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail, sendSupportReportEmail, sendEmail, buildEmailPayload, isEmailConfigured };
