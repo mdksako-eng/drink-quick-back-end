@@ -40,6 +40,25 @@ class LanguageService {
 /// then to the key itself if missing.
 
 const Map<String, String> _en = {
+  // 🆘 Support reports (bug / complaint) — Help & Support
+  'reportProblem': 'Report a problem',
+  'supportReportTitle': 'Report a problem',
+  'supportReportIntro':
+      'Tell us what went wrong or what bothered you. It goes straight to support with the details of your device and company, so you do not have to explain all that.',
+  'supportCategoryLabel': 'What kind of report is this?',
+  'supportCatBug': 'Bug',
+  'supportCatComplaint': 'Complaint',
+  'supportCatIdea': 'Suggestion',
+  'supportCatOther': 'Other',
+  'supportSubjectLabel': 'Short title (optional)',
+  'supportMessageLabel': 'Describe it',
+  'supportMessageHint':
+      'What did you do, what did you expect, and what happened instead?',
+  'supportMessageTooShort': 'Please write at least 10 characters.',
+  'supportSend': 'Send report',
+  'supportSending': 'Sending...',
+  'supportSent': 'Report sent. Reference:',
+  'supportFailed': 'Could not send the report. Please try again.',
   // 🇨🇲 CamerPay (the company's own account — phase 4)
   'campayTitle': 'CamerPay (card, MTN, Orange, PayPal)',
   'campaySubtitle':
@@ -1238,6 +1257,25 @@ const Map<String, String> _en = {
 };
 
 const Map<String, String> _fr = {
+  // 🆘 Signalements (bug / réclamation) — Aide et assistance
+  'reportProblem': 'Signaler un problème',
+  'supportReportTitle': 'Signaler un problème',
+  'supportReportIntro':
+      'Dites-nous ce qui n\'a pas fonctionné ou ce qui vous a gêné. Le message part directement à l\'assistance avec les détails de votre appareil et de votre établissement, vous n\'avez donc pas à les expliquer.',
+  'supportCategoryLabel': 'Quel type de signalement ?',
+  'supportCatBug': 'Bug',
+  'supportCatComplaint': 'Réclamation',
+  'supportCatIdea': 'Suggestion',
+  'supportCatOther': 'Autre',
+  'supportSubjectLabel': 'Titre court (facultatif)',
+  'supportMessageLabel': 'Décrivez',
+  'supportMessageHint':
+      'Qu\'avez-vous fait, qu\'attendiez-vous, et que s\'est-il passé à la place ?',
+  'supportMessageTooShort': 'Écrivez au moins 10 caractères.',
+  'supportSend': 'Envoyer le signalement',
+  'supportSending': 'Envoi...',
+  'supportSent': 'Signalement envoyé. Référence :',
+  'supportFailed': 'Impossible d\'envoyer le signalement. Réessayez.',
   // 🇨🇲 CamerPay (le compte de l'établissement — phase 4)
   'campayTitle': 'CamerPay (carte, MTN, Orange, PayPal)',
   'campaySubtitle':

@@ -27,6 +27,7 @@ import 'package:drinks_calculator_fixed/services/company_branding_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:drinks_calculator_fixed/screens/support_report_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../utils/i18n.dart';
@@ -512,6 +513,14 @@ class CustomDrawer extends StatelessWidget {
                 _buildDrawerItem(context, Icons.help_outline, t('helpSupportMenu'),
                     () {
                   _showHelpDialog(context);
+                }, primaryColor: primaryColor),
+                // Anyone signed in can file a bug report or complaint — staff on the
+                // bar floor included, which is where most complaints start.
+                _buildDrawerItem(
+                    context, Icons.bug_report_outlined, t('reportProblem'), () {
+                  Navigator.of(context).pop(); // close the drawer first
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const SupportReportScreen()));
                 }, primaryColor: primaryColor),
               ],
             ),
