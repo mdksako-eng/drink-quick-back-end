@@ -630,6 +630,32 @@ app.use(async (req, res, next) => {
         console.log('✅ approval_logs table already exists');
       }
       
+      // Support reports (bugs / complaints) filed from the app's Help & Support
+      // screen. No foreign keys on purpose: a report about a company or user that is
+      // later deleted must stay readable.
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS support_reports (
+          id SERIAL PRIMARY KEY,
+          reference TEXT UNIQUE NOT NULL,
+          company_id INTEGER,
+          user_id INTEGER,
+          username VARCHAR(100),
+          category VARCHAR(20) NOT NULL,
+          subject VARCHAR(200),
+          message TEXT NOT NULL,
+          context JSONB,
+          app_version VARCHAR(40),
+          platform VARCHAR(40),
+          screen VARCHAR(60),
+          status VARCHAR(20) NOT NULL DEFAULT 'new',
+          resolution_note TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_support_reports_company ON support_reports(company_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_support_reports_status ON support_reports(status)`);
+      console.log('✅ support_reports table ensured');
+
       const countResult = await pool.query('SELECT COUNT(*) FROM users');
       const userCount = parseInt(countResult.rows[0].count);
       console.log(`📊 Database has ${userCount} users`);
@@ -2450,6 +2476,10 @@ app.get('/api/data/company/:id/public', async (req, res) => {
 // ========== DATA ROUTES (replaces direct Supabase REST access) ==========
 const dataRoutes = require('./routes/data.routes');
 app.use('/api/data', dataRoutes);
+
+// ========== SUPPORT ROUTES (bug reports / complaints) ==========
+const supportRoutes = require('./routes/support.routes');
+app.use('/api/support', supportRoutes);
 
 // ========== AI CHAT (Groq proxy — API key stays on server) ==========
 app.post('/api/ai/chat', requireSession(pool), requirePlan(['pro']), async (req, res) => {

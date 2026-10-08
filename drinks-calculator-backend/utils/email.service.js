@@ -116,4 +116,7 @@ const sendJoinRequestEmail = async (ownerEmail, ownerName, requesterName, compan
   return await sendEmail(ownerEmail, '🔐 Verify New Member - Drink Quick Cal', html);
 };
 
-module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail };
+// Support report (bug / complaint) forwarded to the support inbox.
+const sendSupportReportEmail = async ({ to, subject, html }) => sendEmail(to, subject, html);
+
+module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail, sendSupportReportEmail };
