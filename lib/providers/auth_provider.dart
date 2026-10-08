@@ -841,7 +841,13 @@ class AuthProvider with ChangeNotifier {
       context: context,
       barrierDismissible: false,
       barrierColor: isDark ? Colors.black87 : Colors.black54,
-      builder: (dialogContext) => AlertDialog(
+      // Back must not dismiss this. On a phone the back button closed the dialog and
+      // left the user sitting on the calculator with a session that was already dead —
+      // logged out on paper, still navigating the app in practice. The logout button
+      // is the only way out.
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
@@ -982,6 +988,7 @@ class AuthProvider with ChangeNotifier {
             ),
           ),
         ],
+        ),
       ),
     );
   }

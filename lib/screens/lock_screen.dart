@@ -50,6 +50,10 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
   static const int _maxPinAttempts = 5;
   bool _isLocked = false;
   Timer? _lockTimer;
+  /// How long the keypad stays locked after too many wrong PINs, and the live
+  /// countdown shown while it does — the wait used to be invisible.
+  static const int _lockSeconds = 30;
+  int _lockSecondsRemaining = 0;
   bool _isAuthenticated = false;
 
   // ========== BIOMETRIC SETTINGS ==========
@@ -275,25 +279,49 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
           isError: true,
         );
       } else {
-        Helpers.showToast('Too many attempts. Please wait 30 seconds.',
-            isError: true);
+        Helpers.showToast(
+          '${t('lockTryAgainIn')} ${_lockSeconds}s',
+          isError: true,
+        );
       }
     }
   }
 
+  /// Locks the keypad for [_lockSeconds] and ticks the remaining time down on screen.
+  ///
+  /// This used to be one silent Timer: the user was told "wait 30 seconds" and then had
+  /// no way to know whether 5 or 25 seconds were left.
   void _startLockTimer() {
     _lockTimer?.cancel();
-    _lockTimer = Timer(const Duration(seconds: 30), () {
-      if (mounted) {
-        setState(() {
-          _isLocked = false;
-          _pinAttempts = 0;
-        });
-        Helpers.showToast('You can try again now.');
+    if (mounted) {
+      setState(() => _lockSecondsRemaining = _lockSeconds);
+    } else {
+      _lockSecondsRemaining = _lockSeconds;
+    }
 
-        if (_biometricEnabled && _canCheckBiometrics) {
-          _authenticateWithBiometric();
-        }
+    _lockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      final left = _lockSecondsRemaining - 1;
+      if (left > 0) {
+        setState(() => _lockSecondsRemaining = left);
+        return;
+      }
+
+      // Countdown finished: unlock and give the attempts back.
+      timer.cancel();
+      setState(() {
+        _lockSecondsRemaining = 0;
+        _isLocked = false;
+        _pinAttempts = 0;
+      });
+      Helpers.showToast('You can try again now.');
+
+      if (_biometricEnabled && _canCheckBiometrics) {
+        _authenticateWithBiometric();
       }
     });
   }
@@ -804,7 +832,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
           const Icon(Icons.timer, color: Colors.red, size: 24),
           SizedBox(width: isMobile ? 12 : 16),
           Text(
-            'Locked for 30 seconds',
+            '${t('lockTryAgainIn')} ${_lockSecondsRemaining}s',
             style: TextStyle(
               color: Colors.white,
               fontSize: isMobile ? 16 : 18,
@@ -973,7 +1001,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                       isSetupMode || _savedPin.isEmpty
                           ? 'Create a 6-digit PIN for your account'
                           : _isLocked
-                              ? 'Too many attempts. Please wait 30 seconds.'
+                              ? '${t('lockTryAgainIn')} ${_lockSecondsRemaining}s'
                               : _isAuthenticating
                                   ? 'Authenticating...'
                                   : (showBiometric

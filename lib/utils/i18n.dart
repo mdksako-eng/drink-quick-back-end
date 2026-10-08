@@ -40,6 +40,8 @@ class LanguageService {
 /// then to the key itself if missing.
 
 const Map<String, String> _en = {
+  // 🔐 Device lock screen
+  'lockTryAgainIn': 'Try again in',
   // 🆘 Support reports — the admin inbox (list, read, resolve)
   'adminSupportReportsTitle': 'Support reports',
   'supportFilterAll': 'All',
@@ -1273,6 +1275,8 @@ const Map<String, String> _en = {
 };
 
 const Map<String, String> _fr = {
+  // 🔐 Écran de verrouillage de l'appareil
+  'lockTryAgainIn': 'Réessayez dans',
   // 🆘 Signalements — la boîte de réception admin (lister, lire, résoudre)
   'adminSupportReportsTitle': 'Signalements',
   'supportFilterAll': 'Tous',
