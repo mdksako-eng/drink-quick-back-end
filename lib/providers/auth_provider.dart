@@ -480,21 +480,29 @@ class AuthProvider with ChangeNotifier {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
+                // Theme colours, not a fixed pale blue: on a dark dialog the old
+                // Colors.blue.shade50 background left the device name (theme-coloured
+                // text) invisible, which is the "not everything is showing" report.
+                color: Theme.of(dialogContext).colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 deviceName,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
+                  color: Theme.of(dialogContext).colorScheme.onPrimaryContainer,
                 ),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Managers: ${managers.map((m) => m['username']).join(', ')}',
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              // hintColor follows the theme; Colors.grey[600] washed out on a dark dialog.
+              style: TextStyle(
+                color: Theme.of(dialogContext).hintColor,
+                fontSize: 12,
+              ),
             ),
             const SizedBox(height: 12),
             const Text(
@@ -649,10 +657,16 @@ class AuthProvider with ChangeNotifier {
       debugPrint('📝 _user is null - creating user from pending data');
       debugPrint('   Pending username: $_pendingUsername');
 
-      // ✅ Try to fetch full user data from backend
+      // Fetch the approved user's own profile with the token we were just handed.
+      //
+      // This used to call getUserByUsername(), which reads the token from storage — and
+      // on a brand-new device there is none yet, so it returned null and the user was
+      // built with companyId: null. The app then ran company-less until the staff logged
+      // out and back in. /auth/me is also the right question here: it returns the
+      // session's own user, so it needs no manager privileges.
       try {
         final backendUser =
-            await _backendAuth.getUserByUsername(_pendingUsername!);
+            await _backendAuth.getCurrentUser(sessionToken: sessionToken);
         if (backendUser != null) {
           _user = User(
             id: backendUser.id,
@@ -664,7 +678,7 @@ class AuthProvider with ChangeNotifier {
             isOwner: backendUser.isOwner,
           );
           debugPrint(
-              '✅ User fetched from backend: ${_user!.username} (${_user!.role})');
+              '✅ User fetched from backend: ${_user!.username} (${_user!.role}, company ${_user!.companyId})');
         } else {
           // ✅ Fallback: Create user from pending data
           _user = User(
@@ -716,6 +730,31 @@ class AuthProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('auth_token', sessionToken);
     await prefs.setString('user_data', jsonEncode(_user!.toJson()));
+
+    // Safety net: if the profile could not be read before the session existed, ask once
+    // more now that the token IS in storage. Without this, a single failed fetch left
+    // companyId persisted as null for the whole session — the "company id is missing
+    // until I log out and log in again" report.
+    if (_user!.companyId == null) {
+      try {
+        final retry = await _backendAuth.getCurrentUser();
+        if (retry != null && retry.companyId != null) {
+          _user = User(
+            id: retry.id,
+            username: retry.username,
+            email: retry.email,
+            securityAnswers: retry.securityAnswers,
+            role: retry.role ?? _user!.role,
+            companyId: retry.companyId,
+            isOwner: retry.isOwner || _user!.isOwner,
+          );
+          await prefs.setString('user_data', jsonEncode(_user!.toJson()));
+          debugPrint('✅ Company recovered after approval: ${_user!.companyId}');
+        }
+      } catch (e) {
+        debugPrint('⚠️ Company recovery after approval failed: $e');
+      }
+    }
 
     // ✅ Set Supabase context
     final companyId = _user?.companyId;

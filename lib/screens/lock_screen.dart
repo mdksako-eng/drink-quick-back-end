@@ -279,10 +279,9 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
           isError: true,
         );
       } else {
-        Helpers.showToast(
-          '${t('lockTryAgainIn')} ${_lockSeconds}s',
-          isError: true,
-        );
+        // Not a "try again" message: the countdown lives in the timed panel above, so
+        // this must not repeat it (that was two competing "try again in Ns" lines).
+        Helpers.showToast(t('lockTooManyAttempts'), isError: true);
       }
     }
   }
@@ -1001,7 +1000,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                       isSetupMode || _savedPin.isEmpty
                           ? 'Create a 6-digit PIN for your account'
                           : _isLocked
-                              ? '${t('lockTryAgainIn')} ${_lockSecondsRemaining}s'
+                              ? t('lockTooManyAttempts')
                               : _isAuthenticating
                                   ? 'Authenticating...'
                                   : (showBiometric

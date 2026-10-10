@@ -492,7 +492,16 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              request['username'] ?? 'Staff',
+                                              // The backend names this field
+                                              // staff_username (the pending-requests query
+                                              // aliases u.username AS staff_username).
+                                              // Reading only 'username' always fell through
+                                              // to the literal, so every pending login showed
+                                              // the role "Staff" instead of the person's name.
+                                              (request['staff_username'] ??
+                                                      request['username'] ??
+                                                      'Staff')
+                                                  .toString(),
                                               style: TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 16,

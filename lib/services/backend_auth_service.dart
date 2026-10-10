@@ -405,9 +405,12 @@ class BackendAuthService {
   // ============================================================
   // ✅ FIXED: Get current user
   // ============================================================
-  Future<User?> getCurrentUser() async {
+  /// [sessionToken] lets a caller use a token that is not in storage yet. The approval
+  /// flow is handed a fresh token before its session is saved, and reading storage there
+  /// returns null — which is what left an approved user with a null companyId.
+  Future<User?> getCurrentUser({String? sessionToken}) async {
     try {
-      final token = await _getToken();
+      final token = sessionToken ?? await _getToken();
       if (token == null) {
         debugPrint('❌ No auth token found');
         return null;
