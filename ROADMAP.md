@@ -597,3 +597,14 @@ routes (five verification sites), plus one missing check:
   and toast all follow one tested decision (`lib/utils/order_action_helper.dart`).
   Backend: `tests/order_cancel.test.js` (9 tests) + `tests/order_void.test.js`.
 
+### Re-invoice repaired and manager-gated (2026-10-10)
+- "Edit & Re-invoice" could never finish: the cart lines were rebuilt with fabricated ids
+  (`import_<ts>_<n>_<name>`), so the stock commit found no inventory row, the sale was refused with
+  "not enough stock" while the shelf was full, and a partial return (2 sold, 1 returned) was
+  impossible — no unit came back and both stayed counted. Lines are now resolved to the real
+  catalogue drink by name (price kept as billed, `utils/invoice_import_helper.dart` + 10 tests), the
+  action is manager-gated like a void, and the manager flow returns the right stock
+  (10 → sell 2 → 8 → re-invoice 1 → 7 → original voided → 9).
+- Still to do as its own feature: a true line-level return (return 1 of 2 in one action, recorded and
+  shown on the Z-report) instead of void + re-invoice.
+

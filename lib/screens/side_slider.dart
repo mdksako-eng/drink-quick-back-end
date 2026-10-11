@@ -14,6 +14,7 @@ import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/widgets/skeleton.dart';
 import '../utils/i18n.dart';
 import '../utils/order_action_helper.dart';
+import '../utils/invoice_import_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:drinks_calculator_fixed/providers/customer_provider.dart';
 import 'package:drinks_calculator_fixed/screens/receipt_print_screen.dart';
@@ -483,6 +484,14 @@ class _SideSliderState extends State<SideSlider> {
   }
 
   Future<void> _importInvoice(PurchaseHistory order) async {
+    // Re-invoicing retires the original sale and has to move its stock back, so it
+    // is a manager action — the same rule as voiding. The backend refuses the void
+    // for anyone else, which would leave the sale counted twice.
+    if (!_canManageOrders) {
+      _showToast(t('reInvoiceNeedsManager'), isError: true);
+      return;
+    }
+
     // ✅ Check if order is active
     if (!order.isActive) {
       _showToast(t('cannotEditDeactivated'), isError: true);
@@ -499,44 +508,25 @@ class _SideSliderState extends State<SideSlider> {
         listen: false,
       );
 
-      List<Drink> drinksToImport = [];
-      final baseTimestamp = DateTime.now().millisecondsSinceEpoch;
-      int counter = 0;
-
-      // ✅ Loop through each item in the order
-      for (final item in order.items) {
-        // ✅ Find existing drink or create fallback
-        final existingDrink = drinkProvider.customDrinks.firstWhere(
-          (d) => d.name == item.drinkName,
-          orElse: () => Drink(
-            id: '',
-            name: item.drinkName,
-            price: item.pricePerUnit,
-            category: 'Imported',
-            imageUrl: '',
-          ),
+      // Rebuild every line from the REAL catalogue drink and keep the price the
+      // customer paid. A made-up id used to break the whole flow at the stock step
+      // ("not enough stock" with a full shelf) — see utils/invoice_import_helper.
+      final plan = InvoiceImportHelper.plan(
+        items: order.items,
+        catalog: drinkProvider.customDrinks,
+      );
+      if (plan.missingDrink != null) {
+        _showToast(
+          '${t('importDrinkMissing')}: ${plan.missingDrink}',
+          isError: true,
         );
-
-        // ✅ Create individual drinks for each quantity
-        for (int i = 0; i < item.quantity; i++) {
-          counter++;
-          drinksToImport.add(Drink(
-            id: 'import_${baseTimestamp}_${counter}_${DateTime.now().microsecondsSinceEpoch}_${item.drinkName.replaceAll(' ', '_')}',
-            name: item.drinkName,
-            price: item.pricePerUnit,
-            category: 'Imported',
-            imageUrl: '',
-            currentStock: existingDrink.currentStock,
-            minimumLevel: existingDrink.minimumLevel,
-            purchasePrice: existingDrink.purchasePrice,
-            unit: existingDrink.unit,
-          ));
-        }
+        return;
       }
 
       // ✅ Check if there are drinks to import
+      final List<Drink> drinksToImport = plan.drinks;
       if (drinksToImport.isEmpty) {
-        _showToast('No drinks to import', isError: true);
+        _showToast(t('noDrinksToImport'), isError: true);
         return;
       }
 
@@ -556,12 +546,12 @@ class _SideSliderState extends State<SideSlider> {
 
       // ✅ Show success message
       if (mounted) {
-        _showToast('Invoice loaded! You can now edit and re-process.');
+        _showToast(t('invoiceLoadedForEdit'));
       }
     } catch (e) {
       // ✅ Handle any errors
       if (mounted) {
-        _showToast('Failed to import invoice: ${e.toString()}', isError: true);
+        _showToast('${t('importInvoiceFailed')}: ${e.toString()}', isError: true);
       }
       // ✅ Log the error for debugging
       print('❌ Import invoice error: $e');
