@@ -206,5 +206,24 @@ void main() {
       expect(summary.variance, isNull);
       expect(summary.balanced, isFalse);
     });
+
+    test('corrections (voids / cancellations) are read off the report', () {
+      // The backend has always sent these; the app used to drop them, so a
+      // rolled-back sale was excluded from `sales` with nothing to explain it.
+      final summary = ShiftSummary.fromJson(const {
+        'expectedCash': 10000,
+        'sales': 10000,
+        'voidCount': 2,
+        'voidValue': 5000,
+      });
+      expect(summary.voidCount, 2);
+      expect(summary.voidValue, 5000);
+    });
+
+    test('a shift with no corrections reports zero, never null', () {
+      final summary = ShiftSummary.fromJson(const {'expectedCash': 1000});
+      expect(summary.voidCount, 0);
+      expect(summary.voidValue, 0);
+    });
   });
 }

@@ -584,3 +584,16 @@ routes (five verification sites), plus one missing check:
   rate limiting still covers only the most sensitive endpoints.
 
 
+### Order corrections hardened (2026-10-10)
+- The invoice history's **Void/Restore** was sound, but the calculator's automatic rollbacks used a
+  second lane — `PATCH /api/data/orders/:id {is_active:false}` — which set no `voided_at`. The
+  Z-report filters sales on `voided_at IS NULL`, so a rolled-back sale kept inflating the shift's
+  takings and expected cash, while the app's analytics (which filters `is_active`) excluded it: the
+  two numbers disagreed, and the shift cash-up was overstated. A manager also saw such a row drawn as
+  "Restore" and, on tapping, ran a void that put back stock the rolled-back sale had never taken.
+- Now: **`POST /api/data/orders/:id/cancel`** records who/when/why without moving stock, the Z-report
+  counts only `is_active = true` sales and lists untraced cancellations as corrections, a refused
+  multi-line sale puts back exactly the lines it had already deducted, and the card's button, dialog
+  and toast all follow one tested decision (`lib/utils/order_action_helper.dart`).
+  Backend: `tests/order_cancel.test.js` (9 tests) + `tests/order_void.test.js`.
+

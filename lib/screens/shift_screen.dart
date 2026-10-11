@@ -379,6 +379,11 @@ class _ShiftScreenState extends State<ShiftScreen> {
             _row(t('shiftCollected'), s.collected.formatted),
             _row(t('shiftOnCredit'), s.onCredit.formatted),
             _row(t('shiftPayouts'), s.payouts.formatted),
+            if (s.voidCount > 0)
+              _row(
+                t('shiftCorrections'),
+                '${s.voidCount} · ${s.voidValue.formatted}',
+              ),
             const Divider(),
             _row(t('shiftExpectedCash'), s.expectedCash.formatted),
             _row(t('shiftCounted'), (s.counted ?? 0).formatted),
@@ -435,6 +440,11 @@ class _ShiftScreenState extends State<ShiftScreen> {
         WhatsAppHelper.row(t('shiftPayouts'), summary.payouts.formatted),
         WhatsAppHelper.row(t('shiftOrders'), '${summary.orderCount}'),
         WhatsAppHelper.row(t('shiftCounted'), (summary.counted ?? 0).formatted),
+        if (summary.voidCount > 0)
+          WhatsAppHelper.row(
+            t('shiftCorrections'),
+            '${summary.voidCount} · ${summary.voidValue.formatted}',
+          ),
       ]),
       totalLabel: t('shiftExpectedCash'),
       totalValue: summary.expectedCash.formatted,

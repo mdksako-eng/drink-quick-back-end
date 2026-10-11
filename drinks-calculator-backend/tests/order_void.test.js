@@ -9,6 +9,7 @@
  */
 const {
   isVoided,
+  isInactive,
   canVoidOrder,
   validateVoid,
   validateRestore,
@@ -152,5 +153,36 @@ describe('the voids of a shift', () => {
       voidValue: 0,
     });
     expect(summariseVoids()).toEqual({ voidCount: 0, voidValue: 0 });
+  });
+
+  test('a sale the till cancelled (no void timestamp) is a correction too', () => {
+    // This is the row a refused stock commit leaves behind: inactive, but with no
+    // voided_at. It must not vanish from the report silently.
+    const orders = [
+      { total_amount: 100, is_active: true, voided_at: null },
+      { total_amount: 50, is_active: false, voided_at: null },
+    ];
+    expect(summariseVoids(orders)).toEqual({ voidCount: 1, voidValue: 50 });
+  });
+
+  test('an active row is never counted, however the void column looks', () => {
+    expect(summariseVoids([{ total_amount: 10, is_active: true, voided_at: null }]))
+      .toEqual({ voidCount: 0, voidValue: 0 });
+  });
+});
+
+describe('isInactive', () => {
+  test('only an explicit is_active = false counts', () => {
+    expect(isInactive({ is_active: false })).toBe(true);
+    expect(isInactive({ is_active: true })).toBe(false);
+    expect(isInactive({})).toBe(false);
+    expect(isInactive(null)).toBe(false);
+  });
+
+  test('a voided row is inactive as well as voided', () => {
+    const row = { is_active: false, voided_at: '2026-09-27T11:00:00Z' };
+    expect(isInactive(row)).toBe(true);
+    expect(isVoided(row)).toBe(true);
+    expect(summariseVoids([row])).toEqual({ voidCount: 1, voidValue: 0 });
   });
 });

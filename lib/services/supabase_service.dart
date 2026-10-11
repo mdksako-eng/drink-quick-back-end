@@ -694,15 +694,27 @@ class SupabaseService {
     }
   }
 
-  static Future<bool> updateOrderStatus(String id, bool isActive) async {
+  /// Cancels a sale that never completed (a refused stock commit, a rolled-back
+  /// multi-line sale). Records who/why on the order and stops it counting as a
+  /// sale; the backend deliberately moves NO stock, because the caller has
+  /// already put back the lines it managed to deduct itself.
+  ///
+  /// Returns false when the backend refused (offline, expired session, or a
+  /// backend older than this route) so the caller can tell the operator instead
+  /// of pretending the sale was undone.
+  static Future<bool> cancelOrder(String orderId, String reason) async {
+    if (!canUseSupabase) return false;
     try {
-      final response = await http.patch(
-        Uri.parse('${ApiConfig.dataOrders}/$id'),
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataOrderCancel(orderId)),
         headers: await _authedHeaders(),
-        body: jsonEncode({'is_active': isActive}),
+        body: jsonEncode({'reason': reason}),
       );
-      return response.statusCode == 204;
+      if (response.statusCode == 200) return true;
+      print('⚠️ cancelOrder HTTP ${response.statusCode}: ${response.body}');
+      return false;
     } catch (e) {
+      print('⚠️ cancelOrder error: $e');
       return false;
     }
   }

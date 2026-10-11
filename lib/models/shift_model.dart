@@ -130,6 +130,13 @@ class ShiftSummary {
   final int orderCount;
   final Map<String, double> byMethod;
 
+  /// Corrections made after the fact: voids (the stock was put back) and
+  /// cancellations (a sale the till rolled back before the stock was committed).
+  /// They are already excluded from `sales` above and reported here, so a cash-up
+  /// can always be explained rather than quietly rewritten.
+  final int voidCount;
+  final double voidValue;
+
   const ShiftSummary({
     this.openingFloat = 0,
     this.payouts = 0,
@@ -141,6 +148,8 @@ class ShiftSummary {
     this.variance,
     this.orderCount = 0,
     this.byMethod = const {},
+    this.voidCount = 0,
+    this.voidValue = 0,
   });
 
   /// True when the drawer matches the expected cash (to the cent).
@@ -163,5 +172,7 @@ class ShiftSummary {
         variance: _asDouble(json['variance']),
         orderCount: _asInt(json['orderCount']),
         byMethod: _asMoneyMap(json['byMethod']),
+        voidCount: _asInt(json['voidCount']),
+        voidValue: _asDouble(json['voidValue']) ?? 0,
       );
 }

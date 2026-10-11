@@ -13,6 +13,7 @@ import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/widgets/skeleton.dart';
 import '../utils/i18n.dart';
+import '../utils/order_action_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:drinks_calculator_fixed/providers/customer_provider.dart';
 import 'package:drinks_calculator_fixed/screens/receipt_print_screen.dart';
@@ -149,10 +150,11 @@ class _SideSliderState extends State<SideSlider> {
         Provider.of<AuthProvider>(widget.parentContext, listen: false);
     final role = authProvider.user?.role?.toLowerCase() ?? '';
     setState(() {
+      // Void, restore and cancel all change the takings, so a customer account
+      // must never see the control (the backend refuses it anyway).
       _canManageOrders = role == 'administrator' ||
           role == 'admin' ||
-          role == 'manager' ||
-          role == 'customer';
+          role == 'manager';
     });
   }
 
@@ -290,7 +292,15 @@ class _SideSliderState extends State<SideSlider> {
       return;
     }
 
-    final bool currentlyActive = order.isActive;
+    // The wording follows the ACTION, not just `isActive` — see
+    // utils/order_action_helper.dart. A rolled-back sale (inactive, no void trace)
+    // must offer "Void" so the missing trace gets recorded; it used to be drawn as
+    // "Restore" and then run a void behind the user's back.
+    final OrderAction action = OrderActionHelper.actionFor(
+      isActive: order.isActive,
+      isVoided: order.isVoided,
+    );
+    final bool currentlyActive = action != OrderAction.restoreOrder;
 
     final confirmed = await showDialog<bool>(
       context: widget.parentContext,
@@ -393,10 +403,10 @@ class _SideSliderState extends State<SideSlider> {
 
     if (confirmed != true) return;
 
-    // Voiding needs a reason — "why was this sale cancelled" is the whole point.
-    // Restoring a void does not.
+    // Recording a correction needs a reason — "why was this sale cancelled" is the
+    // whole point. Restoring a void does not: the trace is already there.
     String reason = '';
-    if (!order.isVoided) {
+    if (action != OrderAction.restoreOrder) {
       final reasonController = TextEditingController();
       final entered = await showDialog<String>(
         context: widget.parentContext,
@@ -443,12 +453,25 @@ class _SideSliderState extends State<SideSlider> {
     try {
       final orderProvider =
           Provider.of<OrderProvider>(widget.parentContext, listen: false);
-      final bool ok = order.isVoided
-          ? await orderProvider.restoreOrder(order.id)
-          : await orderProvider.voidOrder(order.id, reason);
+      // One branch per action, so the button can never do something other than
+      // what its label promised:
+      //   restore -> put the sale back (stock comes off the shelf again),
+      //   cancel  -> record the missing trace and touch no stock, because the
+      //              rolled-back sale's lines were already put back,
+      //   void    -> correct a counted sale (stock goes back on the shelf).
+      final bool ok = switch (action) {
+        OrderAction.restoreOrder => await orderProvider.restoreOrder(order.id),
+        OrderAction.cancelOrder =>
+          await orderProvider.cancelOrder(order.id, reason),
+        OrderAction.voidOrder => await orderProvider.voidOrder(order.id, reason),
+      };
       _showToast(
         ok
-            ? (order.isVoided ? t('orderRestored') : t('orderVoided'))
+            ? switch (action) {
+                OrderAction.restoreOrder => t('orderRestored'),
+                OrderAction.cancelOrder => t('orderCancelled'),
+                OrderAction.voidOrder => t('orderVoided'),
+              }
             : t('orderVoidFailed'),
         isError: !ok,
       );
@@ -462,7 +485,7 @@ class _SideSliderState extends State<SideSlider> {
   Future<void> _importInvoice(PurchaseHistory order) async {
     // ✅ Check if order is active
     if (!order.isActive) {
-      _showToast('Cannot edit deactivated invoice', isError: true);
+      _showToast(t('cannotEditDeactivated'), isError: true);
       return;
     }
 
@@ -874,7 +897,7 @@ class _SideSliderState extends State<SideSlider> {
                                           size: 18, color: widget.primaryColor),
                                       const SizedBox(width: 8),
                                       Text(
-                                        'Show deactivated invoices',
+                                        t('showDeactivatedInvoices'),
                                         style: TextStyle(
                                           fontSize: 13,
                                           color: widget.textPrimaryColor,
@@ -1167,9 +1190,9 @@ class _SideSliderState extends State<SideSlider> {
                                 color: _warningColor,
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: const Text(
-                                'DEACTIVATED',
-                                style: TextStyle(
+                              child: Text(
+                                t('deactivated'),
+                                style: const TextStyle(
                                   fontSize: 8,
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -1427,16 +1450,19 @@ class _SideSliderState extends State<SideSlider> {
                       child: ElevatedButton(
                         onPressed: () => _toggleInvoiceStatus(order),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isActive
+                          // Promise what the tap will do: an invoice with no void
+                          // trace records a correction (block / warning), one that
+                          // carries a trace is put back (check / success).
+                          backgroundColor: !order.isVoided
                               ? _warningColor.withOpacity(0.1)
                               : _successColor.withOpacity(0.1),
                           foregroundColor:
-                              isActive ? _warningColor : _successColor,
+                              !order.isVoided ? _warningColor : _successColor,
                           padding: EdgeInsets.zero,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                             side: BorderSide(
-                              color: isActive
+                              color: !order.isVoided
                                   ? _warningColor.withOpacity(0.3)
                                   : _successColor.withOpacity(0.3),
                               width: 1,
@@ -1445,9 +1471,9 @@ class _SideSliderState extends State<SideSlider> {
                           elevation: 0,
                         ),
                         child: Icon(
-                          isActive ? Icons.block : Icons.check_circle,
+                          !order.isVoided ? Icons.block : Icons.check_circle,
                           size: isMobile ? 18.0 : 20.0,
-                          color: isActive ? _warningColor : _successColor,
+                          color: !order.isVoided ? _warningColor : _successColor,
                         ),
                       ),
                     ),
@@ -1622,9 +1648,9 @@ class _SideSliderState extends State<SideSlider> {
                                     color: _warningColor,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
-                                  child: const Text(
-                                    'DEACTIVATED',
-                                    style: TextStyle(
+                                  child: Text(
+                                    t('deactivated'),
+                                    style: const TextStyle(
                                       fontSize: 10,
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,

@@ -96,6 +96,12 @@ class ApiConfig {
   /// Manager-only: undo a void.
   static String dataOrderRestore(String orderId) =>
       '$apiBase/data/orders/$orderId/restore';
+
+  /// Any session: cancel a sale that never completed — records who/why and stops
+  /// it counting, but never moves stock (the caller already put back what it had
+  /// taken off the shelf).
+  static String dataOrderCancel(String orderId) =>
+      '$apiBase/data/orders/$orderId/cancel';
   static const String dataInventory = '$apiBase/data/inventory';
   static const String dataInventoryUpsert = '$apiBase/data/inventory/upsert';
   static const String dataInventorySell = '$apiBase/data/inventory/sell';

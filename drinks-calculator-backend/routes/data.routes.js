@@ -418,6 +418,62 @@ router.post('/orders/:id/restore', async (req, res) => {
   }
 });
 
+// 🚫 Cancel a sale that never happened.
+//
+// The app writes the order row before it commits the stock, so a refused commit
+// (insufficient stock, failed payment, a rolled-back multi-line sale) leaves a
+// row that must stop counting as a sale.
+//
+// Unlike /void this NEVER moves stock: the caller has already put back exactly
+// the lines it managed to take off the shelf, so restoring the whole order here
+// would invent inventory for the lines that were never deducted. The reason and
+// who did it are still recorded, so the correction shows up on the Z-report
+// instead of a sale quietly disappearing.
+//
+// Any member of the company may cancel — a cashier has to be able to undo their
+// own refused sale. A stock-moving void/restore stays manager-only.
+router.post('/orders/:id/cancel', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const found = await req.db.query(
+      'SELECT * FROM orders WHERE id = $1 AND company_id = $2',
+      [req.params.id, companyId]
+    );
+    if (found.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    const order = found.rows[0];
+    if (orderVoid.isVoided(order)) {
+      return res.status(409).json({ message: 'This order is already voided' });
+    }
+
+    const valid = orderVoid.validateVoid({ order, reason: req.body && req.body.reason });
+    if (!valid.ok) return res.status(400).json({ message: valid.reason });
+
+    const cancelledByName =
+      (req.user && (req.user.username || req.user.email)) || '';
+
+    const updated = await req.db.query(
+      `UPDATE orders
+          SET is_active = false,
+              voided_at = CURRENT_TIMESTAMP,
+              voided_by = $3,
+              voided_by_name = $4,
+              void_reason = $5
+        WHERE id = $1 AND company_id = $2
+        RETURNING *`,
+      [req.params.id, companyId, req.user.id, cancelledByName, valid.reason]
+    );
+
+    res.json({ ...updated.rows[0], stockMoved: 0 });
+  } catch (error) {
+    console.error('POST /orders/:id/cancel error:', error.message);
+    res.status(500).json({ message: 'Failed to cancel this order' });
+  }
+});
+
 // ============================================================
 // 📅 FORECAST EVENTS (company-wide demand-boost events)
 // ============================================================
@@ -830,20 +886,23 @@ router.get('/shifts/:id/summary', async (req, res) => {
     }
     const shift = found.rows[0];
 
-    // The sales of this shift: the orders taken inside its window. VOIDED orders
-    // are excluded from the sales and reported separately, so a correction can
-    // never silently rewrite a cash-up.
+    // The sales of this shift: the orders taken inside its window. CORRECTED
+    // orders are excluded from the sales and reported separately, so a correction
+    // can never silently rewrite a cash-up: a void carries a timestamp, and a
+    // cancellation (the till rolled a sale back before the stock was committed)
+    // carries `is_active = false` without one.
     const orders = await req.db.query(
       `SELECT total_amount, amount_paid FROM orders
         WHERE company_id = $1 AND created_at >= $2
           AND created_at <= COALESCE($3, CURRENT_TIMESTAMP)
-          AND voided_at IS NULL`,
+          AND voided_at IS NULL AND is_active = true`,
       [companyId, shift.opened_at, shift.closed_at]
     );
     const voids = await req.db.query(
-      `SELECT total_amount, voided_at FROM orders
-        WHERE company_id = $1 AND voided_at IS NOT NULL
-          AND voided_at >= $2 AND voided_at <= COALESCE($3, CURRENT_TIMESTAMP)`,
+      `SELECT total_amount, voided_at, is_active FROM orders
+        WHERE company_id = $1 AND (voided_at IS NOT NULL OR is_active = false)
+          AND COALESCE(voided_at, created_at) >= $2
+          AND COALESCE(voided_at, created_at) <= COALESCE($3, CURRENT_TIMESTAMP)`,
       [companyId, shift.opened_at, shift.closed_at]
     );
     res.json(summariseShift({

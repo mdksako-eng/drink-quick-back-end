@@ -14,6 +14,23 @@ function isVoided(order) {
 }
 
 /**
+ * An order that was taken off the sales without a void trace.
+ *
+ * Two different things put `is_active = false` on a row:
+ *   * a VOID (`POST /orders/:id/void`), which also stamps `voided_at` and puts
+ *     the stock back, and
+ *   * a CANCEL (`POST /orders/:id/cancel`), used when the sale never really
+ *     happened — the app writes the order row before it commits the stock, so a
+ *     refused commit leaves a row that must stop counting but must NOT restore
+ *     stock (nothing, or only some lines, were ever taken off the shelf).
+ *
+ * Either way the row stops counting as a sale; only the void has a timestamp.
+ */
+function isInactive(order) {
+  return !!(order && order.is_active === false);
+}
+
+/**
  * Who may void (or restore) an order:
  *   * the company owner, and
  *   * any manager / administrator.
@@ -96,14 +113,19 @@ function stockToRestore(items) {
 }
 
 /**
- * The voids of a shift window, for the Z-report: how many and how much value
- * was cancelled after the fact.
+ * The corrections of a shift window, for the Z-report: how many and how much
+ * value was taken off the sales after the fact.
+ *
+ * A void (stock put back, who/why recorded) and a cancellation (the sale never
+ * completed, so nothing was put back) both land here, so a manager always sees
+ * what was corrected — including a row the till cancelled on its own. Rows that
+ * simply never carried a flag are ignored.
  */
 function summariseVoids(orders) {
   let count = 0;
   let value = 0;
   for (const order of orders || []) {
-    if (!isVoided(order)) continue;
+    if (!isVoided(order) && !isInactive(order)) continue;
     count += 1;
     const parsed = typeof order.total_amount === 'number'
       ? order.total_amount
@@ -118,6 +140,7 @@ function summariseVoids(orders) {
 
 module.exports = {
   isVoided,
+  isInactive,
   canVoidOrder,
   validateVoid,
   validateRestore,

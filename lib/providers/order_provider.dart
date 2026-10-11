@@ -301,13 +301,9 @@ class OrderProvider with ChangeNotifier {
 
       final List<Drink> copiedItems = [];
       for (final drink in items) {
-        copiedItems.add(Drink(
-          id: drink.id,
-          name: drink.name,
-          price: drink.price,
-          category: drink.category,
-          imageUrl: drink.imageUrl,
-        ));
+        // Keep the whole drink: the order snapshot must not lose the purchase
+        // price, unit or barcode the reports and the profit summary read.
+        copiedItems.add(drink.copyWith());
       }
 
       final order = Order(
@@ -378,58 +374,34 @@ class OrderProvider with ChangeNotifier {
     return ok;
   }
 
-  Future<void> toggleOrderStatus(String orderId, bool isActive) async {
-    try {
-      _isLoading = true;
-      notifyListeners();
+  /// Cancels a sale that never completed — a refused stock commit, a rolled-back
+  /// multi-line sale. The reason is recorded on the server and the order stops
+  /// counting as a sale; stock is deliberately NOT touched here, because the
+  /// caller has already put back the lines it managed to take off the shelf.
+  ///
+  /// Returns false when the backend refused (offline, expired session), so the
+  /// caller can warn the operator instead of claiming a success the server never
+  /// recorded.
+  Future<bool> cancelOrder(String orderId, String reason) async {
+    final ok = await SupabaseService.cancelOrder(orderId, reason);
+    if (ok) await reloadOrders();
+    return ok;
+  }
 
-      final index = _orderHistory.indexWhere((order) => order.id == orderId);
-      if (index != -1) {
-        final order = _orderHistory[index];
-        final updatedOrder = Order(
-          id: order.id,
-          items: order.items
-              .map((drink) => Drink(
-                    id: drink.id,
-                    name: drink.name,
-                    price: drink.price,
-                    category: drink.category,
-                    imageUrl: drink.imageUrl,
-                  ))
-              .toList(),
-          totalAmount: order.totalAmount,
-          amountPaid: order.amountPaid,
-          balance: order.balance,
-          receiptNumber: order.receiptNumber,
-          date: order.date,
-          isActive: isActive,
-          customerName: order.customerName,
-          staffName: order.staffName,
-        );
-        _orderHistory[index] = updatedOrder;
-        await _saveOrders();
-        // Sync to Supabase
-        try {
-          await SupabaseService.updateOrderStatus(orderId, isActive);
-        } catch (e) {
-          print('Supabase order status sync error: $e');
-        }
-        print('${isActive ? '✅ Activated' : '❌ Deactivated'} order: $orderId');
-        Helpers.showToast(isActive
-            ? 'Order activated successfully'
-            : 'Order deactivated successfully');
-      } else {
-        print('⚠️ Order not found: $orderId');
-        Helpers.showToast('Order not found');
-      }
-    } catch (e) {
-      print('❌ Error toggling order status: $e');
-      Helpers.showToast('Error updating order status');
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+  /// Retires the invoice that a re-invoice replaces.
+  ///
+  /// A void is tried first because it also puts the stock back — which is what
+  /// stops the replacement sale from deducting the same drinks twice. When the
+  /// acting user may not void (staff), it falls back to a stock-free cancel, so
+  /// the old invoice stops counting as a sale either way instead of the pair
+  /// being counted twice.
+  Future<bool> voidOrCancelOrder(String orderId, String reason) async {
+    final voided = await SupabaseService.voidOrder(orderId, reason);
+    if (voided) {
+      await reloadOrders();
+      return true;
     }
+    return cancelOrder(orderId, reason);
   }
 
   List<Order> getActiveOrders() {

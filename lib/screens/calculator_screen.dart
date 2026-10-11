@@ -481,9 +481,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         _createdOrder?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
     debugPrint('   Order ID: $orderId');
 
-    // 🔒 Every line is committed atomically server-side. If any line cannot be
-    // sold (someone else took the last unit), the whole sale is refused instead
-    // of pushing the inventory negative.
+    // 🔒 Every line is committed atomically server-side. If a line cannot be
+    // sold (someone else took the last unit) the sale is refused instead of
+    // pushing the inventory negative — and the lines this sale already took off
+    // the shelf are put back below, so a refused multi-line sale never leaves the
+    // inventory short.
+    final List<MapEntry<Drink, int>> taken = [];
     for (final entry in summary.entries) {
       final drink = _selectedDrinks.firstWhere((d) => d.name == entry.key);
       debugPrint(
@@ -498,6 +501,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       );
       debugPrint('   Stock removed result: $stockRemoved');
       if (stockRemoved) {
+        taken.add(MapEntry(drink, entry.value));
         final updatedDrink = drink.copyWith(
           currentStock: (drink.currentStock - entry.value).clamp(0, 999999),
         );
@@ -510,6 +514,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             ? '${drink.name}: $available ${t('remainingInStock')}'
             : drink.name;
         debugPrint('   ❌ Failed to remove stock for ${drink.name}');
+        await _putBackTakenStock(inventoryProvider, drinkProvider, taken);
         if (mounted) {
           Helpers.showToast(
             '${t('insufficientStockSale')} — $detail',
@@ -523,8 +528,28 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       }
     }
     return true;
-    await drinkProvider.loadDrinksFromSupabase();
-    debugPrint('   ✅ Forced drinks refresh from Supabase');
+  }
+
+  /// Puts back exactly the lines a refused sale had already taken off the shelf.
+  ///
+  /// Best effort: the failure toast has already told the operator, so a sync
+  /// error here must not hide it. Passing back the drink snapshot taken before
+  /// the deduction restores the stock level it had a moment ago.
+  Future<void> _putBackTakenStock(
+    InventoryProvider inventoryProvider,
+    DrinkProvider drinkProvider,
+    List<MapEntry<Drink, int>> taken,
+  ) async {
+    for (final line in taken) {
+      await inventoryProvider.addStock(
+        drinkId: line.key.id,
+        drinkName: line.key.name,
+        quantity: line.value,
+        reason: 'sale_rollback',
+      );
+      await drinkProvider.updateDrink(line.key.id, line.key);
+      debugPrint('   ↩️ Put back ${line.value} × ${line.key.name}');
+    }
   }
 
   Future<void> _loadData() async {
@@ -870,7 +895,14 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         if (_originalOrderId != null && _originalOrderId!.isNotEmpty) {
           final orderProvider =
               Provider.of<OrderProvider>(context, listen: false);
-          await orderProvider.toggleOrderStatus(_originalOrderId!, false);
+          // The invoice this one replaces has to stop counting as a sale — and, for
+          // a manager, hand its stock back so the replacement sale does not deduct
+          // the same drinks a second time.
+          final retired = await orderProvider.voidOrCancelOrder(
+              _originalOrderId!, t('reasonReInvoiced'));
+          if (!retired) {
+            Helpers.showToast(t('orderRetireFailed'), isError: true);
+          }
           _originalOrderId = null;
         }
 
@@ -1007,8 +1039,15 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     // roll the order back and tell the operator to reconcile.
     final stockOk = await _deductInventoryFromOrder();
     if (!stockOk) {
+      // The sale is refused, so the row must stop counting as one — and it must be
+      // a CANCELLATION, never a void: only some lines were deducted (they were put
+      // back above), so restoring the whole order would invent stock.
       if (_createdOrder != null) {
-        await orderProvider.toggleOrderStatus(_createdOrder!.id, false);
+        final cancelled = await orderProvider.cancelOrder(
+            _createdOrder!.id, t('reasonStockRollback'));
+        if (!cancelled) {
+          Helpers.showToast(t('saleRollbackFailed'), isError: true);
+        }
         _createdOrder = null;
       }
       return false;
@@ -1182,8 +1221,14 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     // else in the meantime the sale is rolled back instead of going negative.
     final stockOk = await _deductInventoryFromOrder();
     if (!stockOk) {
+      // A rollback, not a void: the lines that made it onto the floor were already
+      // put back, so the order must simply stop counting.
       if (_createdOrder != null) {
-        await orderProvider.toggleOrderStatus(_createdOrder!.id, false);
+        final cancelled = await orderProvider.cancelOrder(
+            _createdOrder!.id, t('reasonStockRollback'));
+        if (!cancelled) {
+          Helpers.showToast(t('saleRollbackFailed'), isError: true);
+        }
         _createdOrder = null;
       }
       return false;
