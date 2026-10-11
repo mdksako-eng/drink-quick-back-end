@@ -9,12 +9,15 @@ import 'package:drinks_calculator_fixed/utils/helpers.dart';
 import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
+import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/widgets/skeleton.dart';
 import '../utils/i18n.dart';
 import '../utils/order_action_helper.dart';
 import '../utils/invoice_import_helper.dart';
+import '../utils/order_return_helper.dart';
+import '../widgets/return_items_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:drinks_calculator_fixed/providers/customer_provider.dart';
 import 'package:drinks_calculator_fixed/screens/receipt_print_screen.dart';
@@ -561,6 +564,101 @@ class _SideSliderState extends State<SideSlider> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  /// Gives items back from a sale — "1 of 2 comes back" in one action.
+  ///
+  /// The sale keeps counting as billed; the units go back on the shelf and the
+  /// money back to the customer, and the refund shows up as its own Returns line
+  /// on the Z-report. That is why it is a manager action: it moves stock and opens
+  /// the drawer, exactly like a void — only the reason is recorded instead of the
+  /// whole invoice disappearing.
+  ///
+  /// The dialog is drawn from the SERVER's numbers (sold / already returned /
+  /// left), never from the local list: another device may have returned a unit,
+  /// and the backend refuses a return that asks for more than is left.
+  Future<void> _returnItems(PurchaseHistory order) async {
+    if (!_canManageOrders) {
+      _showToast(t('onlyManagersCanVoid'), isError: true);
+      return;
+    }
+    if (!OrderActionHelper.countsAsSale(
+      isActive: order.isActive,
+      isVoided: order.isVoided,
+    )) {
+      _showToast(t('cannotEditDeactivated'), isError: true);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    Map<String, dynamic>? payload;
+    try {
+      final orderProvider =
+          Provider.of<OrderProvider>(widget.parentContext, listen: false);
+      payload = await orderProvider.loadReturnableLines(order.id);
+    } catch (e) {
+      payload = null;
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+
+    if (!mounted) return;
+    if (payload == null) {
+      _showToast(t('returnLoadFailed'), isError: true);
+      return;
+    }
+
+    final lines = OrderReturnHelper.linesFromApi(payload);
+    if (lines.isEmpty) {
+      _showToast(t('returnNothingToReturn'), isError: true);
+      return;
+    }
+    if (!OrderReturnHelper.anyReturnable(lines)) {
+      _showToast(t('returnEverythingBack'), isError: true);
+      return;
+    }
+
+    final reference = order.id.length >= 8 ? order.id.substring(0, 8) : order.id;
+    final answer = await showDialog<Map<String, dynamic>>(
+      context: widget.parentContext,
+      builder: (context) => ReturnItemsDialog(lines: lines, orderLabel: reference),
+    );
+    if (answer == null || !mounted) return;
+
+    final items = (answer['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    if (items.isEmpty) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final orderProvider =
+          Provider.of<OrderProvider>(widget.parentContext, listen: false);
+      final result = await orderProvider.returnItems(
+        order.id,
+        reason: (answer['reason'] ?? '').toString(),
+        items: items,
+      );
+
+      if (result != null && result['success'] == true) {
+        // The shelf changed on the server: refresh stock instead of doing local
+        // arithmetic, which would double-count if another till moved it too.
+        if (mounted) {
+          await Provider.of<InventoryProvider>(widget.parentContext, listen: false)
+              .loadInventory();
+        }
+        final refunded = (result['totalAmount'] as num?)?.toDouble() ?? 0;
+        _showToast('${t('returnRecorded')}: ${_formatCurrency(refunded)}');
+      } else {
+        final message = (result?['message'] ?? '').toString();
+        _showToast(
+          message.isEmpty ? t('returnFailed') : message,
+          isError: true,
+        );
+      }
+    } catch (e) {
+      _showToast('${t('returnFailed')}: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -1467,6 +1565,38 @@ class _SideSliderState extends State<SideSlider> {
                         ),
                       ),
                     ),
+                  // "1 of 2 comes back": the sale stays as billed, the units go
+                  // back on the shelf and the refund is reported as its own line on
+                  // the Z-report. Manager-only (like the void), and only while the
+                  // sale still counts — a voided invoice has nothing to give back.
+                  if (_canManageOrders && isActive && !order.isVoided) ...[
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 40,
+                      height: isMobile ? 36 : 42,
+                      child: ElevatedButton(
+                        onPressed: () => _returnItems(order),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: widget.primaryColor.withOpacity(0.1),
+                          foregroundColor: widget.primaryColor,
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(
+                              color: widget.primaryColor.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: Icon(
+                          Icons.assignment_return_outlined,
+                          size: isMobile ? 18.0 : 20.0,
+                          color: widget.primaryColor,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],

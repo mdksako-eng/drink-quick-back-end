@@ -137,6 +137,15 @@ class ShiftSummary {
   final int voidCount;
   final double voidValue;
 
+  /// Items given back during the window. The sale stays in `sales` (it was
+  /// invoiced), so `netSales` is what the shop kept and the refund is what the
+  /// drawer is missing — a returned item is a Returns line, not a rewritten
+  /// invoice.
+  final int returnCount;
+  final int returnUnits;
+  final double returnValue;
+  final double netSales;
+
   const ShiftSummary({
     this.openingFloat = 0,
     this.payouts = 0,
@@ -150,6 +159,10 @@ class ShiftSummary {
     this.byMethod = const {},
     this.voidCount = 0,
     this.voidValue = 0,
+    this.returnCount = 0,
+    this.returnUnits = 0,
+    this.returnValue = 0,
+    this.netSales = 0,
   });
 
   /// True when the drawer matches the expected cash (to the cent).
@@ -174,5 +187,9 @@ class ShiftSummary {
         byMethod: _asMoneyMap(json['byMethod']),
         voidCount: _asInt(json['voidCount']),
         voidValue: _asDouble(json['voidValue']) ?? 0,
+        returnCount: _asInt(json['returnCount']),
+        returnUnits: _asInt(json['returnUnits']),
+        returnValue: _asDouble(json['returnValue']) ?? 0,
+        netSales: _asDouble(json['netSales']) ?? 0,
       );
 }

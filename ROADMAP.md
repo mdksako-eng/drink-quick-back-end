@@ -608,3 +608,26 @@ routes (five verification sites), plus one missing check:
 - Still to do as its own feature: a true line-level return (return 1 of 2 in one action, recorded and
   shown on the Z-report) instead of void + re-invoice.
 
+### Returns — "1 of 2 comes back" (2026-10-11)
+- New correction lane, next to void and cancel: `POST /api/data/orders/:id/returns` (manager-only)
+  with pure `utils/orderReturn.js` (28 Jest tests) and `GET /orders/:id/returns`, which hands the app
+  every line with its sold / already-returned / remaining counts.
+- The sale stays as billed and still counts; the units go back through the same guarded stock
+  primitive a sale uses (`applyStockDelta`) with a movements ledger row (`reason 'return'`,
+  `order_id`, `performed_by`, `selling_price_at_sale`). That row is the ceiling for the next return,
+  so a unit can never be refunded twice. It is written with `CURRENT_TIMESTAMP` (like a void) so it
+  lands in the right shift window, and it is not best-effort for exactly that reason.
+- The Z-report gained a **Returns** line (count · units · value) and **Net sales**
+  (`sales − returns`), and the refund is taken off `expectedCash`, so a cash-up reconciles instead of
+  showing a shortage. Voids and cancellations keep their own line.
+- Flutter: a return button on the invoice card (manager-only, only while the sale counts), a
+  quantity-stepper dialog drawn from the SERVER's numbers (`utils/order_return_helper.dart` +
+  `widgets/return_items_dialog.dart`, 10 tests), a mandatory reason, and a stock refresh from the
+  server afterwards instead of local arithmetic.
+- Product decision taken (as recommended): returns are a separate line with sales left as invoiced —
+  net = sales − returns — matching how voids are handled.
+- Gates: backend **24 suites / 371 tests**; Flutter **326 tests**; `flutter analyze lib` 0 errors;
+  i18n EN=1193 FR=1193.
+- Known gaps: no widget test for the dialog itself (its rules are unit tested); a refund is always
+  assumed to be cash out of the drawer — there is no "credit note instead of cash" option yet.
+

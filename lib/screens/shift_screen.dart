@@ -235,7 +235,14 @@ class _ShiftScreenState extends State<ShiftScreen> {
                 Expanded(
                     child: _metric(t('shiftOnCredit'), summary.onCredit.formatted)),
                 Expanded(child: _metric(t('shiftOrders'), '${summary.orderCount}')),
-                const Spacer(),
+                // Items given back over the counter show up here too: the refund
+                // is money the drawer no longer holds.
+                if (summary.returnCount > 0)
+                  Expanded(
+                    child: _metric(t('shiftReturns'), summary.returnValue.formatted),
+                  )
+                else
+                  const Spacer(),
               ]),
               const SizedBox(height: 8),
               Text(
@@ -384,6 +391,15 @@ class _ShiftScreenState extends State<ShiftScreen> {
                 t('shiftCorrections'),
                 '${s.voidCount} · ${s.voidValue.formatted}',
               ),
+            // The sale stays in `sales` (it was invoiced); what came back is its
+            // own line, and the net is what the shop actually kept.
+            if (s.returnCount > 0) ...[
+              _row(
+                t('shiftReturns'),
+                '${s.returnCount} · ${s.returnUnits} · ${s.returnValue.formatted}',
+              ),
+              _row(t('netSales'), s.netSales.formatted),
+            ],
             const Divider(),
             _row(t('shiftExpectedCash'), s.expectedCash.formatted),
             _row(t('shiftCounted'), (s.counted ?? 0).formatted),
@@ -444,6 +460,12 @@ class _ShiftScreenState extends State<ShiftScreen> {
           WhatsAppHelper.row(
             t('shiftCorrections'),
             '${summary.voidCount} · ${summary.voidValue.formatted}',
+          ),
+        if (summary.returnCount > 0)
+          WhatsAppHelper.row(
+            t('shiftReturns'),
+            '${summary.returnCount} · ${summary.returnUnits} · '
+                '${summary.returnValue.formatted}',
           ),
       ]),
       totalLabel: t('shiftExpectedCash'),

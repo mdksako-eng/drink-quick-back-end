@@ -404,6 +404,32 @@ class OrderProvider with ChangeNotifier {
     return cancelOrder(orderId, reason);
   }
 
+  /// What a return dialog needs for one order, or `null` when the backend could
+  /// not answer (offline, expired session) — the caller must not draw an empty
+  /// dialog on `null`, or "we could not ask" would look like "nothing to return".
+  Future<Map<String, dynamic>?> loadReturnableLines(String orderId) =>
+      SupabaseService.fetchOrderReturns(orderId);
+
+  /// Gives items back (manager only): the units return to the shelf and the money
+  /// to the customer, and the sale keeps counting as billed — the refund shows up
+  /// as its own Returns line on the Z-report instead of a rewritten invoice.
+  ///
+  /// Returns the backend's answer, or `null` when it refused (staff, everything
+  /// already returned, a drink that is not stocked) with `message` explaining why.
+  Future<Map<String, dynamic>?> returnItems(
+    String orderId, {
+    required String reason,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    final result = await SupabaseService.returnOrderItems(
+      orderId,
+      reason: reason,
+      items: items,
+    );
+    if (result != null && result['success'] == true) await reloadOrders();
+    return result;
+  }
+
   List<Order> getActiveOrders() {
     return _orderHistory.where((order) => order.isActive == true).toList();
   }

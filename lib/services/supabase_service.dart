@@ -719,6 +719,68 @@ class SupabaseService {
     }
   }
 
+  /// Loads what a return dialog needs for one order: every line with its sold /
+  /// already-returned / remaining counts, and the refunds recorded so far.
+  ///
+  /// Returns `null` when the backend could not answer (offline, expired session,
+  /// or a backend older than this route) so the caller can say so instead of
+  /// drawing an empty dialog that looks like "nothing to return".
+  static Future<Map<String, dynamic>?> fetchOrderReturns(String orderId) async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.get(
+        Uri.parse(ApiConfig.dataOrderReturns(orderId)),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) return decoded;
+        return null;
+      }
+      print('⚠️ fetchOrderReturns HTTP ${response.statusCode}: ${response.body}');
+      return null;
+    } catch (e) {
+      print('⚠️ fetchOrderReturns error: $e');
+      return null;
+    }
+  }
+
+  /// Records a return (manager only): the units go back on the shelf and the
+  /// money back to the customer.
+  ///
+  /// Returns the backend's answer (units, refunded amount, remaining shelf
+  /// counts) or `null` when it refused — with `message` carrying the reason the
+  /// manager needs to see (already returned, a drink that is not stocked…).
+  static Future<Map<String, dynamic>?> returnOrderItems(
+    String orderId, {
+    required String reason,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataOrderReturns(orderId)),
+        headers: await _authedHeaders(),
+        body: jsonEncode({'reason': reason, 'items': items}),
+      );
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        return decoded is Map<String, dynamic> ? decoded : {'success': true};
+      }
+      print('⚠️ returnOrderItems HTTP ${response.statusCode}: ${response.body}');
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) return decoded;
+      } catch (_) {
+        // Body was not JSON — fall through to a plain refusal.
+      }
+      return null;
+    } catch (e) {
+      print('⚠️ returnOrderItems error: $e');
+      return null;
+    }
+  }
+
   // ============================================================
   // 📅 FORECAST EVENTS (stored online so an event is never lost)
   // ============================================================

@@ -26,6 +26,7 @@ const {
   validateClose,
 } = require('../utils/shiftMath');
 const orderVoid = require('../utils/orderVoid');
+const orderReturn = require('../utils/orderReturn');
 
 const MANAGER_ROLES = ['Manager', 'Administrator', 'Admin'];
 
@@ -474,6 +475,179 @@ router.post('/orders/:id/cancel', async (req, res) => {
   }
 });
 
+// ↩️ RETURNS — items given back from a sale that still happened.
+//
+// The third correction lane, next to /void (retire the whole sale) and /cancel
+// (the sale never completed):
+//   * the sale stays as billed and still counts as revenue,
+//   * the returned units go back on the shelf as recorded movements
+//     (reason 'return', order_id set, performed_by = the manager who took them),
+//   * the money leaves the drawer, and the Z-report shows it as its own Returns
+//     line, so the cash-up still reconciles, and
+//   * the ceiling is what the order sold minus what earlier returns already took
+//     back — the same unit can never be refunded twice.
+//
+// Manager-only, for the same reason as a void: it moves stock and gives money
+// back, and it is the manager who answers for the drawer.
+//
+// GET /orders/:id/returns — what the return dialog needs: every line with its
+// sold / already-returned / remaining counts, and the refunds recorded so far.
+router.get('/orders/:id/returns', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const found = await req.db.query(
+      'SELECT * FROM orders WHERE id = $1 AND company_id = $2',
+      [req.params.id, companyId]
+    );
+    if (found.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    const order = found.rows[0];
+
+    const ledger = await req.db.query(
+      `SELECT drink_id, drink_name, quantity, reason, performed_by, date,
+              selling_price_at_sale
+         FROM inventory_transactions
+        WHERE company_id = $1 AND order_id = $2 AND reason = 'return'
+        ORDER BY date DESC`,
+      [companyId, String(order.id)]
+    );
+
+    res.json({
+      orderId: order.id,
+      isActive: order.is_active !== false,
+      isVoided: orderVoid.isVoided(order),
+      lines: orderReturn.returnableLines(order.items, ledger.rows),
+      returns: ledger.rows,
+      summary: orderReturn.summariseReturns(ledger.rows),
+    });
+  } catch (error) {
+    console.error('GET /orders/:id/returns error:', error.message);
+    res.status(500).json({ message: 'Failed to load the returns of this order' });
+  }
+});
+
+// POST /orders/:id/returns — record the return.
+// Body: { reason: string, items: [{ drink_id, quantity }] }
+router.post('/orders/:id/returns', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const allowed = orderVoid.canVoidOrder({ user: req.user });
+    if (!allowed.ok) return res.status(403).json({ message: allowed.reason });
+
+    const found = await req.db.query(
+      'SELECT * FROM orders WHERE id = $1 AND company_id = $2',
+      [req.params.id, companyId]
+    );
+    if (found.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    const order = found.rows[0];
+
+    // The ceiling is read from the ledger, not from the client: whatever earlier
+    // returns took back (possibly from another device) still counts.
+    const ledger = await req.db.query(
+      `SELECT drink_id, drink_name, quantity, reason FROM inventory_transactions
+        WHERE company_id = $1 AND order_id = $2 AND reason = 'return'`,
+      [companyId, String(order.id)]
+    );
+
+    const valid = orderReturn.validateReturn({
+      order,
+      lines: req.body && req.body.items,
+      reason: req.body && req.body.reason,
+      alreadyReturned: ledger.rows,
+    });
+    if (!valid.ok) {
+      return res
+        .status(valid.code === 'conflict' ? 409 : 400)
+        .json({ success: false, message: valid.reason });
+    }
+
+    // Put the units back through the same guarded primitive a sale uses. Its
+    // pre-check is deliberate: stock only ever moves for a drink that is actually
+    // stocked, so a return cannot invent an inventory row.
+    const ids = valid.lines.map((line) => String(line.drinkId));
+    const stocked = await req.db.query(
+      'SELECT drink_id FROM inventory WHERE company_id = $1 AND drink_id = ANY($2::text[])',
+      [companyId, ids]
+    );
+    const stockedIds = new Set(stocked.rows.map((r) => String(r.drink_id)));
+    const missing = valid.lines.filter((line) => !stockedIds.has(String(line.drinkId)));
+    if (missing.length > 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'not_stocked',
+        message: `These drinks are not stocked, so they cannot go back:
+                  ${missing.map((line) => line.drinkName || line.drinkId).join(', ')}`
+          .replace(/\s+/g, ' ')
+          .trim(),
+      });
+    }
+
+    const returnedByName =
+      (req.user && (req.user.username || req.user.email)) || '';
+    const applied = [];
+
+    for (const line of valid.lines) {
+      // The ledger row is written HERE rather than inside applyStockDelta for two
+      // reasons: it must carry the database clock (CURRENT_TIMESTAMP, like a void)
+      // so it falls in the shift window it belongs to, and it is the record the
+      // return ceiling is read from — it must not be best-effort.
+      await req.db.query(
+        `INSERT INTO inventory_transactions
+           (company_id, drink_id, drink_name, quantity, type, reason, order_id,
+            performed_by, date, selling_price_at_sale)
+         VALUES ($1,$2,$3,$4,'in','return',$5,$6,CURRENT_TIMESTAMP,$7)`,
+        [
+          companyId,
+          String(line.drinkId),
+          line.drinkName,
+          line.quantity,
+          String(order.id),
+          req.user ? req.user.id : null,
+          line.unitPrice,
+        ]
+      );
+
+      const outcome = await applyStockDelta({
+        db: req.db,
+        companyId,
+        userId: req.user && req.user.id,
+        drinkId: String(line.drinkId),
+        delta: line.quantity,
+        logMovement: false,
+      });
+      if (!outcome.ok) {
+        return res.status(409).json({
+          success: false,
+          error: 'stock_move_failed',
+          applied,
+          message: `Could not put ${line.drinkName || line.drinkId} back on the shelf`,
+        });
+      }
+      applied.push({ ...line, remaining: outcome.remaining });
+    }
+
+    res.json({
+      success: true,
+      orderId: order.id,
+      reason: valid.reason,
+      returned: applied,
+      totalUnits: valid.totalUnits,
+      totalAmount: valid.totalAmount,
+      returnedBy: returnedByName,
+    });
+  } catch (error) {
+    console.error('POST /orders/:id/returns error:', error.message);
+    res.status(500).json({ message: 'Failed to record this return' });
+  }
+});
+
 // ============================================================
 // 📅 FORECAST EVENTS (company-wide demand-boost events)
 // ============================================================
@@ -905,10 +1079,29 @@ router.get('/shifts/:id/summary', async (req, res) => {
           AND COALESCE(voided_at, created_at) <= COALESCE($3, CURRENT_TIMESTAMP)`,
       [companyId, shift.opened_at, shift.closed_at]
     );
+
+    // Items given back over the counter in this window. Read from the movements
+    // ledger (reason 'return'), which is also what puts the stock back, so the
+    // Returns line and the shelf can never disagree. Best-effort like the payment
+    // split: a database missing the columns still produces a report.
+    let returns = { rows: [] };
+    try {
+      returns = await req.db.query(
+        `SELECT order_id, drink_name, quantity, selling_price_at_sale
+          FROM inventory_transactions
+          WHERE company_id = $1 AND reason = 'return'
+            AND date >= $2 AND date <= COALESCE($3, CURRENT_TIMESTAMP)`,
+        [companyId, shift.opened_at, shift.closed_at]
+      );
+    } catch (retErr) {
+      console.log('⚠️ Shift returns line skipped:', retErr.message);
+    }
+
     res.json(summariseShift({
       shift,
       orders: orders.rows,
       voids: orderVoid.summariseVoids(voids.rows),
+      returns: orderReturn.summariseReturns(returns.rows),
     }));
   } catch (error) {
     console.error('GET /shifts/:id/summary error:', error.message);
@@ -956,6 +1149,21 @@ router.patch('/shifts/:id', async (req, res) => {
       [companyId, shift.opened_at]
     );
 
+    // The Returns line of the window, from the movements ledger (see
+    // GET /shifts/:id/summary). Best-effort, so the close never fails on it.
+    let returns = { rows: [] };
+    try {
+      returns = await req.db.query(
+        `SELECT order_id, drink_name, quantity, selling_price_at_sale
+          FROM inventory_transactions
+          WHERE company_id = $1 AND reason = 'return'
+            AND date >= $2 AND date <= CURRENT_TIMESTAMP`,
+        [companyId, shift.opened_at]
+      );
+    } catch (retErr) {
+      console.log('⚠️ Shift returns line skipped:', retErr.message);
+    }
+
     // The money-method split is a bonus: a database without the payment
     // columns still produces a correct cash-up.
     let payments = { rows: [] };
@@ -980,6 +1188,7 @@ router.patch('/shifts/:id', async (req, res) => {
       orders: orders.rows,
       payments: payments.rows,
       voids: orderVoid.summariseVoids(voids.rows),
+      returns: orderReturn.summariseReturns(returns.rows),
     });
 
     const result = await req.db.query(
@@ -1114,7 +1323,7 @@ router.post('/inventory/upsert', async (req, res) => {
 // check-and-write happens inside one row lock. Two staff selling the last item
 // at the same moment therefore cannot both succeed, and quantity can never go
 // negative (no "last case sold twice" race).
-async function applyStockDelta({ db, companyId, userId, drinkId, delta, body }) {
+async function applyStockDelta({ db, companyId, userId, drinkId, delta, body, logMovement = true }) {
   const result = await db.query(
     `UPDATE inventory
         SET quantity = quantity + $1
@@ -1140,6 +1349,12 @@ async function applyStockDelta({ db, companyId, userId, drinkId, delta, body }) 
   const row = result.rows[0];
 
   // 📄 Audit trail: every movement is recorded as stock-in / stock-out.
+  // A caller that writes its own ledger row (the Returns lane, which needs the
+  // database clock so the row falls in the same shift window as a void) passes
+  // logMovement: false to avoid recording the movement twice.
+  if (!logMovement) {
+    return { ok: true, remaining: Number(row.quantity), drinkName: row.drink_name };
+  }
   try {
     const txn = buildMovementTransaction({
       companyId,

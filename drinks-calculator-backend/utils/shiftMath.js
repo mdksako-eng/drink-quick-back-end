@@ -65,18 +65,24 @@ function summarisePayments(payments) {
 /**
  * The whole Z-report for a shift window.
  * `payments` is optional: without it the report still works from the orders
- * (a till with no network keeps taking sales).
+ * (a till with no network keeps taking sales). `returns` is the Returns ledger of
+ * the window (see utils/orderReturn.js).
  */
-function summariseShift({ shift, orders, payments, voids }) {
+function summariseShift({ shift, orders, payments, voids, returns }) {
   const openingFloat = money(shift && shift.opening_float);
   const payouts = money(shift && shift.cash_payouts);
   const orderTotals = summariseOrders(orders);
   const paymentTotals = summarisePayments(payments);
   const voidTotals = voids || { voidCount: 0, voidValue: 0 };
+  const returnTotals = returns || { returnCount: 0, returnUnits: 0, returnValue: 0 };
 
   // What should be in the drawer: the float, plus what was collected in cash,
-  // minus anything paid out of the till during the shift.
-  const expectedCash = money(openingFloat + orderTotals.collected - payouts);
+  // minus anything paid out of the till during the shift, minus the money handed
+  // back over the counter for returned items. The sale itself stays as billed —
+  // it happened — so the refund is what reconciles it, not a rewritten invoice.
+  const expectedCash = money(
+    openingFloat + orderTotals.collected - payouts - returnTotals.returnValue
+  );
   const counted = shift && (shift.status === 'closed' || shift.cash_counted != null)
     ? money(shift.cash_counted)
     : null;
@@ -95,6 +101,13 @@ function summariseShift({ shift, orders, payments, voids }) {
     voidCount: num(voidTotals.voidCount),
     voidValue: money(voidTotals.voidValue),
     ...orderTotals,
+    // Items given back: the sale stays in `sales` (it was invoiced), the refund is
+    // reported here and taken off the cash the drawer should hold, so
+    // `netSales` is what the shop actually kept.
+    returnCount: num(returnTotals.returnCount),
+    returnUnits: num(returnTotals.returnUnits),
+    returnValue: money(returnTotals.returnValue),
+    netSales: money(orderTotals.sales - returnTotals.returnValue),
   };
 }
 

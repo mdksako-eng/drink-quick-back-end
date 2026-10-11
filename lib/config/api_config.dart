@@ -102,6 +102,13 @@ class ApiConfig {
   /// taken off the shelf).
   static String dataOrderCancel(String orderId) =>
       '$apiBase/data/orders/$orderId/cancel';
+
+  /// Returns items from a sale that still happened — manager-only. The backend
+  /// puts the units back on the shelf, records who/why on the movements ledger
+  /// and reports a Returns line on the Z-report (the refund leaves the drawer).
+  /// GET lists what is left to give back, POST records the return.
+  static String dataOrderReturns(String orderId) =>
+      '$apiBase/data/orders/$orderId/returns';
   static const String dataInventory = '$apiBase/data/inventory';
   static const String dataInventoryUpsert = '$apiBase/data/inventory/upsert';
   static const String dataInventorySell = '$apiBase/data/inventory/sell';
