@@ -131,4 +131,42 @@ void main() {
       expect(OrderReturnHelper.totalAmount(lines, {'d1': 1}), 0.0);
     });
   });
+
+  group('a whole sale comes back', () {
+    // This app is not only bars: a company can sell a whole crate sale of 24
+    // units at once, and give the lot back. Selecting everything must be one
+    // action, not twenty-four taps.
+    final bulk = [
+      line(sold: 24, price: 500),
+      line(id: 'd2', name: 'Water', sold: 6, price: 300),
+      line(id: 'd3', name: 'Juice', sold: 1, returned: 1, price: 700),
+    ];
+
+    test('all left takes every line that still has something to give', () {
+      expect(OrderReturnHelper.allRemaining(bulk), {'d1': 24, 'd2': 6});
+    });
+
+    test('the whole sale totals in units and in money', () {
+      final all = OrderReturnHelper.allRemaining(bulk);
+      expect(OrderReturnHelper.totalUnits(bulk, all), 30);
+      expect(OrderReturnHelper.totalAmount(bulk, all), 24 * 500.0 + 6 * 300.0);
+      expect(OrderReturnHelper.requestItems(bulk, all), [
+        {'drink_id': 'd1', 'drink_name': 'Beer', 'quantity': 24},
+        {'drink_id': 'd2', 'drink_name': 'Water', 'quantity': 6},
+      ]);
+    });
+
+    test('a typed quantity larger than what is left is capped, not refused', () {
+      final lines = [line(sold: 24)];
+      expect(OrderReturnHelper.requestItems(lines, {'d1': 99}), [
+        {'drink_id': 'd1', 'drink_name': 'Beer', 'quantity': 24},
+      ]);
+      expect(OrderReturnHelper.totalUnits(lines, {'d1': 99}), 24);
+    });
+
+    test('an empty or fully returned invoice selects nothing', () {
+      expect(OrderReturnHelper.allRemaining(const []), isEmpty);
+      expect(OrderReturnHelper.allRemaining([line(returned: 2)]), isEmpty);
+    });
+  });
 }

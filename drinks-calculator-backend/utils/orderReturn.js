@@ -4,10 +4,13 @@
 //
 // Why a return is not a void: a void retires the WHOLE sale (its stock goes back,
 // the order stops counting). A return keeps the sale as billed — the customer
-// bought two beers — and records that one of them came back: that unit goes back
+// bought two units — and records that one of them came back: that unit goes back
 // on the shelf, the money is given back, and the Z-report shows a Returns line so
-// the drawer still reconciles. "Void the invoice, then re-invoice one beer"
+// the drawer still reconciles. "Void the invoice, then re-invoice one unit"
 // reached the same stock number but lost the reason and left a second invoice.
+//
+// Nothing here assumes what the business sells: the app is used by bars,
+// restaurants and shops alike, so a "unit" is whatever was on the invoice.
 //
 // The ceiling is what makes it safe: an order can never return more units of a
 // drink than it sold, counting what earlier returns already took back. That count

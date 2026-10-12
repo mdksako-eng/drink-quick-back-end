@@ -137,4 +137,19 @@ class OrderReturnHelper {
   /// Is there anything at all left to give back on this invoice?
   static bool anyReturnable(List<ReturnableLine> lines) =>
       lines.any((line) => line.canReturn);
+
+  /// Everything still on the invoice, as a whole selection.
+  ///
+  /// This is the bulk case: a whole sale of drinks comes back in one go, so a
+  /// manager must not have to type 24 into a box (or tap + twenty-four times).
+  /// Lines already fully returned are left out, so the result can be handed
+  /// straight to [requestItems] / [totalUnits].
+  static Map<String, int> allRemaining(List<ReturnableLine> lines) {
+    final chosen = <String, int>{};
+    for (final line in lines) {
+      if (!line.canReturn) continue;
+      chosen[line.drinkId] = line.remaining;
+    }
+    return chosen;
+  }
 }

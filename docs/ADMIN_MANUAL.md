@@ -13,8 +13,8 @@ Drink Quick Cal is a multi-tenant system: every record belongs to exactly one co
 | Role | Typical holder | Can do | Cannot do |
 |---|---|---|---|
 | **Owner** (one per company, `companies.owner_id`) | Proprietor / director | Everything: company settings and **logo**, staff, prices, subscription and payment, reports, exports, voids | — |
-| **Manager** | Bar manager / supervisor | Sell, discount within limits, **void and restore orders with a reason**, approve staff actions, receive stock, run counts, close shifts, view reports, manage non-owner staff | Change the owner's account, change company ownership, buy or extend the subscription on the owner's behalf without agreement |
-| **Staff** (cashier / bartender) | Serving staff | Sell, take payment, print, open and close their shift, view stock levels, add customers, settle tabs | Void orders, apply discounts beyond their limit, see cost prices where hidden, edit drinks or prices, see company settings, manage users |
+| **Manager** | Manager / supervisor | Sell, discount within limits, **void and restore orders with a reason**, approve staff actions, receive stock, run counts, close shifts, view reports, manage non-owner staff | Change the owner's account, change company ownership, buy or extend the subscription on the owner's behalf without agreement |
+| **Staff** (cashier / server) | Serving staff | Sell, take payment, print, open and close their shift, view stock levels, add customers, settle tabs | Void orders, apply discounts beyond their limit, see cost prices where hidden, edit drinks or prices, see company settings, manage users |
 | **Platform administrator** | You, the publisher / support team | Cross-company support: help a company reset access, inspect a problem, correct data with a documented reason | Business decisions inside a customer's company; administrator actions are also logged |
 
 **The owner row is protected.** In the staff list the owner's own account is marked, and a co-manager cannot edit or delete it — only the owner themselves or a platform administrator may. That rule is enforced in the app *and* in the API, so it cannot be bypassed from a modified client.
@@ -62,7 +62,7 @@ A recorded sale is **never edited**. It is voided, and the void is itself a reco
 Stock is where money quietly disappears, so treat every movement as an entry in the books.
 
 - **Receipts** — record deliveries with supplier, quantity and unit cost. Never adjust a quantity to match a delivery that was not entered; the receipt *is* the entry.
-- **Adjustments** — spillage, breakage, staff consumption, a gift, a transfer between bars: each needs a **reason**. An unexplained adjustment is a red flag, whoever made it.
+- **Adjustments** — spillage, breakage, staff consumption, a gift, a transfer between locations: each needs a **reason**. An unexplained adjustment is a red flag, whoever made it.
 - **Expiry** — capture expiry dates on receipt so the app can warn you in time, and pull short-dated stock to the front of the shelf.
 - **Variance count** (Menu → Variance) — count physically, enter what you find, and give a reason where it differs. The app values the gap **at cost**, which is the honest number: it is what you paid for what you no longer have.
 - **Cadence** — count high-value spirits weekly, beer and soft drinks daily or every two days, and always before a delivery. Do the count with a second person present and sign it off.
@@ -73,7 +73,7 @@ Stock is where money quietly disappears, so treat every movement as an entry in 
 1. **One shift, one drawer, one responsible person.** The app warns if a shift is already open — do not start a second one to hide the first.
 2. The shift records the **float** at the start, cash sales, mobile money, card, and **credit given** separately.
 3. At closing, the person **counts the cash physically** and enters the counted amount. The app computes **expected cash** and the **difference**.
-4. A note explaining the difference is required to close. Accept no unexplained difference, however small: the habit is what protects the bar.
+4. A note explaining the difference is required to close. Accept no unexplained difference, however small: the habit is what protects the business.
 5. The **Z report** for that shift becomes the day's control document: sales by payment type, discounts, credit given, voids (count and value) listed separately, and the cash difference.
 6. Keep the shift history. If a figure is ever disputed, the Z report plus the invoice list settle it, because both come from the same recorded sales.
 
@@ -87,7 +87,7 @@ Credit is a loan you grant on trust, so it needs rules:
 - **One customer, one record.** Do not let staff put several people's debts under one name — the ledger becomes unenforceable.
 - **Follow up weekly**, not once a year: the Customers screen shows the balance, the last activity and the full ledger, and the **WhatsApp** button sends a polite reminder with the exact amount.
 - **All repayments are recorded** (cash, mobile money, card), so the balance always equals the ledger. If a customer disputes a figure, open the ledger and read it line by line.
-- **Writing off a debt** is a manager decision and must be recorded as an adjustment **with a reason**, never by deleting entries. Treat writes-off as a monthly report line: a bar that writes off a lot is either granting credit too freely or losing it through the till.
+- **Writing off a debt** is a manager decision and must be recorded as an adjustment **with a reason**, never by deleting entries. Treat writes-off as a monthly report line: a business that writes off a lot is either granting credit too freely or losing it through the till.
 - A customer who never pays is a business decision, not a technical one: stop extending credit and use the ledger as your evidence.
 
 ## 8. Prices, margins and what staff can see
@@ -105,7 +105,7 @@ Open **Menu → Settings** (or Profile) with the **owner** account to change:
 - **Company name, address, phone and tax details** — these print on receipts and invoices, so they must be right.
 - **Company logo** — the owner uploads it; it appears on receipts and invoices. Logo changes are owner-only and are checked on the server, so a manager account will be refused even from a modified app. If the logo refuses to change, confirm you are signed in as the owner (see the troubleshooting note in §13).
 - **Currency and formats** — set once, so every report and receipt reads the same way.
-- **Branches / locations** — where the company runs more than one bar, keep each sale attached to the right location so reports make sense.
+- **Branches / locations** — where the company runs more than one location, keep each sale attached to the right location so reports make sense.
 - **Default language** — the language new users see; each person can change their own afterwards.
 
 **One company per user (today).** A user account belongs to one company; if you operate two separate businesses, they need their own accounts. Data between companies is isolated at the database level, and that isolation is a feature you should never try to work around inside one company.
