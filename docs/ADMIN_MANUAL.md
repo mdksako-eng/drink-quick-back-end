@@ -8,7 +8,7 @@ This manual covers what the user manual does not: **who may do what, how to chan
 
 ## 1. Roles and what each one can do
 
-Drink Quick Cal is a multi-tenant system: every record belongs to exactly one company, and a company can never see another company's data. Access is checked on the server from the signed-in session — never from anything the app sends — so changing a role in the app only works if the backend allows it.
+Drink Quick Cal is a multi-tenant system: every record belongs to exactly one company, and a company can never see another company's data. A **company** is one customer of the app — a bar, a restaurant or a shop — and it may run several locations. Access is checked on the server from the signed-in session — never from anything the app sends — so changing a role in the app only works if the backend allows it.
 
 | Role | Typical holder | Can do | Cannot do |
 |---|---|---|---|
@@ -73,7 +73,7 @@ Stock is where money quietly disappears, so treat every movement as an entry in 
 1. **One shift, one drawer, one responsible person.** The app warns if a shift is already open — do not start a second one to hide the first.
 2. The shift records the **float** at the start, cash sales, mobile money, card, and **credit given** separately.
 3. At closing, the person **counts the cash physically** and enters the counted amount. The app computes **expected cash** and the **difference**.
-4. A note explaining the difference is required to close. Accept no unexplained difference, however small: the habit is what protects the business.
+4. A note explaining the difference is required to close. Accept no unexplained difference, however small: the habit is what protects the company.
 5. The **Z report** for that shift becomes the day's control document: sales by payment type, discounts, credit given, voids (count and value) listed separately, and the cash difference.
 6. Keep the shift history. If a figure is ever disputed, the Z report plus the invoice list settle it, because both come from the same recorded sales.
 
@@ -87,7 +87,7 @@ Credit is a loan you grant on trust, so it needs rules:
 - **One customer, one record.** Do not let staff put several people's debts under one name — the ledger becomes unenforceable.
 - **Follow up weekly**, not once a year: the Customers screen shows the balance, the last activity and the full ledger, and the **WhatsApp** button sends a polite reminder with the exact amount.
 - **All repayments are recorded** (cash, mobile money, card), so the balance always equals the ledger. If a customer disputes a figure, open the ledger and read it line by line.
-- **Writing off a debt** is a manager decision and must be recorded as an adjustment **with a reason**, never by deleting entries. Treat writes-off as a monthly report line: a business that writes off a lot is either granting credit too freely or losing it through the till.
+- **Writing off a debt** is a manager decision and must be recorded as an adjustment **with a reason**, never by deleting entries. Treat writes-off as a monthly report line: a company that writes off a lot is either granting credit too freely or losing it through the till.
 - A customer who never pays is a business decision, not a technical one: stop extending credit and use the ledger as your evidence.
 
 ## 8. Prices, margins and what staff can see

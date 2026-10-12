@@ -157,7 +157,7 @@ const Map<String, String> _en = {
   'profileStock': 'Stock items',
   'pinSet': 'PIN is set on this device',
   'pinNotSet': 'No PIN set on this device',
-  'profileCustomerHint': 'Ask the shop for your orders.',
+  'profileCustomerHint': 'Ask the staff for your orders.',
   'profileStaffHint':
       'You can take orders and scan items sent by your manager.',
   'profileManagerHint': 'You manage drinks, stock and staff for this company.',
@@ -1332,7 +1332,7 @@ const Map<String, String> _fr = {
   'reportProblem': 'Signaler un problème',
   'supportReportTitle': 'Signaler un problème',
   'supportReportIntro':
-      'Dites-nous ce qui n\'a pas fonctionné ou ce qui vous a gêné. Le message part directement à l\'assistance avec les détails de votre appareil et de votre établissement, vous n\'avez donc pas à les expliquer.',
+      'Dites-nous ce qui n\'a pas fonctionné ou ce qui vous a gêné. Le message part directement à l\'assistance avec les détails de votre appareil et de votre entreprise, vous n\'avez donc pas à les expliquer.',
   'supportCategoryLabel': 'Quel type de signalement ?',
   'supportCatBug': 'Bug',
   'supportCatComplaint': 'Réclamation',
@@ -1347,7 +1347,7 @@ const Map<String, String> _fr = {
   'supportSending': 'Envoi...',
   'supportSent': 'Signalement envoyé. Référence :',
   'supportFailed': 'Impossible d\'envoyer le signalement. Réessayez.',
-  // 🇨🇲 CamerPay (le compte de l'établissement — phase 4)
+  // 🇨🇲 CamerPay (le compte de l'entreprise — phase 4)
   'campayTitle': 'CamerPay (carte, MTN, Orange, PayPal)',
   'campaySubtitle':
       'Connectez votre propre compte CamerPay pour que vos clients vous paient directement.',
@@ -1667,7 +1667,7 @@ const Map<String, String> _fr = {
   'profileStock': 'Articles en stock',
   'pinSet': 'Code PIN défini sur cet appareil',
   'pinNotSet': 'Aucun code PIN sur cet appareil',
-  'profileCustomerHint': 'Demandez vos commandes à la boutique.',
+  'profileCustomerHint': 'Demandez vos commandes au personnel.',
   'profileStaffHint':
       'Vous pouvez prendre des commandes et scanner les articles envoyés par votre gérant.',
   'profileManagerHint':

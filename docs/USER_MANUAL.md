@@ -2,7 +2,7 @@
 
 *For everyone who sells, serves or counts: staff, cashiers, servers and managers. Version 2.0 — 27 September 2026.*
 
-Drink Quick Cal is a drinks sales and stock management app for phones and tablets, used by bars, restaurants and shops alike. It records what you sell, keeps the stock right, follows customers who owe money, and closes the day's cash-up. It works **offline**: if the network drops, keep selling, and the app synchronises when the connection comes back.
+Drink Quick Cal is a drinks sales and stock management app for phones and tablets, used by bars, restaurants and shops alike. In the app, every customer — whether a bar, a restaurant or a shop — is a **company**: that is the account your data belongs to. It records what you sell, keeps the stock right, follows customers who owe money, and closes the day's cash-up. It works **offline**: if the network drops, keep selling, and the app synchronises when the connection comes back.
 
 The app is available in **English and French** — change it in *Settings → Language*. All amounts are shown in **XAF** unless your company set another currency.
 
@@ -130,7 +130,7 @@ Open **Invoice History** to see past sales, newest first. Search by invoice numb
 
 **Variance** compares what the system believes you should have with what you physically counted:
 
-1. Start a count (for the whole business or a category).
+1. Start a count (for the whole company or a category).
 2. Enter the counted quantity for each drink, or confirm the expected quantity where they match.
 3. The app shows the difference and its value at cost for every line, then the total variance.
 4. Add a reason where there is a meaningful gap (spillage, unrecorded sale, mis-pour, transfer).
