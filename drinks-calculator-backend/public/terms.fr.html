@@ -12,6 +12,10 @@
   .wrap{max-width:880px;margin:0 auto;padding:26px 20px 60px}
   .brand{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 0 2px}
   .wordmark{font-size:23px;font-weight:800;letter-spacing:-.4px}
+  /* The real app logo (assets/icons/icon.png → logo.png). It is dark artwork with
+     transparent corners, so it sits on a white tile and stays legible in dark mode. */
+  .logo{display:inline-flex;align-items:center;justify-content:center;background:#fff;border:1px solid var(--line);border-radius:14px;padding:5px;box-shadow:0 2px 6px rgba(18,32,58,.10)}
+  .logo img{display:block;height:38px;width:auto}
   .wordmark span{color:var(--brand)}
   .tagline{margin:2px 0 0;color:var(--muted);font-size:13px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 24px;margin-top:20px}
@@ -27,12 +31,7 @@
 <body>
 <div class="wrap">
   <div class="brand">
-    <svg width="46" height="46" viewBox="0 0 64 64" role="img" aria-label="Drink Quick Cal">
-      <defs><linearGradient id="g4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4361EE"/><stop offset="1" stop-color="#4CC9F0"/></linearGradient></defs>
-      <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#g4)"/>
-      <path d="M20 16h24l-10 16v12h6v4H24v-4h6V32L20 16z" fill="#fff" opacity=".95"/>
-      <circle cx="45" cy="20" r="3.2" fill="#fff"/>
-    </svg>
+    <span class="logo"><img src="logo.png" alt="Drink Quick Cal"></span>
     <div>
       <div class="wordmark">Drink&nbsp;Quick&nbsp;<span>Cal</span></div>
       <p class="tagline">Gestion des boissons et du stock au Cameroun — conçue pour fonctionner hors ligne</p>

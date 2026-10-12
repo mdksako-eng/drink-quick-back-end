@@ -24,6 +24,11 @@ const isBcryptHash = (stored) => typeof stored === 'string' && stored.startsWith
 // and the tests share one implementation.
 const { getCompanyOwnerId, canEditStaff } = require('./utils/staffPermissions');
 
+// Password-reset limits (how many emails per address per day, how many wrong codes)
+// live in a pure module so the rule is unit tested rather than embedded in a route.
+const passwordReset = require('./utils/passwordReset');
+const passwordResetStore = require('./utils/passwordResetStore');
+
 // ========== RATE LIMITING (in-memory) ==========
 const rateLimitBuckets = new Map();
 const RATE_MAX_ATTEMPTS = 10;
@@ -46,7 +51,7 @@ console.log('🔌 Connecting to PostgreSQL (Supabase)...');
 // 🏷️ Build identity, reported by GET /health. Bump RELEASE when you want to
 // confirm from the outside that a deploy actually went through; SERVER_STARTED_AT
 // resets on every restart (uptimeSeconds in the health payload).
-const RELEASE = '2026-10-07-campay-phase5';
+const RELEASE = '2026-10-11-returns-and-reset-limit';
 const SERVER_STARTED_AT = new Date();
 // Used by the startup banner below. CamerPay is the rail being migrated to;
 // Notch Pay is the legacy one still in place (see memory-bank/activeContext.md).
@@ -670,6 +675,31 @@ app.use(async (req, res, next) => {
         console.warn(`⚠️  Could not lock down support_reports with RLS: ${rlsError.message}`);
       }
 
+      // Password-reset requests: one row per reset email asked for, and one per
+      // wrong code tried. This is what makes the "N per day" cap survive a restart
+      // or a second instance — an in-memory counter would forget everything the
+      // moment the service recycled, which is exactly when it matters.
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS password_reset_requests (
+          id SERIAL PRIMARY KEY,
+          email TEXT NOT NULL,
+          kind VARCHAR(20) NOT NULL DEFAULT 'request',
+          ip VARCHAR(60),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_password_reset_email ON password_reset_requests(email, kind, created_at)`);
+      console.log('✅ password_reset_requests table ensured');
+
+      // The anon key shipped inside the app must never read who asked for a reset.
+      try {
+        await pool.query(`ALTER TABLE public.password_reset_requests ENABLE ROW LEVEL SECURITY`);
+        await pool.query(`REVOKE ALL ON public.password_reset_requests FROM anon, authenticated`);
+        console.log('🔒 password_reset_requests RLS enabled');
+      } catch (rlsError) {
+        console.warn(`⚠️  Could not lock down password_reset_requests with RLS: ${rlsError.message}`);
+      }
+
       const countResult = await pool.query('SELECT COUNT(*) FROM users');
       const userCount = parseInt(countResult.rows[0].count);
       console.log(`📊 Database has ${userCount} users`);
@@ -768,17 +798,44 @@ function isPlatformAdminRequest(req) {
 const resetCodes = {};
 const generateResetCode = () => Math.floor(100000 + Math.random() * 900000).toString();
 
+// How many reset emails this address asked for inside the window, as timestamps.
+// Counted from rows (not memory) so the daily cap is not forgotten on a restart.
+const resetEvents = (email, kind, windowMs) =>
+  passwordResetStore.resetEvents(pool, email, kind, windowMs);
+const recordResetEvent = (email, kind, req) =>
+  passwordResetStore.recordResetEvent(pool, email, kind, req);
+
 // SEND RESET CODE TO EMAIL
 app.post('/api/auth/send-reset-code', async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = (req.body && req.body.email ? String(req.body.email) : '').trim();
     if (!email) return res.status(400).json({ status: 'error', message: 'Email required' });
 
-    // ⏱️ Rate limit reset-code requests per email
+    // ⏱️ The burst limiter (in memory) still catches a hammering, but the daily cap
+    // is the one that actually answers "how many times can one address reset in a
+    // day". It is checked BEFORE the account lookup, and the request is recorded
+    // whether or not the address exists: a limit that only fired for real accounts
+    // would let anyone test which addresses are registered.
     if (!checkRateLimit(`reset:${email}`)) {
       return res.status(429).json({ status: 'error', message: 'Too many reset requests. Try again in 15 minutes.' });
     }
-    
+
+    const limit = passwordReset.evaluateRequest({
+      timestamps: await resetEvents(email, 'request', passwordReset.DAY_MS),
+    });
+    if (!limit.allowed) {
+      return res.status(429).json({
+        status: 'error',
+        code: 'reset_limit_reached',
+        message: passwordReset.requestLimitMessage(limit),
+        limit: limit.limit,
+        used: limit.used,
+        retryAfterMinutes: limit.retryAfterMinutes,
+      });
+    }
+
+    await recordResetEvent(email, 'request', req);
+
     const result = await pool.query('SELECT id, username, email FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0) {
       return res.json({ status: 'success', message: 'If your email exists, a reset code has been sent' });
@@ -789,9 +846,13 @@ app.post('/api/auth/send-reset-code', async (req, res) => {
     resetCodes[email] = { code, userId: user.id, expiresAt: Date.now() + 10 * 60 * 1000 };
     
     await sendResetCodeEmail(email, code, user.username);
-    console.log(`📧 Reset code sent to ${email}`);
+    console.log(`📧 Reset code sent to ${email} (${limit.used + 1}/${limit.limit} today)`);
     
-    res.json({ status: 'success', message: 'Reset code sent to your email' });
+    res.json({
+      status: 'success',
+      message: 'Reset code sent to your email',
+      remainingToday: limit.remaining,
+    });
   } catch (error) {
     console.error('Send code error:', error);
     res.status(500).json({ status: 'error', message: 'Failed to send code' });
@@ -803,12 +864,44 @@ app.post('/api/auth/verify-reset-code', async (req, res) => {
   try {
     const { email, code } = req.body;
     if (!email || !code) return res.status(400).json({ status: 'error', message: 'Email and code required' });
-    
+
+    // 🔢 A six-digit code with unlimited guesses is a guessing game an attacker wins.
+    // Wrong attempts are counted; a correct one clears the count, so an honest typo
+    // never locks anyone out.
+    const attempts = passwordReset.evaluateCodeAttempt({
+      timestamps: await resetEvents(email, 'code_attempt', passwordReset.CODE_ATTEMPT_WINDOW_MS),
+    });
+    if (!attempts.allowed) {
+      return res.status(429).json({
+        status: 'error',
+        code: 'reset_code_attempts',
+        message: passwordReset.codeAttemptMessage(attempts),
+      });
+    }
+
     const stored = resetCodes[email];
     if (!stored) return res.status(400).json({ status: 'error', message: 'No reset code found' });
     if (Date.now() > stored.expiresAt) { delete resetCodes[email]; return res.status(400).json({ status: 'error', message: 'Code expired' }); }
-    if (stored.code !== code) return res.status(400).json({ status: 'error', message: 'Invalid code' });
-    
+    if (stored.code !== code) {
+      try {
+        await recordResetEvent(email, 'code_attempt', req);
+      } catch (logError) {
+        console.warn('⚠️ Could not record a wrong reset code:', logError.message);
+      }
+      return res.status(400).json({
+        status: 'error',
+        message: `Invalid code. ${Math.max(0, attempts.remaining - 1)} attempt${attempts.remaining - 1 === 1 ? '' : 's'} left before you must ask for a new one.`,
+        attemptsLeft: Math.max(0, attempts.remaining - 1),
+      });
+    }
+
+    // Correct: forget the wrong tries so the next reset starts clean.
+    try {
+      await passwordResetStore.clearCodeAttempts(pool, email);
+    } catch (clearError) {
+      console.warn('⚠️ Could not clear wrong reset codes:', clearError.message);
+    }
+
     res.json({ status: 'success', message: 'Code verified' });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });
