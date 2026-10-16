@@ -850,7 +850,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          'Use $_biometricType',
+          '${t('lockUse')} $_biometricType',
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.7),
             fontSize: isMobile ? 14 : 16,
@@ -1070,7 +1070,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                             ? null
                             : () => _handleSuccessfulAuthentication(),
                         child: Text(
-                          'Skip PIN Setup',
+                          t('lockSkipPinSetup'),
                           style: TextStyle(
                             color: Colors.white60,
                             fontSize: isMobile ? 14 : 16,
@@ -1117,7 +1117,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                           });
                         },
                         child: Text(
-                          'Use $_biometricType instead',
+                          '${t('lockUse')} $_biometricType ${t('lockInstead')}',
                           style: TextStyle(
                             color: Colors.white70,
                             fontSize: isMobile ? 14 : 16,
@@ -1128,7 +1128,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                     // ========== VERSION ==========
                     SizedBox(height: isMobile ? 16 : 24),
                     Text(
-                      'Version 1.0.0',
+                      '${t('version')} 1.0.0',
                       style: TextStyle(
                         color: Colors.white38,
                         fontSize: isMobile ? 12 : 14,
