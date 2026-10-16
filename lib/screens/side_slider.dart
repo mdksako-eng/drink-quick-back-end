@@ -1392,7 +1392,7 @@ class _SideSliderState extends State<SideSlider> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Items Preview:',
+                        t('invItemsPreview'),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -1521,7 +1521,7 @@ class _SideSliderState extends State<SideSlider> {
                         color: isActive ? widget.primaryColor : Colors.grey,
                       ),
                       label: Text(
-                        'Edit & Re-invoice',
+                        t('orderEditReinvoice'),
                         style: TextStyle(
                           fontSize: isMobile ? 11.0 : 12.0,
                           fontWeight: FontWeight.w600,
@@ -1752,7 +1752,7 @@ class _SideSliderState extends State<SideSlider> {
                           Row(
                             children: [
                               Text(
-                                'Invoice Details',
+                                t('orderInvoiceDetails'),
                                 style: TextStyle(
                                   fontSize: isMobile ? 16.0 : 18.0,
                                   fontWeight: FontWeight.bold,

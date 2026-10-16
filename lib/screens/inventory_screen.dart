@@ -15,6 +15,7 @@ import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/notification_service.dart';
 import '../widgets/drink_avatar.dart';
 import 'package:drinks_calculator_fixed/utils/i18n.dart';
+import 'package:drinks_calculator_fixed/utils/inventory_sort_helper.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({Key? key}) : super(key: key);
@@ -280,7 +281,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 if (mounted) {
                   Navigator.pop(context);
                   Helpers.showToast(
-                      'Added $quantity ${item.drinkName} to stock');
+                      '${t('invAddedToStock')} $quantity ${item.drinkName}');
                 }
               }
             },
@@ -347,37 +348,37 @@ class _InventoryScreenState extends State<InventoryScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Stock Section
-              _buildDetailSection('📦 Stock Information', [
+              _buildDetailSection('📦 ${t('invSectionStock')}', [
                 _buildDetailRow(
-                    'Current Stock', '${item.quantity} ${item.unit}(s)'),
+                    t('currentStock'), '${item.quantity} ${item.unit}(s)'),
                 _buildDetailRow(
-                    'Minimum Level', '${item.minStockLevel} ${item.unit}(s)'),
+                    t('invMinimumLevel'), '${item.minStockLevel} ${item.unit}(s)'),
                 _buildDetailRow(
-                    'Status', item.isLowStock ? '⚠️ Low Stock' : '✅ In Stock'),
-                _buildDetailRow('Last Restocked',
+                    t('invStatus'), item.isLowStock ? '⚠️ ${t('lowStock')}' : '✅ ${t('invInStock')}'),
+                _buildDetailRow(t('invLastRestocked'),
                     DateFormat('MMM dd, yyyy').format(item.lastRestocked)),
               ]),
               const Divider(),
 
               // Pricing Section
-              _buildDetailSection('💰 Pricing', [
-                _buildDetailRow('Purchase Price',
+              _buildDetailSection('💰 ${t('invSectionPricing')}', [
+                _buildDetailRow(t('invPurchasePrice'),
                     CurrencyHelper.format(item.purchasePrice)),
-                _buildDetailRow('Selling Price',
-                    drink != null ? CurrencyHelper.format(drink.price) : 'N/A'),
+                _buildDetailRow(t('invSellingPrice'),
+                    drink != null ? CurrencyHelper.format(drink.price) : t('na')),
                 if (drink != null && item.purchasePrice > 0) ...[
-                  _buildDetailRow('Profit per Unit',
+                  _buildDetailRow(t('invProfitPerUnit'),
                       CurrencyHelper.format(drink.price - item.purchasePrice)),
-                  _buildDetailRow('Profit Margin',
+                  _buildDetailRow(t('invProfitMargin'),
                       '${(((drink.price - item.purchasePrice) / item.purchasePrice) * 100).toStringAsFixed(1)}%'),
                   _buildDetailRow(
-                      'Total Stock Value',
+                      t('invTotalValue'),
                       CurrencyHelper.format(
                           item.purchasePrice * item.quantity)),
-                  _buildDetailRow('Potential Revenue',
+                  _buildDetailRow(t('invPotentialRevenue'),
                       CurrencyHelper.format(drink.price * item.quantity)),
                   _buildDetailRow(
-                      'Potential Profit',
+                      t('invPotentialProfit'),
                       CurrencyHelper.format(
                           (drink.price - item.purchasePrice) * item.quantity)),
                 ],
@@ -385,9 +386,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
               const Divider(),
 
               // Category Section
-              _buildDetailSection('📋 Classification', [
-                _buildDetailRow('Category', item.category),
-                _buildDetailRow('Unit', item.unit),
+              _buildDetailSection('📋 ${t('invSectionClassification')}', [
+                _buildDetailRow(t('category'), item.category),
+                _buildDetailRow(t('unit'), item.unit),
                 _buildDetailRow('Drink ID', item.drinkId),
                 _buildDetailRow('Inventory ID', item.id),
               ]),
@@ -505,7 +506,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 if (mounted) {
                 Navigator.pop(context);
                 Helpers.showToast(
-                    'Updated min stock level for ${item.drinkName}');
+                    '${t('invMinUpdated')} ${item.drinkName}');
                 }
               }
             },
@@ -629,17 +630,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
                         _buildStatChip(
-                            'Total Items',
+                            t('totalItems'),
                             '${inventoryProvider.totalItems}',
                             Icons.inventory,
                             Colors.blue),
                         _buildStatChip(
-                            'Products',
+                            t('invProducts'),
                             '${inventoryProvider.inventoryItems.length}',
                             Icons.category,
                             Colors.green),
                         _buildStatChip(
-                            'Low Stock',
+                            t('lowStock'),
                             '${inventoryProvider.lowStockCount}',
                             Icons.warning,
                             Colors.orange),
@@ -698,15 +699,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                 tooltip: t('sortBy'),
                                 onSelected: (value) =>
                                     setState(() => _sortBy = value),
-                                itemBuilder: (context) => [
-                                  'Name',
-                                  'Quantity (High)',
-                                  'Quantity (Low)',
-                                  'Recently Restocked'
-                                ]
-                                    .map((s) =>
-                                        PopupMenuItem(value: s, child: Text(s)))
-                                    .toList(),
+                                itemBuilder: (context) =>
+                                    InventorySortLabels.values
+                                        .map((value) => PopupMenuItem(
+                                            value: value,
+                                            child: Text(
+                                                InventorySortLabels.label(value))))
+                                        .toList(),
                               ),
                             ],
                           ),
@@ -862,13 +861,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   Icon(Icons.calendar_today, size: 12, color: Colors.grey[500]),
                   const SizedBox(width: 4),
                   Text(
-                    'Restocked: ${DateFormat('MMM dd').format(item.lastRestocked)}',
+                    '${t('invRestocked')}: ${DateFormat('MMM dd').format(item.lastRestocked)}',
                     style: TextStyle(color: Colors.grey[500], fontSize: 11),
                   ),
                   const SizedBox(width: 16),
                   if (drink != null)
                     Text(
-                      'Price: ${CurrencyHelper.format(drink.price)}',
+                      '${t('price')}: ${CurrencyHelper.format(drink.price)}',
                       style: TextStyle(color: Colors.grey[500], fontSize: 11),
                     ),
                 ],
