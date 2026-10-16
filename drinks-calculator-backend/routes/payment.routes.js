@@ -15,6 +15,10 @@ const publicUrl = require('../utils/publicUrl');
 const campay = require('../utils/campay');
 const paymentFees = require('../utils/paymentFees');
 const paymentGuard = require('../utils/paymentGuard');
+// Provider refusals are re-stated in our words before they reach a cashier (see
+// utils/campayRefusal.js): CamerPay's own sentence names a third party and links to
+// a portal the user cannot act on.
+const campayRefusal = require('../utils/campayRefusal');
 const { rawBodyOf } = require('../utils/requestBody');
 // Shared secret for verifying /api/payment/webhook calls (set in env).
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
@@ -601,28 +605,45 @@ router.post('/payment/campay-initiate', async (req, res) => {
     });
   } catch (error) {
     if (error && error.name === 'CampayError') {
-      console.warn(`⚠️ CamerPay collection failed: ${error.status} ${error.code || ''} — ${error.message}`);
-      // 402 is a KYC-tier or plan quota refusal: pass the upgrade path through.
-      if (error.status === 402) {
+      const payload = error.payload || {};
+      const refusal = campayRefusal.classify({
+        status: error.status,
+        code: error.code,
+        message: error.message,
+        upgradeUrl: payload.upgrade_url || payload.upgradeUrl,
+      });
+      console.warn(
+        `⚠️ CamerPay collection refused: ${error.status} ${error.code || ''} [${refusal.code}] — ${error.message}`
+      );
+
+      // Same contract as the subscription rail: the app gets a code it can translate
+      // and never has to show this company's provider prose to a cashier. The KYC
+      // detail still travels, because a volume limit names the document that raises it.
+      const body = {
+        success: false,
+        code: refusal.code,
+        error: refusal.code,
+        message: campayRefusal.userMessageFor(refusal.code),
+        providerMessage: error.message || null,
+        providerCode: error.code || null,
+        accountLevel: refusal.accountLevel,
+      };
+
+      if (refusal.code === campayRefusal.CODES.QUOTA) {
         return res.status(402).json({
-          success: false,
-          error: error.code || 'quota_exceeded',
-          message: error.message,
-          nextAction: (error.payload && error.payload.next_action) || null,
-          upgradeUrl: (error.payload && error.payload.upgrade_url) || null,
+          ...body,
+          nextAction: payload.next_action || null,
+          upgradeUrl: payload.upgrade_url || null,
         });
       }
-      if (error.status === 422) {
-        return res.status(400).json({ success: false, error: error.message, code: error.code });
+      if (refusal.code === campayRefusal.CODES.ACCOUNT_INACTIVE ||
+          refusal.code === campayRefusal.CODES.TOKEN) {
+        return res.status(503).json(body);
       }
-      if (error.status === 401) {
-        return res.status(503).json({
-          success: false,
-          error: 'CamerPay rejected this company API token — a manager must issue a new one',
-          code: 'invalid_token',
-        });
+      if (refusal.code === campayRefusal.CODES.REQUEST_REJECTED) {
+        return res.status(400).json(body);
       }
-      return res.status(502).json({ success: false, error: error.message, code: error.code });
+      return res.status(502).json(body);
     }
     console.error('POST /payment/campay-initiate error:', error.message);
     res.status(500).json({ error: 'Internal server error' });

@@ -12,6 +12,9 @@ const notchpay = require('../utils/notchpay');
 // collection. It is additive here: the Notch Pay path keeps working until every
 // company has moved (see memory-bank/activeContext.md, phase 2).
 const campay = require('../utils/campay');
+// What CamerPay refused, said in our words: the provider's own sentence belongs in a
+// support ticket, not in front of a customer (see utils/campayRefusal.js).
+const campayRefusal = require('../utils/campayRefusal');
 const paymentFees = require('../utils/paymentFees');
 const subscriptionPayment = require('../utils/subscriptionPayment');
 // Provider callbacks must be reachable from the internet: CamerPay blocks
@@ -990,30 +993,51 @@ function campayMethodFromRail(rail) {
 /** Map a CampayError onto an answer the app can act on. */
 function campayErrorResponse(res, error, context) {
   if (error && error.name === 'CampayError') {
-    console.warn(`⚠️ CamerPay ${context}: ${error.status} ${error.code || ''} — ${error.message}`);
-    if (error.status === 402) {
-      // KYC tier or plan quota: hand the upgrade path back verbatim so the app can
-      // tell the owner exactly which document unlocks the next limit.
+    const payload = error.payload || {};
+    const refusal = campayRefusal.classify({
+      status: error.status,
+      code: error.code,
+      message: error.message,
+      upgradeUrl: payload.upgrade_url || payload.upgradeUrl,
+    });
+
+    console.warn(
+      `⚠️ CamerPay ${context}: ${error.status} ${error.code || ''} [${refusal.code}] — ${error.message}`
+    );
+
+    // The customer reads OUR sentence (the app translates the code). CamerPay's own
+    // words travel in `providerMessage` for the log, and the app shows them as a
+    // second line only where they are actionable — a KYC limit names the document
+    // that unlocks the next tier, which is the one case worth handing back verbatim.
+    const body = {
+      success: false,
+      code: refusal.code,
+      error: refusal.code,
+      message: campayRefusal.userMessageFor(refusal.code),
+      providerMessage: error.message || null,
+      providerCode: error.code || null,
+      accountLevel: refusal.accountLevel,
+    };
+
+    if (refusal.code === campayRefusal.CODES.QUOTA) {
       return res.status(402).json({
-        success: false,
-        error: error.code || 'quota_exceeded',
-        message: error.message,
-        nextAction: (error.payload && error.payload.next_action) || null,
-        upgradeUrl: (error.payload && error.payload.upgrade_url) || null,
-        remaining: (error.payload && error.payload.remaining) ?? null,
-        monthlyLimit: (error.payload && error.payload.monthly_limit) ?? null,
+        ...body,
+        nextAction: payload.next_action || null,
+        upgradeUrl: payload.upgrade_url || null,
+        remaining: payload.remaining ?? null,
+        monthlyLimit: payload.monthly_limit ?? null,
       });
     }
-    if (error.status === 422) {
-      return res.status(400).json({ success: false, error: error.message, code: error.code });
+    if (refusal.code === campayRefusal.CODES.ACCOUNT_INACTIVE ||
+        refusal.code === campayRefusal.CODES.TOKEN) {
+      // Nothing the caller can fix: it is our account or our token. 503 (not 402)
+      // so it reads as "service unavailable", and never as "you must pay more".
+      return res.status(503).json(body);
     }
-    if (error.status === 401) {
-      return res.status(503).json({
-        success: false,
-        error: 'CamerPay rejected the API token — issue a new one in the CamerPay dashboard.',
-      });
+    if (refusal.code === campayRefusal.CODES.REQUEST_REJECTED) {
+      return res.status(400).json(body);
     }
-    return res.status(502).json({ success: false, error: error.message, code: error.code });
+    return res.status(502).json(body);
   }
   console.error(`POST ${context} error:`, error && error.message);
   return res.status(500).json({ success: false, error: 'Internal server error' });

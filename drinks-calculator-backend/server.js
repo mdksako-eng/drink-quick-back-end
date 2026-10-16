@@ -51,7 +51,7 @@ console.log('🔌 Connecting to PostgreSQL (Supabase)...');
 // 🏷️ Build identity, reported by GET /health. Bump RELEASE when you want to
 // confirm from the outside that a deploy actually went through; SERVER_STARTED_AT
 // resets on every restart (uptimeSeconds in the health payload).
-const RELEASE = '2026-10-11-returns-and-reset-limit';
+const RELEASE = '2026-10-14-payment-error-codes';
 const SERVER_STARTED_AT = new Date();
 // Used by the startup banner below. CamerPay is the rail being migrated to;
 // Notch Pay is the legacy one still in place (see memory-bank/activeContext.md).

@@ -14,6 +14,7 @@ import 'package:drinks_calculator_fixed/providers/order_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/models/drink_model.dart';
 import 'package:drinks_calculator_fixed/utils/helpers.dart';
+import 'package:drinks_calculator_fixed/utils/payment_error_helper.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
 import 'drink_management_screen.dart';
 import 'ai_assistant_screen.dart';
@@ -989,9 +990,16 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     }
 
     if (!result['success']) {
+      // In our words, not the provider's: the server sends a code, and its own
+      // wording only for the cases where it is actionable (a KYC document limit).
+      final failure = PaymentErrorHelper.fromResponse(result);
+      debugPrint(
+        '❌ CamerPay collection refused: ${failure.code}'
+        '${failure.providerMessage == null ? '' : ' — ${failure.providerMessage}'}',
+      );
       setState(() {
         _paymentStatus = 'failed';
-        _paymentMessage = result['error'] ?? 'Payment initiation failed';
+        _paymentMessage = PaymentErrorHelper.messageWithDetail(failure);
       });
       return false;
     }

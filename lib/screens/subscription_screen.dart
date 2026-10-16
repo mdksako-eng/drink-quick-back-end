@@ -7,6 +7,7 @@ import '../providers/plan_provider.dart';
 import '../services/payments_status_service.dart';
 import '../utils/i18n.dart';
 import '../utils/payment_channel_helper.dart';
+import '../utils/payment_error_helper.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   /// When true the screen is used as the mandatory post-login gate: no back
@@ -83,7 +84,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         await _autoVerifyPlan(provider);
       }
     } catch (e) {
-      if (mounted) _showSnack('${t('error')}: $e');
+      // Our sentence, translated — plus the provider's own wording only where it is
+      // actionable (a KYC limit names the document that unlocks the next tier).
+      if (mounted) _showSnack(PaymentErrorHelper.messageWithDetail(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -122,9 +125,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           customerPhone: payerPhone,
         );
       } catch (e) {
-        // Keep the reason. CamerPay explains itself (a KYC volume limit, a closed rail);
-        // swallowing it is how a fixable refusal becomes a vague "pending verification".
-        camerpayError = e.toString().replaceFirst('Exception: ', '');
+        // Keep the reason, in our words: the provider's own sentence names a third
+        // party, comes in one language, and links to a portal the user cannot use.
+        // Its detail is added below only when it is actionable (KYC/quota).
+        camerpayError = PaymentErrorHelper.messageWithDetail(e);
       }
 
       if (!mounted) return;

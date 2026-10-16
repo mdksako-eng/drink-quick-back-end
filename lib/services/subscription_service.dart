@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/subscription_model.dart';
 import '../services/secure_storage_service.dart';
+// A refusal is shown in our own words, never the provider's (see the helper).
+import '../utils/payment_error_helper.dart';
 
 class SubscriptionService {
   /// Fetch the current plan/status for the logged-in company.
@@ -207,18 +209,45 @@ class SubscriptionService {
           return Map<String, dynamic>.from(data['data'] ?? {});
         }
       } else {
-        // 402 (KYC / plan quota) and 503 (not ready) carry a message worth showing.
-        final data = jsonDecode(response.body);
-        if (data is Map && data['message'] != null) {
-          throw Exception(data['message']);
-        }
-        if (data is Map && data['error'] != null) throw Exception(data['error']);
+        // A refusal carries a machine-readable code; the app renders its own
+        // sentence. The provider's own words travel in `providerMessage` for the log
+        // and are shown only where they are actionable (see PaymentErrorHelper).
+        final data = _errorBody(response.body);
+        throw PaymentFailure(
+          code: (data['code'] ?? data['error'] ?? PaymentErrorHelper.unknownCode)
+              .toString(),
+          providerMessage: data['providerMessage']?.toString(),
+          providerCode: data['providerCode']?.toString(),
+          accountLevel: data['accountLevel'] == true,
+        );
       }
       return null;
     } catch (e) {
-      debugPrint('SubscriptionService.campayInitiate error: $e');
+      if (e is PaymentFailure) {
+        // The code is what we act on; the provider's sentence is for support.
+        debugPrint(
+          'SubscriptionService.campayInitiate refused: ${e.code}'
+          '${e.providerCode == null ? '' : ' (${e.providerCode})'}'
+          '${e.providerMessage == null ? '' : ' — ${e.providerMessage}'}',
+        );
+      } else {
+        debugPrint('SubscriptionService.campayInitiate error: $e');
+      }
       rethrow;
     }
+  }
+
+  /// A refusal body, even when it is not JSON (a proxy error page, a timeout body):
+  /// an unreadable body must not turn into a confusing parse error on top of the
+  /// refusal we are trying to explain.
+  static Map<String, dynamic> _errorBody(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) return decoded;
+    } catch (_) {
+      // fall through
+    }
+    return const {};
   }
 
   /// Rail the caller picked → CamerPay's rail name, so tapping MTN lands on MTN,
