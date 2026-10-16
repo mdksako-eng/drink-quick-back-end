@@ -2,6 +2,12 @@
 import 'package:drinks_calculator_fixed/models/drink_model.dart';
 
 class AppConstants {
+  /// The released app version — the `version:` field of `pubspec.yaml` with the
+  /// `+build` suffix stripped. **One version for the whole app:** the drawer,
+  /// the lock screen, backup metadata and support reports all read this, and
+  /// `test/app_info_test.dart` fails if it drifts from pubspec.yaml.
+  static const String appVersion = '1.0.0';
+
   // Empty arrays - no built-in drinks
   static const List<Drink> beers = [];
   static const List<Drink> wines = [];

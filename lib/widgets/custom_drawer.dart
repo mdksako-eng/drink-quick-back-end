@@ -31,6 +31,7 @@ import 'package:drinks_calculator_fixed/screens/support_report_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../utils/i18n.dart';
+import '../utils/constants.dart';
 import 'language_toggle.dart';
 import '../widgets/badge_icon.dart';
 
@@ -556,7 +557,7 @@ class CustomDrawer extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text('${t('version')} 1.1.0',
+                Text('${t('version')} ${AppConstants.appVersion}',
                     style: TextStyle(fontSize: 11, color: theme.hintColor)),
                 const SizedBox(height: 4),
                 Text('© 2026 Drink Quick Cal',
@@ -903,7 +904,7 @@ class CustomDrawer extends StatelessWidget {
               Text(t('aboutAIAssistant'),
                   style: TextStyle(color: theme.hintColor)),
               const SizedBox(height: 16),
-              Text(t('versionLabel') + ' 1.1.0',
+              Text('${t('versionLabel')} ${AppConstants.appVersion}',
                   style: TextStyle(fontSize: 12, color: theme.hintColor)),
               Text('© 2026 Drink Quick Cal',
                   style: TextStyle(fontSize: 12, color: theme.hintColor)),

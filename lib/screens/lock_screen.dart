@@ -11,6 +11,7 @@ import 'package:drinks_calculator_fixed/utils/helpers.dart';
 import '../main.dart' as app; // ✅ Import for navigatorKey
 import '../screens/auth_screen.dart'; // ✅ Import AuthScreen
 import '../utils/i18n.dart';
+import '../utils/constants.dart';
 
 class LockScreen extends StatefulWidget {
   final VoidCallback onAuthenticated;
@@ -1128,7 +1129,9 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                     // ========== VERSION ==========
                     SizedBox(height: isMobile ? 16 : 24),
                     Text(
-                      '${t('version')} 1.0.0',
+                      // One version for the whole app (AppConstants.appVersion,
+                      // kept honest by test/app_info_test.dart).
+                      '${t('version')} ${AppConstants.appVersion}',
                       style: TextStyle(
                         color: Colors.white38,
                         fontSize: isMobile ? 12 : 14,

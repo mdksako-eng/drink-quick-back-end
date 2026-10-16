@@ -8,13 +8,15 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
+import '../utils/constants.dart';
 import 'secure_storage_service.dart';
 
 class SupportService {
   SupportService._();
 
-  /// Kept in step with the version shown in the drawer footer.
-  static const String appVersion = '1.1.0';
+  /// The same number the drawer footer and the lock screen show — one version
+  /// for the whole app, read from `AppConstants.appVersion`.
+  static const String appVersion = AppConstants.appVersion;
 
   /// What the user was doing at the time. Only these keys are sent (and the server
   /// keeps only these keys, bounded), so this cannot become a data dump.

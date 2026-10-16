@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
+import '../utils/constants.dart';
 
 class StorageService {
   static final StorageService _instance = StorageService._internal();
@@ -115,7 +116,7 @@ class StorageService {
       'drinks': loadCustomDrinks(),
       'orders': loadOrders(),
       'settings': loadSettings(),
-      'version': '1.1.0',
+      'version': AppConstants.appVersion,
     };
 
     final backupString = jsonEncode(backup);
