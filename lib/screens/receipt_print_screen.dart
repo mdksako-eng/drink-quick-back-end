@@ -248,7 +248,8 @@ class _ReceiptPrintScreenState extends State<ReceiptPrintScreen> {
       if (!mounted) return;
       Helpers.showToast(t('receiptSaved'));
     } catch (e) {
-      if (mounted) Helpers.showToast('$e');
+      debugPrint('Receipt save failed: $e');
+      if (mounted) Helpers.showToast(t('errorGeneric'), isError: true);
     }
   }
 

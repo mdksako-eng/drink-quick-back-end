@@ -130,13 +130,13 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
         // Refresh the list
         await _loadPendingRequests();
       } else {
-        Helpers.showToast(result['message'] ?? 'Error processing approval',
+        Helpers.showToast(result['message'] ?? t('approvalProcessFailed'),
             isError: true);
         setState(() => _isLoading = false);
       }
     } catch (e) {
       print('Approval error: $e');
-      Helpers.showToast('Error: $e', isError: true);
+      Helpers.showToast(t('errorGeneric'), isError: true);
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -170,16 +170,19 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
       );
       if (!mounted || _isDisposed) return;
       if (result['status'] == 'success') {
-        Helpers.showToast(approve ? '✅ ${result['message'] ?? 'Member approved'}' : '🚫 ${result['message'] ?? 'Request rejected'}');
+        Helpers.showToast(approve
+            ? '✅ ${result['message'] ?? t('approvalMemberApproved')}'
+            : '🚫 ${result['message'] ?? t('approvalRequestRejected')}');
       } else {
-        Helpers.showToast(result['message'] ?? 'Error processing request', isError: true);
+        Helpers.showToast(result['message'] ?? t('approvalRequestFailed'),
+            isError: true);
       }
       await _loadPendingJoins();
       if (mounted && !_isDisposed) setState(() => _isLoading = false);
     } catch (e) {
       print('Join approval error: $e');
       if (mounted && !_isDisposed) setState(() => _isLoading = false);
-      Helpers.showToast('Error: $e', isError: true);
+      Helpers.showToast(t('errorGeneric'), isError: true);
     }
   }
 

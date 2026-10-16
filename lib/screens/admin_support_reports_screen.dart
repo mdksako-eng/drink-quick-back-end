@@ -112,7 +112,8 @@ class _AdminSupportReportsScreenState extends State<AdminSupportReportsScreen> {
         );
       }
     } catch (e) {
-      Helpers.showToast('$e', isError: true);
+      debugPrint('Support report update failed: $e');
+      Helpers.showToast(t('errorGeneric'), isError: true);
     }
   }
 
