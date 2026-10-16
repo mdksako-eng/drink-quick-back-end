@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
+import 'package:drinks_calculator_fixed/utils/i18n.dart';
 import 'package:drinks_calculator_fixed/services/tts/tts_factory.dart'
     as tts;
 import 'package:drinks_calculator_fixed/services/os_notifications/os_notifications_factory.dart'
@@ -92,44 +93,62 @@ class NotificationService extends ChangeNotifier {
   }
 
   void showOrderCreated({required String orderId, required int itemCount, required double totalAmount}) {
-    _addNotification(AppNotification(title: '🛒 New Order', message: '$itemCount items - ${CurrencyHelper.format(totalAmount)}', type: NotificationType.order));
-    _speak('New order with $itemCount items');
-    osn.osShowNotification('order_created', '🛒 New Order', '$itemCount items - ${CurrencyHelper.format(totalAmount)}');
+    final title = '🛒 ${t('notifNewOrderTitle')}';
+    final message =
+        '$itemCount ${t('invItems')} - ${CurrencyHelper.format(totalAmount)}';
+    _addNotification(AppNotification(title: title, message: message, type: NotificationType.order));
+    _speak('${t('notifNewOrderSpoken')} $itemCount ${t('invItems')}');
+    osn.osShowNotification('order_created', title, message);
   }
 
   void showOrderCompleted({required String orderId, required String customerName, required double totalAmount, required String paymentMethod}) {
-    _addNotification(AppNotification(title: '✅ Order Done', message: '$customerName - ${CurrencyHelper.format(totalAmount)} via $paymentMethod', type: NotificationType.order));
-    _speak('Order completed for $customerName');
-    osn.osShowNotification('order_completed', '✅ Order Done', '$customerName - ${CurrencyHelper.format(totalAmount)} via $paymentMethod');
+    final title = '✅ ${t('notifOrderDoneTitle')}';
+    final message =
+        '$customerName - ${CurrencyHelper.format(totalAmount)} ${t('notifVia')} $paymentMethod';
+    _addNotification(AppNotification(title: title, message: message, type: NotificationType.order));
+    _speak('${t('notifOrderCompletedSpoken')} $customerName');
+    osn.osShowNotification('order_completed', title, message);
   }
 
   void showLowStockAlert({required String drinkName, required int currentStock, required int minStockLevel}) {
-    _addNotification(AppNotification(title: '⚠️ Low Stock', message: '$drinkName: $currentStock left (Min: $minStockLevel)', type: NotificationType.stock));
-    _speak('Low stock alert for $drinkName');
-    osn.osShowNotification('low_stock', '⚠️ Low Stock', '$drinkName: $currentStock left (Min: $minStockLevel)');
+    final title = '⚠️ ${t('notifLowStockTitle')}';
+    final message =
+        '$drinkName: $currentStock ${t('notifLeft')} (${t('notifMin')} $minStockLevel)';
+    _addNotification(AppNotification(title: title, message: message, type: NotificationType.stock));
+    _speak('${t('notifLowStockSpoken')} $drinkName');
+    osn.osShowNotification('low_stock', title, message);
   }
 
   void showOutOfStockAlert({required String drinkName}) {
-    _addNotification(AppNotification(title: '🚫 Out of Stock', message: '$drinkName is out of stock!', type: NotificationType.stock));
-    _speak('$drinkName is out of stock');
-    osn.osShowNotification('out_of_stock', '🚫 Out of Stock', '$drinkName is out of stock!');
+    final title = '🚫 ${t('notifOutOfStockTitle')}';
+    final message = '$drinkName ${t('notifOutOfStock')}';
+    _addNotification(AppNotification(title: title, message: message, type: NotificationType.stock));
+    _speak(message);
+    osn.osShowNotification('out_of_stock', title, message);
   }
 
   void showStockRestocked({required String drinkName, required int quantity, required int newTotal}) {
-    _addNotification(AppNotification(title: '📦 Restocked', message: '$drinkName: +$quantity (Total: $newTotal)', type: NotificationType.stock));
-    osn.osShowNotification('restocked', '📦 Restocked', '$drinkName: +$quantity (Total: $newTotal)');
+    final title = '📦 ${t('invRestocked')}';
+    final message = '$drinkName: +$quantity (${t('total')}: $newTotal)';
+    _addNotification(AppNotification(title: title, message: message, type: NotificationType.stock));
+    osn.osShowNotification('restocked', title, message);
   }
 
   void showPaymentReceived({required String customerName, required double amount, required String paymentMethod}) {
-    _addNotification(AppNotification(title: '💵 Payment', message: '$customerName paid ${CurrencyHelper.format(amount)} via $paymentMethod', type: NotificationType.payment));
-    _speak('Payment received from $customerName');
-    osn.osShowNotification('payment', '💵 Payment', '$customerName paid ${CurrencyHelper.format(amount)} via $paymentMethod');
+    final title = '💵 ${t('notifPaymentTitle')}';
+    final message =
+        '$customerName ${t('notifPaid')} ${CurrencyHelper.format(amount)} ${t('notifVia')} $paymentMethod';
+    _addNotification(AppNotification(title: title, message: message, type: NotificationType.payment));
+    _speak('${t('notifPaymentReceivedSpoken')} $customerName');
+    osn.osShowNotification('payment', title, message);
   }
 
   void showPaymentFailed({required String reason, required String paymentMethod}) {
-    _addNotification(AppNotification(title: '❌ Payment Failed', message: '$paymentMethod: $reason', type: NotificationType.payment));
-    _speak('Payment failed');
-    osn.osShowNotification('payment_failed', '❌ Payment Failed', '$paymentMethod: $reason');
+    final title = '❌ ${t('notifPaymentFailedTitle')}';
+    final message = '$paymentMethod: $reason';
+    _addNotification(AppNotification(title: title, message: message, type: NotificationType.payment));
+    _speak(t('notifPaymentFailedSpoken'));
+    osn.osShowNotification('payment_failed', title, message);
   }
 
   /// Warns that a batch is about to expire (or already has), including the
@@ -142,39 +161,42 @@ class NotificationService extends ChangeNotifier {
     int recommendedOrder = 0,
   }) {
     final when = expired
-        ? 'has expired'
+        ? t('notifExpired')
         : daysLeft == 0
-            ? 'expires today'
-            : 'expires in $daysLeft day${daysLeft == 1 ? '' : 's'}';
+            ? t('notifExpiresToday')
+            : '${t('notifExpiresInDays')} $daysLeft '
+                '${daysLeft == 1 ? t('notifDaySingle') : t('forecastDays')}';
     final demand = forecastDemand > 0
-        ? ' - expected demand ${forecastDemand.toStringAsFixed(1)}'
+        ? ' - ${t('notifExpectedDemand')} ${forecastDemand.toStringAsFixed(1)}'
         : '';
-    final order = recommendedOrder > 0 ? ' - order $recommendedOrder' : '';
+    final order =
+        recommendedOrder > 0 ? ' - ${t('notifOrderWord')} $recommendedOrder' : '';
     final message = '$drinkName $when$demand$order';
+    final title =
+        expired ? t('notifExpiredStockTitle') : t('notifExpiringSoonTitle');
 
     _addNotification(AppNotification(
-      title: expired ? 'Expired stock' : 'Expiring soon',
+      title: title,
       message: message,
       type: NotificationType.reminder,
     ));
-    _speak(expired
-        ? '$drinkName has expired'
-        : '$drinkName expires in $daysLeft days');
+    // Spoken wording follows the notification body so both read the same.
+    _speak('$drinkName $when');
     osn.osShowNotification(
-        expired ? 'stock_expired' : 'stock_expiring',
-        expired ? 'Expired stock' : 'Expiring soon',
-        message);
+        expired ? 'stock_expired' : 'stock_expiring', title, message);
   }
 
   /// Surface server-sync failures to the user so they don't assume data saved.
   void showSyncFailed({required String action, required String detail}) {
+    final title = '⚠️ ${t('notifSyncFailedTitle')}';
     _addNotification(AppNotification(
-      title: '⚠️ Sync Failed',
-      message: '$action failed to reach the server. Data is saved on this device only and will not appear for other staff: $detail',
+      title: title,
+      message: '$action ${t('notifSyncBody')} $detail',
       type: NotificationType.system,
     ));
-    _speak('Warning: sync failed. Data saved locally only');
-    osn.osShowNotification('sync_failed', '⚠️ Sync Failed', '$action failed — saved on this device only: $detail');
+    _speak(t('notifSyncFailedSpoken'));
+    osn.osShowNotification(
+        'sync_failed', title, '$action ${t('notifSyncShortBody')} $detail');
   }
 
   Future<void> _speak(String text) async {
