@@ -471,10 +471,10 @@ class AuthProvider with ChangeNotifier {
           children: [
             const Icon(Icons.hourglass_top, size: 60, color: Colors.orange),
             const SizedBox(height: 16),
-            const Text(
-              'Please wait for manager approval to login on:',
+            Text(
+              t('approvalWaitOn'),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16),
+              style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 8),
             Container(
@@ -497,7 +497,7 @@ class AuthProvider with ChangeNotifier {
             ),
             const SizedBox(height: 8),
             Text(
-              'Managers: ${managers.map((m) => m['username']).join(', ')}',
+              '${t('approvalManagers')}: ${managers.map((m) => m['username']).join(', ')}',
               // hintColor follows the theme; Colors.grey[600] washed out on a dark dialog.
               style: TextStyle(
                 color: Theme.of(dialogContext).hintColor,
@@ -505,9 +505,9 @@ class AuthProvider with ChangeNotifier {
               ),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'This request will expire in 15 minutes.',
-              style: TextStyle(color: Colors.orange, fontSize: 12),
+            Text(
+              t('approvalExpires15'),
+              style: const TextStyle(color: Colors.orange, fontSize: 12),
             ),
             const SizedBox(height: 8),
             Container(
@@ -516,14 +516,14 @@ class AuthProvider with ChangeNotifier {
                 color: Colors.green.shade50,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.sync, color: Colors.green, size: 16),
-                  SizedBox(width: 8),
+                  const Icon(Icons.sync, color: Colors.green, size: 16),
+                  const SizedBox(width: 8),
                   Text(
-                    'Auto-checking every 10 seconds',
-                    style: TextStyle(color: Colors.green, fontSize: 12),
+                    t('approvalAutoCheck'),
+                    style: const TextStyle(color: Colors.green, fontSize: 12),
                   ),
                 ],
               ),

@@ -432,7 +432,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'All staff members are logged in correctly',
+                            t('approvalAllClear'),
                             style: TextStyle(
                               color: theme.hintColor,
                             ),
@@ -500,7 +500,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                                               // the role "Staff" instead of the person's name.
                                               (request['staff_username'] ??
                                                       request['username'] ??
-                                                      'Staff')
+                                                      t('role_Staff'))
                                                   .toString(),
                                               style: TextStyle(
                                                 fontWeight: FontWeight.bold,
@@ -510,7 +510,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                                               ),
                                             ),
                                             Text(
-                                              'Device: ${request['device_name'] ?? 'Unknown'}',
+                                              '${t('approvalDevice')}: ${request['device_name'] ?? t('unknown')}',
                                               style: TextStyle(
                                                 color: theme.hintColor,
                                               ),
@@ -541,7 +541,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
-                                    'Requested to log in on new device',
+                                    t('approvalRequestedNewDevice'),
                                     style: TextStyle(
                                       color: theme.hintColor,
                                     ),
