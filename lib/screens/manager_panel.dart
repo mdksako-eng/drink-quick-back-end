@@ -108,7 +108,7 @@ class _ManagerPanelState extends State<ManagerPanel>
         }
       }
     } catch (e) {
-      Helpers.showToast('Error loading staff: $e');
+      Helpers.showToast('${t('staffLoadFailed')}: $e');
     }
 
     setState(() => _isLoading = false);
@@ -118,7 +118,7 @@ class _ManagerPanelState extends State<ManagerPanel>
     if (_usernameController.text.trim().isEmpty ||
         _emailController.text.trim().isEmpty ||
         _passwordController.text.isEmpty) {
-      Helpers.showToast('Please fill all fields');
+      Helpers.showToast(t('fillAllFields'));
       return;
     }
 
@@ -154,12 +154,12 @@ class _ManagerPanelState extends State<ManagerPanel>
         _clearForm();
         await _loadStaff();
         Navigator.pop(context);
-        Helpers.showToast('Staff created!');
+        Helpers.showToast(t('staffCreated'));
       } else {
-        Helpers.showToast(data['message'] ?? 'Failed');
+        Helpers.showToast(data['message'] ?? t('failed'));
       }
     } catch (e) {
-      Helpers.showToast('Error: $e');
+      Helpers.showToast('${t('error')}: $e');
     }
 
     setState(() => _isCreating = false);
@@ -177,11 +177,11 @@ class _ManagerPanelState extends State<ManagerPanel>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(t('blockStaff')),
-        content: Text('Block ${staff['username']}?\n\nThey cannot login.'),
+        content: Text('${t('blockStaffAsk')} ${staff['username']}?\n\n${t('blockStaffWhy')}'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+              child: Text(t('cancel'))),
           ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -216,7 +216,7 @@ class _ManagerPanelState extends State<ManagerPanel>
           if (mounted) Helpers.showToast(message, isError: true);
         }
       } catch (e) {
-        Helpers.showToast('Error: $e');
+        Helpers.showToast('${t('error')}: $e');
       }
       setState(() => _isLoading = false);
     }
@@ -227,11 +227,11 @@ class _ManagerPanelState extends State<ManagerPanel>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(t('unblockStaff')),
-        content: Text('Allow ${staff['username']} to login?'),
+        content: Text('${t('allowStaff')} ${staff['username']} ${t('toLogin')}?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+              child: Text(t('cancel'))),
           ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
@@ -255,10 +255,10 @@ class _ManagerPanelState extends State<ManagerPanel>
         );
         if (response.statusCode == 200) {
           await _loadStaff();
-          Helpers.showToast('Unblocked');
+          Helpers.showToast(t('staffUnblocked'));
         }
       } catch (e) {
-        Helpers.showToast('Error: $e');
+        Helpers.showToast('${t('error')}: $e');
       }
       setState(() => _isLoading = false);
     }
@@ -304,9 +304,9 @@ class _ManagerPanelState extends State<ManagerPanel>
               DropdownButtonFormField<String>(
                 initialValue: role,
                 decoration: InputDecoration(labelText: t('staffRole')),
-                items: const [
-                  DropdownMenuItem(value: 'Staff', child: Text('Staff')),
-                  DropdownMenuItem(value: 'Manager', child: Text('Manager')),
+                items: [
+                  DropdownMenuItem(value: 'Staff', child: Text(t('role_Staff'))),
+                  DropdownMenuItem(value: 'Manager', child: Text(t('role_Manager'))),
                 ],
                 onChanged: (v) => setModalState(() => role = v ?? 'Staff'),
               ),
@@ -600,7 +600,7 @@ class _ManagerPanelState extends State<ManagerPanel>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                           Text(
-                              'Welcome, ${authProvider.user?.username ?? 'Manager'}!',
+                              '${t('welcome')}, ${authProvider.user?.username ?? 'Manager'}!',
                               style: const TextStyle(
                                   fontSize: 18, fontWeight: FontWeight.bold)),
                           Text('Manage your company staff',
