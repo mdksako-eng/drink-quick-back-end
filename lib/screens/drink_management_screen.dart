@@ -7,6 +7,7 @@ import 'package:drinks_calculator_fixed/utils/helpers.dart';
 import 'package:drinks_calculator_fixed/widgets/drink_card.dart';
 import 'package:drinks_calculator_fixed/utils/constants.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
+import 'package:drinks_calculator_fixed/utils/unit_label_helper.dart';
 import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import 'package:drinks_calculator_fixed/models/inventory_model.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
@@ -608,9 +609,10 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
       behavior: HitTestBehavior.translucent,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text(
-            'Drink Management',
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          title: Text(
+            t('dm_title'),
+            style: const TextStyle(
+                fontWeight: FontWeight.bold, color: Colors.white),
           ),
           centerTitle: true,
           backgroundColor: primaryColor,
@@ -971,7 +973,8 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                                     color: Colors.blue, size: 18),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'Stock Value ($stock ${_selectedUnit}(s)):',
+                                  '${t('dm_stockValue')} ($stock '
+                                  '${UnitLabelHelper.label(_selectedUnit, t)}):',
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                       color: Colors.blue,
@@ -1256,7 +1259,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Category',
+        Text(t('dm_category'),
             style: TextStyle(
                 color: theme.hintColor,
                 fontSize: isMobile ? 14 : 15,
@@ -1320,7 +1323,7 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Unit',
+        Text(t('dm_unit'),
             style: TextStyle(
                 color: theme.hintColor,
                 fontSize: isMobile ? 14 : 15,
@@ -1344,7 +1347,10 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
                     fontSize: isMobile ? 14 : 16),
                 items: [
                   ..._units.map((unit) => DropdownMenuItem(
-                      value: unit, child: Text(t('unit_' + unit)))),
+                      // Label translated, stored value kept canonical — and a
+                      // custom unit shows verbatim (see unit_label_helper).
+                      value: unit,
+                      child: Text(UnitLabelHelper.label(unit, t)))),
                   // ➕ create a unit without leaving the form
                   DropdownMenuItem(
                     value: _newOptionValue,
@@ -1677,7 +1683,8 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isUploadingImage = false);
-        Helpers.showToast('${t('dm_imageUploadFailed')}: $e', isError: true);
+        debugPrint('Image upload failed: $e');
+        Helpers.showToast(t('dm_imageUploadFailed'), isError: true);
       }
     }
   }
