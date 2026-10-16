@@ -286,7 +286,7 @@ class _AuthScreenState extends State<AuthScreen> {
         setState(() => _codeSent = true);
         _showSuccessDialog(
             t('auth_codeSent'),
-            'Check your email for the 6-digit code.\n\nIf you don\'t see it, check spam or try again.',
+            t('auth_codeSentHint'),
             Icons.email,
             Colors.green,
             () {});
@@ -308,7 +308,7 @@ class _AuthScreenState extends State<AuthScreen> {
       if (e.toString().contains('TimeoutException')) {
         _showErrorDialog(
             t('auth_connectionSlow'),
-            'Server taking too long. Try again in a moment.',
+            t('auth_serverSlow'),
             Icons.hourglass_empty,
             Colors.orange);
       } else {
@@ -643,8 +643,8 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               child: Column(
                 children: [
-                  const Text(
-                    'Check your inbox for the verification email.',
+                  Text(
+                    t('auth_checkInbox'),
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 13),
                   ),
@@ -659,8 +659,8 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Don\'t see it? Check spam or request a new one.',
+                  Text(
+                    t('auth_checkSpam'),
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
@@ -770,8 +770,8 @@ class _AuthScreenState extends State<AuthScreen> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       fontWeight: FontWeight.bold, color: Colors.orange)),
-              content: const Text(
-                  'Please check your internet connection and try again.',
+              content: Text(
+                  t('authCheckConnection'),
                   textAlign: TextAlign.center),
               actions: [
                 ElevatedButton.icon(
@@ -790,8 +790,13 @@ class _AuthScreenState extends State<AuthScreen> {
             ));
   }
 
+  /// [title] is the caller's heading. Every call site passes the English word 'Error'
+  /// (seventeen of them), so the heading is translated HERE instead of at each call
+  /// site: one place to keep bilingual, and no call site can be missed. A caller that
+  /// ever passes a real title still gets it.
   void _showErrorDialog(
       String title, String message, IconData icon, Color color) {
+    final heading = title == 'Error' ? t('error') : title;
     showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -803,7 +808,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   decoration: BoxDecoration(
                       color: color.withOpacity(0.1), shape: BoxShape.circle),
                   child: Icon(icon, size: 36, color: color)),
-              title: Text(title,
+              title: Text(heading,
                   textAlign: TextAlign.center,
                   style: TextStyle(fontWeight: FontWeight.bold, color: color)),
               content: Text(message, textAlign: TextAlign.center),
@@ -816,8 +821,11 @@ class _AuthScreenState extends State<AuthScreen> {
             ));
   }
 
+  /// Same as [_showErrorDialog]: the callers pass the English 'Success!', translated
+  /// here so every success dialog is bilingual.
   void _showSuccessDialog(String title, String message, IconData icon,
       Color color, VoidCallback onOk) {
+    final heading = title == 'Success!' ? t('success') : title;
     showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -829,7 +837,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   decoration: BoxDecoration(
                       color: color.withOpacity(0.1), shape: BoxShape.circle),
                   child: Icon(icon, size: 36, color: color)),
-              title: Text(title,
+              title: Text(heading,
                   textAlign: TextAlign.center,
                   style: TextStyle(fontWeight: FontWeight.bold, color: color)),
               content: Text(message, textAlign: TextAlign.center),
@@ -1205,7 +1213,7 @@ class _AuthScreenState extends State<AuthScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Format: ${_countries.firstWhere((c) => c['code'] == _selectedCountry)['format']}',
+            '${t('authFormat')}: ${_countries.firstWhere((c) => c['code'] == _selectedCountry)['format']}',
             style: const TextStyle(
                 fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
           ),
@@ -1316,7 +1324,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    'Register as Business Manager',
+                    t('authRegisterAsManager'),
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -1330,7 +1338,7 @@ class _AuthScreenState extends State<AuthScreen> {
               subtitle: Padding(
                 padding: const EdgeInsets.only(left: 34),
                 child: Text(
-                  'Manage your own company and staff',
+                  t('authManageOwnCompany'),
                   style: TextStyle(
                     fontSize: 11,
                     color: _registerAsManager
@@ -1409,14 +1417,14 @@ class _AuthScreenState extends State<AuthScreen> {
                                       } else {
                                         _showErrorDialog(
                                             t('auth_invalidCode'),
-                                            'Company not found',
+                                            t('authCompanyNotFound'),
                                             Icons.error,
                                             Colors.red);
                                       }
                                     } catch (e) {
                                       _showErrorDialog(
                                           'Error',
-                                          'Could not verify',
+                                          t('authCouldNotVerify'),
                                           Icons.error,
                                           Colors.red);
                                     }
