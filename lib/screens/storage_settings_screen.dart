@@ -1121,7 +1121,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                   children: [
                     _buildThemeOption(
                       Icons.light_mode,
-                      'Light',
+                      t('st_themeLight'),
                       ThemeMode.light,
                       theme,
                       primaryColorValue,
@@ -1134,7 +1134,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     const SizedBox(width: 12),
                     _buildThemeOption(
                       Icons.dark_mode,
-                      'Dark',
+                      t('st_themeDark'),
                       ThemeMode.dark,
                       theme,
                       primaryColorValue,
@@ -1212,7 +1212,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       style:
                           TextStyle(color: theme.textTheme.bodyLarge?.color)),
                   subtitle: Text(
-                      'Reduce spacing and font sizes for more content',
+                      t('st_compactHint'),
                       style: TextStyle(color: theme.hintColor)),
                   value: _compactMode,
                   onChanged: (value) {
@@ -1278,9 +1278,9 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     color: primaryColorValue.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text(
-                    'Active',
-                    style: TextStyle(fontSize: 8, fontWeight: FontWeight.w500),
+                  child: Text(
+                    t('st_themeActive'),
+                    style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w500),
                   ),
                 ),
             ],
@@ -1323,7 +1323,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Currency Settings',
+                      t('st_currencySettings'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -1342,7 +1342,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      'Read Only',
+                      t('st_readOnly'),
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
@@ -1357,7 +1357,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Currency settings are managed by your company manager.',
+                t('st_currencyManagedBy'),
                 style: TextStyle(
                   fontSize: 12,
                   // ✅ Dark: lighter grey, Light: grey
@@ -1370,8 +1370,10 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               _buildReadOnlyField('Currency Symbol', _currencySymbol),
               const SizedBox(height: 12),
               _buildReadOnlyField(
-                'Currency Position',
-                _currencyPosition == 'left' ? 'Left (\$100)' : 'Right (100Frs)',
+                t('st_currencyPosition'),
+                _currencyPosition == 'left'
+                    ? '${t('st_currencyLeft')} (\$100)'
+                    : '${t('st_currencyRight')} (100Frs)',
               ),
               const SizedBox(height: 12),
               _buildReadOnlyField('Number Format', _getNumberFormatDisplay()),
@@ -1397,7 +1399,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Currency Settings',
+                    t('st_currencySettings'),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
@@ -1412,8 +1414,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     color: Colors.orange.shade100,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text(
-                    'Company-Wide',
+                  child: Text(
+                    t('st_companyWide'),
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w500,
@@ -1425,7 +1427,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'All staff will use these currency settings.',
+              t('st_allStaffCurrency'),
               style: TextStyle(
                 fontSize: 12,
                 color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
@@ -1467,7 +1469,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Currency Position',
+              t('st_currencyPosition'),
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: theme.textTheme.bodyLarge?.color,
@@ -1478,7 +1480,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               children: [
                 Expanded(
                   child: _buildRadioOption(
-                    'Left (\$100)',
+                    '${t('st_currencyLeft')} (\$100)',
                     _currencyPosition == 'left',
                     () {
                       setState(() {
@@ -1493,7 +1495,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                 ),
                 Expanded(
                   child: _buildRadioOption(
-                    'Right (100Frs)',
+                    '${t('st_currencyRight')} (100Frs)',
                     _currencyPosition == 'right',
                     () {
                       setState(() {
@@ -1510,7 +1512,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Number Format',
+              t('st_numberFormat'),
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: theme.textTheme.bodyLarge?.color,
@@ -1654,7 +1656,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                 Icon(Icons.preview, color: primaryColorValue),
                 const SizedBox(width: 8),
                 Text(
-                  'Live Preview',
+                  t('st_livePreview'),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
@@ -1670,9 +1672,9 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       color: Colors.orange,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Text(
-                      'Unsaved',
-                      style: TextStyle(color: Colors.white, fontSize: 10),
+                    child: Text(
+                      t('st_unsaved'),
+                      style: const TextStyle(color: Colors.white, fontSize: 10),
                     ),
                   ),
               ],
@@ -2010,7 +2012,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Company Information',
+                      t('st_companyInformation'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -2027,7 +2029,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      'Read Only',
+                      t('st_readOnly'),
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
@@ -2041,7 +2043,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Company information is managed by your company manager.',
+                t('st_companyInfoManagedBy'),
                 style: TextStyle(
                   fontSize: 12,
                   color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
@@ -2076,13 +2078,13 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
-                Icon(Icons.business, size: 20),
-                SizedBox(width: 8),
+                const Icon(Icons.business, size: 20),
+                const SizedBox(width: 8),
                 Text(
-                  'Company Information',
-                  style: TextStyle(
+                  t('st_companyInformation'),
+                  style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                   ),
@@ -2168,7 +2170,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Format: ${_countries.firstWhere((c) => c['code'] == _selectedCountry)['format']}',
+              '${t('st_phoneFormat')} ${_countries.firstWhere((c) => c['code'] == _selectedCountry)['format']}',
               style: TextStyle(
                 fontSize: 11,
                 color: theme.hintColor,
@@ -2259,15 +2261,15 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                 String? warning;
                 if (_selectedCountry == 'CM') {
                   if (digits.isNotEmpty && !digits.startsWith('6')) {
-                    warning = 'Cameroon numbers must start with 6';
+                    warning = t('st_cameroonStart6');
                   } else if (digits.length != 9) {
                     warning =
-                        'Cameroon numbers must be 9 digits (currently ${digits.length})';
+                        '${t('st_cameroon9Digits')} (${t('st_currently')} ${digits.length})';
                   }
                 } else if (_selectedCountry == 'NG') {
                   if (digits.length != 10) {
                     warning =
-                        'Nigeria numbers must be 10 digits (currently ${digits.length})';
+                        '${t('st_nigeria10Digits')} (${t('st_currently')} ${digits.length})';
                   }
                 }
 
@@ -2297,9 +2299,10 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         const Icon(Icons.check_circle,
                             color: Colors.green, size: 14),
                         const SizedBox(width: 6),
-                        const Text(
-                          'Valid phone number',
-                          style: TextStyle(color: Colors.green, fontSize: 11),
+                        Text(
+                          t('st_validPhone'),
+                          style: const TextStyle(
+                              color: Colors.green, fontSize: 11),
                         ),
                       ],
                     ),
@@ -2617,7 +2620,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Business Payment Settings',
+                      t('st_businessPaymentSettings'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -2632,17 +2635,17 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       color: Colors.grey.shade200,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Text(
-                      'Read Only',
+                    child: Text(
+                      t('st_readOnly'),
                       style:
-                          TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
+                          const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
               Text(
-                'Payment settings are managed by your company manager.',
+                t('st_paymentManagedBy'),
                 style: TextStyle(
                   fontSize: 12,
                   color: theme.hintColor,
@@ -2651,7 +2654,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               ),
               const SizedBox(height: 16),
               _buildReadOnlySwitch(
-                  'Enable Business Payments', _businessPaymentsEnabled),
+                  t('st_enableBusinessPayments'), _businessPaymentsEnabled),
               const SizedBox(height: 8),
               _buildReadOnlySwitch('MTN Mobile Money', _mtnEnabled),
               const SizedBox(height: 8),
@@ -2678,7 +2681,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Business Payment Settings',
+                    t('st_businessPaymentSettings'),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
@@ -2693,8 +2696,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     color: Colors.orange.shade100,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text(
-                    'Company-Wide',
+                  child: Text(
+                    t('st_companyWide'),
                     style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
@@ -2705,7 +2708,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'All staff will use these payment settings.',
+              t('st_allStaffPayments'),
               style: TextStyle(
                 fontSize: 12,
                 color: theme.hintColor,
@@ -2796,7 +2799,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     if (_mtnEnabled) ...[
                       const SizedBox(height: 12),
                       Text(
-                        'This phone number will RECEIVE payments from customers',
+                        t('st_receivePayments'),
                         style: TextStyle(
                           fontSize: 11,
                           color: theme.hintColor,
@@ -3020,7 +3023,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            'Credit Card',
+                            t('st_creditCard'),
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
@@ -3064,7 +3067,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     if (_orangeEnabled) ...[
                       const SizedBox(height: 12),
                       Text(
-                        'This phone number will RECEIVE payments from customers',
+                        t('st_receivePayments'),
                         style: TextStyle(
                           fontSize: 11,
                           color: theme.hintColor,
@@ -3075,8 +3078,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       TextField(
                         controller: _orangeMerchantPhoneController,
                         decoration: InputDecoration(
-                          labelText:
-                              'Your Orange Phone Number (Receives Money)',
+                          labelText: t('st_orangePhone'),
                           hintText: t('st_egPhone'),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -3291,20 +3293,20 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                 return Column(
                   children: [
                     _buildStatRow(
-                        'Custom Drinks', '${stats['drinksCount']}', theme),
+                        t('st_customDrinks'), '${stats['drinksCount']}', theme),
                     _buildStatRow(
-                        'Order History', '${stats['ordersCount']}', theme),
+                        t('st_orderHistoryStat'), '${stats['ordersCount']}', theme),
                     _buildStatRow(
-                        'Pending Sync Items', '${stats['pendingSync']}', theme),
+                        t('st_pendingSyncItems'), '${stats['pendingSync']}', theme),
                     _buildStatRow(
-                        'Available Backups', '${stats['backupCount']}', theme),
+                        t('st_availableBackups'), '${stats['backupCount']}', theme),
                     _buildStatRow(
-                      'Last Backup',
+                      t('st_lastBackup'),
                       stats['lastBackup'] != 'Never'
                           ? DateFormat('yyyy-MM-dd HH:mm:ss').format(
                               DateTime.fromMillisecondsSinceEpoch(
                                   int.parse(stats['lastBackup'])))
-                          : 'Never',
+                          : t('st_never'),
                       theme,
                     ),
                   ],
@@ -3337,7 +3339,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     color: theme.textTheme.bodyLarge?.color)),
             const SizedBox(height: 12),
             Text(
-                'Create regular backups to protect your data from accidental loss.',
+                t('st_backupNote'),
                 style: TextStyle(color: theme.hintColor)),
             const SizedBox(height: 16),
             Row(
@@ -3721,8 +3723,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(t('st_clearAllData')),
-        content: const Text(
-            'This will delete ALL drinks and orders. This action cannot be undone.'),
+        content: Text(t('st_clearDataConfirm')),
         backgroundColor: theme.cardColor,
         titleTextStyle: TextStyle(
             color: theme.textTheme.bodyLarge?.color,
