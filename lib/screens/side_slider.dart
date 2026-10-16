@@ -813,8 +813,8 @@ class _SideSliderState extends State<SideSlider> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  'Invoice History',
+                                Text(
+                                  t('invHistoryTitle'),
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 18,
@@ -823,7 +823,7 @@ class _SideSliderState extends State<SideSlider> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  '${filteredOrders.length} invoice${filteredOrders.length != 1 ? 's' : ''}',
+                                  '${filteredOrders.length} ${filteredOrders.length == 1 ? t('invInvoice') : t('invInvoices')}',
                                   style: const TextStyle(
                                     color: Colors.white70,
                                     fontSize: 11,
@@ -843,7 +843,7 @@ class _SideSliderState extends State<SideSlider> {
                                     color: Colors.white.withOpacity(0.3)),
                               ),
                               child: Text(
-                                '${filteredOrders.length} items',
+                                '${filteredOrders.length} ${filteredOrders.length == 1 ? t('invItem') : t('invItems')}',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 11,
@@ -1021,7 +1021,7 @@ class _SideSliderState extends State<SideSlider> {
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
-                                        'Filter:',
+                                        '${t('invFilter')}:',
                                         style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
@@ -1369,7 +1369,7 @@ class _SideSliderState extends State<SideSlider> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Order #${order.id}', // FULL ORDER ID - NOT truncated
+                      '${t('orderNumber')} #${order.id}', // FULL ORDER ID - NOT truncated
                       style: TextStyle(
                         fontSize: isMobile ? 12.0 : 13.0,
                         color: widget.textPrimaryColor,

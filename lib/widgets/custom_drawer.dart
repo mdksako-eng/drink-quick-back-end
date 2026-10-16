@@ -944,13 +944,13 @@ class CustomDrawer extends StatelessWidget {
               color: Colors.grey.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.business, color: Colors.grey, size: 14),
                 SizedBox(width: 6),
                 Text(
-                  'No Company',
+                  t('noCompany'),
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
@@ -995,13 +995,13 @@ class CustomDrawer extends StatelessWidget {
                   color: Colors.grey.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.business, color: Colors.grey, size: 14),
                     SizedBox(width: 6),
                     Text(
-                      'No Company',
+                      t('noCompany'),
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 12,
@@ -1027,13 +1027,13 @@ class CustomDrawer extends StatelessWidget {
                   color: Colors.grey.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.business, color: Colors.grey, size: 14),
                     SizedBox(width: 6),
                     Text(
-                      'No Company',
+                      t('noCompany'),
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 12,

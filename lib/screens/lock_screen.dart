@@ -275,7 +275,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
 
       if (_pinAttempts < _maxPinAttempts) {
         Helpers.showToast(
-          'Invalid PIN. $remaining attempts remaining.',
+          '${t('lockInvalidPin')} $remaining ${t('lockAttemptsRemaining')}',
           isError: true,
         );
       } else {
@@ -461,7 +461,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
             const SizedBox(height: 16),
             Text(
               widget.sessionTerminatedMessage ??
-                  'Your account is now active on another device.',
+                  t('lockActiveElsewhere'),
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 16),
             ),
@@ -475,9 +475,9 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                 ),
                 child: Column(
                   children: [
-                    const Text(
-                      '📱 Previous Device:',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                    Text(
+                      t('lockPreviousDevice'),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -497,7 +497,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                'You will be redirected to the login screen.',
+                t('lockRedirectLogin'),
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey.shade600,
@@ -556,13 +556,13 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.login, size: 20),
                   SizedBox(width: 10),
                   Text(
-                    'Login Again',
+                    t('lockLoginAgain'),
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -624,7 +624,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
               ),
               const SizedBox(height: 16),
               Text(
-                'Use $_biometricType',
+                '${t('lockUse')} $_biometricType',
                 style: TextStyle(
                   fontSize: isMobile ? 18 : 24,
                   fontWeight: FontWeight.w600,
@@ -664,7 +664,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                         setState(() => _isPinMode = true);
                       },
                 child: Text(
-                  'Use PIN instead',
+                  t('lockUsePinInstead'),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.7),
                     fontSize: isMobile ? 14 : 16,
