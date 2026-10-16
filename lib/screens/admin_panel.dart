@@ -258,7 +258,10 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
                 isError: true);
           }
         }
-      } catch (e) { Helpers.showToast('Error: $e', isError: true); }
+      } catch (e) {
+        debugPrint('Block user failed: $e');
+        Helpers.showToast(t('errorGeneric'), isError: true);
+      }
       setState(() => _isLoading = false);
     }
   }
@@ -314,7 +317,10 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
                 isError: true);
           }
         }
-      } catch (e) { Helpers.showToast('Error: $e', isError: true); }
+      } catch (e) {
+        debugPrint('Unblock user failed: $e');
+        Helpers.showToast(t('errorGeneric'), isError: true);
+      }
       setState(() => _isLoading = false);
     }
   }
@@ -351,7 +357,10 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
           Helpers.showToast('${user['username']} ${t('admin_deletedToast')}');
           await _loadUsers();
         }
-      } catch (e) { Helpers.showToast('Error: $e'); }
+      } catch (e) {
+        debugPrint('Delete user failed: $e');
+        Helpers.showToast(t('errorGeneric'), isError: true);
+      }
       setState(() => _isLoading = false);
     }
   }
@@ -363,7 +372,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
       builder: (ctx) => AlertDialog(
         title: Text('${t('admin_changeRole')} ${user['username']}'),
         content: Column(mainAxisSize: MainAxisSize.min, children: roles.map((r) => ListTile(
-          title: Text(r),
+          title: Text(t('role_$r')),
           leading: Radio<String>(
             value: r, 
             groupValue: user['role'], 
@@ -390,7 +399,10 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
           Helpers.showToast('${t('admin_roleChanged')} $newRole');
           await _loadUsers();
         }
-      } catch (e) { Helpers.showToast('Error: $e'); }
+      } catch (e) {
+        debugPrint('Change role failed: $e');
+        Helpers.showToast(t('errorGeneric'), isError: true);
+      }
       setState(() => _isLoading = false);
     }
   }

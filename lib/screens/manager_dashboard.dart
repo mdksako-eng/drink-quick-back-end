@@ -635,7 +635,8 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
           break;
       }
     } catch (e) {
-      if (mounted) Helpers.showToast('$e', isError: true);
+      debugPrint('Export failed: $e');
+      if (mounted) Helpers.showToast(t('errorGeneric'), isError: true);
     }
   }
 
@@ -726,7 +727,8 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
         files: [XFile(file.path)],
       ));
     } catch (e) {
-      if (mounted) Helpers.showToast('$e');
+      debugPrint('CSV share failed: $e');
+      if (mounted) Helpers.showToast(t('errorGeneric'), isError: true);
     }
   }
 

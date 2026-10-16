@@ -191,7 +191,7 @@ class CustomDrawer extends StatelessWidget {
                       size: 12, color: Colors.white70),
                   const SizedBox(width: 4),
                   Expanded(
-                      child: Text(user?.email ?? 'No email',
+                      child: Text(user?.email ?? t('noEmail'),
                           style: const TextStyle(
                               fontSize: 11,
                               color: Color.fromRGBO(255, 255, 255, 0.702)),
@@ -488,7 +488,7 @@ class CustomDrawer extends StatelessWidget {
                   _buildDrawerSectionTitle(context, t('menuAdmin'),
                       color: Colors.purple),
                   _buildDrawerItem(
-                      context, Icons.admin_panel_settings, 'Admin Panel', () {
+                      context, Icons.admin_panel_settings, t('adminPanel'), () {
                     Navigator.pop(context);
                     Navigator.push(
                         context,
@@ -556,7 +556,7 @@ class CustomDrawer extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text('Version 1.1.0',
+                Text('${t('version')} 1.1.0',
                     style: TextStyle(fontSize: 11, color: theme.hintColor)),
                 const SizedBox(height: 4),
                 Text('© 2026 Drink Quick Cal',

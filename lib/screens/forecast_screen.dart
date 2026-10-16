@@ -758,7 +758,8 @@ class _ForecastScreenState extends State<ForecastScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _aiLoading = false);
-        Helpers.showToast('$e');
+        debugPrint('AI suggestion failed: $e');
+        Helpers.showToast(t('errorGeneric'), isError: true);
       }
     }
   }
