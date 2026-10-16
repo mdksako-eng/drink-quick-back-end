@@ -1,6 +1,8 @@
 // lib/widgets/storage_status_widget.dart
 import 'package:flutter/material.dart';
 import 'package:drinks_calculator_fixed/services/storage_service.dart';
+// The three buttons below were hardcoded English, so a French user saw English.
+import 'package:drinks_calculator_fixed/utils/i18n.dart';
 
 class StorageStatusWidget extends StatelessWidget {
   final VoidCallback onBackup;
@@ -43,19 +45,19 @@ class StorageStatusWidget extends StatelessWidget {
               children: [
                 _buildActionButton(
                   icon: Icons.backup,
-                  label: 'Backup',
+                  label: t('st_backup'),
                   onPressed: onBackup,
                   color: Colors.blue,
                 ),
                 _buildActionButton(
                   icon: Icons.restore,
-                  label: 'Restore',
+                  label: t('st_restore'),
                   onPressed: onRestore,
                   color: Colors.green,
                 ),
                 _buildActionButton(
                   icon: Icons.delete_sweep,
-                  label: 'Clear',
+                  label: t('st_clear'),
                   onPressed: onClear,
                   color: Colors.red,
                 ),

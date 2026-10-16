@@ -196,7 +196,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   void _showAddStockDialog(InventoryItem item) {
     final quantityController = TextEditingController();
-    final reasonController = TextEditingController(text: 'Restock');
+    final reasonController = TextEditingController(text: t('reasonRestock'));
 
     showDialog(
       context: context,

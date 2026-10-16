@@ -2123,7 +2123,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             DropdownButtonFormField<String>(
               value: _selectedCountry,
               decoration: InputDecoration(
-                labelText: 'Country',
+                labelText: t('auth_country'),
                 labelStyle: TextStyle(color: theme.hintColor),
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -2180,7 +2180,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             TextFormField(
               controller: _companyPhoneController,
               decoration: InputDecoration(
-                labelText: 'Phone Number',
+                labelText: t('phoneNumber'),
                 hintText: _countries
                     .firstWhere((c) => c['code'] == _selectedCountry)['format'],
                 labelStyle: TextStyle(color: theme.hintColor),
@@ -3044,9 +3044,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                     TextField(
                       controller: _notchpaySyncIdController,
                       decoration: InputDecoration(
-                        labelText: 'Notch Pay Sync Account ID',
-                        hintText:
-                            "Set this to enable payment methods (money goes to the company)",
+                        labelText: t('npSyncAccountId'),
+                        hintText: t('npSyncAccountIdHint'),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),

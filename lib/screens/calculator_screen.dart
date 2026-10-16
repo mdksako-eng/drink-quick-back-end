@@ -161,7 +161,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             _selectedDrinkId = null;
             _searchController.clear();
             _searchQuery = '';
-            Helpers.showToast('⚠️ Selected drink is now out of stock',
+            Helpers.showToast(t('calcSelectedOutOfStock'),
                 isError: true);
           }
         }
@@ -426,7 +426,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Helpers.showToast(
-              'MTN Mobile Money was disabled. Switched to Cash payment.');
+              t('calcMtnDisabled'));
         });
       }
 
@@ -439,7 +439,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Helpers.showToast(
-              'Orange Money was disabled. Switched to Cash payment.');
+              t('calcOrangeDisabled'));
         });
       }
 
@@ -452,13 +452,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Helpers.showToast(
-              'Business payments disabled. Switched to Cash payment.');
+              t('calcCamPayDisabled'));
         });
       }
 
       if (!wasEnabled && _businessPaymentsEnabled) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          Helpers.showToast('Business payments are now available!');
+          Helpers.showToast(t('calcCamPayEnabled'));
         });
       }
     });
@@ -610,7 +610,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     final availableStock = currentDrink.currentStock - alreadySelected;
 
     if (availableStock <= 0) {
-      Helpers.showToast('${drink.name} is out of stock!', isError: true);
+      Helpers.showToast('${drink.name} — ${t('outOfStockToast')}', isError: true);
       if (mounted) {
         setState(() {
           _selectedDrinkId = null;
@@ -623,7 +623,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
     if (availableStock < _selectedQuantity) {
       Helpers.showToast(
-          'Only ${availableStock} more ${drink.name}(s) available!',
+          '${drink.name}: $availableStock ${t('calcLeftInStock')}',
           isError: true);
       return;
     }
@@ -647,7 +647,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       });
     });
 
-    Helpers.showToast('Added $_selectedQuantity ${drink.name}');
+    Helpers.showToast('${t('calcAdded')} $_selectedQuantity ${drink.name}');
 
     if (scrollToDrink) {
       _scrollTimer?.cancel();
@@ -744,7 +744,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         _sortSelectedDrinks();
         _calculateTotal();
 
-        Helpers.showToast('Removed 1 $drinkName');
+        Helpers.showToast('${t('calcRemoved')} $drinkName');
 
         if (_selectedDrinks.where((d) => d.name == drinkName).isEmpty) {
           _expandedDrinkName = null;
@@ -793,12 +793,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       _selectedDrinkId = null;
       _originalOrderId = null;
     });
-    Helpers.showToast('Order cleared - $count items removed');
+    Helpers.showToast('${t('calcOrderCleared')} $count');
   }
 
   void _showPreviewInvoice() {
     if (_selectedDrinks.isEmpty) {
-      Helpers.showToast('No purchases yet! Please add drinks first.',
+      Helpers.showToast(t('calcNoPurchases'),
           isError: true);
       return;
     }
@@ -892,7 +892,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       }
 
       if (paymentSuccess) {
-        Helpers.showToast('Payment processed successfully!');
+        Helpers.showToast(t('calcPaymentProcessed'));
         if (_originalOrderId != null && _originalOrderId!.isNotEmpty) {
           final orderProvider =
               Provider.of<OrderProvider>(context, listen: false);
@@ -926,16 +926,20 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         _showResponsiveInvoice();
       }
     } catch (e) {
+      // A thrown exception is not a message: it can be a stack trace or a provider
+      // sentence. The operator sees our sentence; the technical detail is logged.
+      debugPrint('❌ Payment flow error: $e');
+      final message = PaymentErrorHelper.message(e);
       setState(() {
         _paymentStatus = 'failed';
-        _paymentMessage = e.toString();
+        _paymentMessage = message;
       });
       // 🔔 Notify the in-app notification center
       NotificationService().showPaymentFailed(
-        reason: e.toString(),
+        reason: message,
         paymentMethod: _selectedPaymentMethod.name,
       );
-      Helpers.showToast('Payment failed: ${e.toString()}', isError: true);
+      Helpers.showToast(message, isError: true);
     } finally {
       setState(() {
         _isProcessingPayment = false;
@@ -958,12 +962,14 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
     // ✅ Validate phone number
     if (paymentMethod != 'card' && !_validatePhoneNumber(customerPhone, paymentMethod)) {
+      // Composed from a translated fragment: t() takes no parameters, and word order
+      // differs between EN and FR.
+      final message = '${t('calcInvalidPhone')} $paymentMethod';
       setState(() {
         _paymentStatus = 'failed';
-        _paymentMessage = 'Invalid phone number for $paymentMethod';
+        _paymentMessage = message;
       });
-      Helpers.showToast('Invalid phone number for $paymentMethod',
-          isError: true);
+      Helpers.showToast(message, isError: true);
       return false;
     }
 
@@ -1131,7 +1137,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       size: 60, color: Colors.orange),
                   SizedBox(height: 16),
                   Text(
-                    'Please check your phone and enter your PIN to approve the payment.',
+                    t('calcCheckPhonePin'),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
@@ -1168,7 +1174,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'Waiting for confirmation... (${_attempts * 10}s)',
+                    '${t('calcWaitingConfirmation')} (${_attempts * 10}s)',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ],
@@ -1953,8 +1959,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   });
                 });
               }
-              Helpers.showToast(
-                  'Invoice loaded! You can now edit and re-process.');
+              Helpers.showToast(t('invoiceLoadedForEdit'));
             },
           ),
           Positioned(
@@ -2374,7 +2379,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20))),
                 icon: Icon(Icons.logout, size: 18, color: Colors.white),
-                label: Text('Logout',
+                label: Text(t('logout'),
                     style: TextStyle(fontSize: 14, color: Colors.white)),
               ),
             ],
@@ -2534,7 +2539,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                   ),
                                 if (isLowStock && !isOutOfStock)
                                   Text(
-                                    'LOW STOCK (${drink.currentStock})',
+                                    '${t('calcLowStock')} (${drink.currentStock})',
                                     style: const TextStyle(
                                       fontSize: 9,
                                       color: Colors.orange,
@@ -2839,7 +2844,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                         ),
                                       if (isLowStock && !isOutOfStock)
                                         Text(
-                                          'LOW STOCK (${drink.currentStock})',
+                                          '${t('calcLowStock')} (${drink.currentStock})',
                                           style: const TextStyle(
                                             fontSize: 9,
                                             color: Colors.orange,
@@ -2948,7 +2953,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                   .firstWhere((d) => d.id == _selectedDrinkId);
                               _addDrink(selectedDrink);
                             } else {
-                              Helpers.showToast('Please select a drink first');
+                              Helpers.showToast(t('calcSelectDrinkFirst'));
                             }
                           },
                           style: ElevatedButton.styleFrom(
@@ -3263,7 +3268,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Total:',
+                Text('${t('total')}:',
                     style: TextStyle(
                         fontSize: isMobile ? 16 : 18,
                         fontWeight: FontWeight.bold,
@@ -3318,7 +3323,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       style: TextStyle(
                           fontSize: isMobile ? 10 : 12, color: Colors.green)),
                 if (remainingStock <= 0)
-                  Text('Out of stock!',
+                  Text(t('outOfStockToast'),
                       style: TextStyle(
                           fontSize: isMobile ? 10 : 12,
                           color: Colors.red,
@@ -3362,8 +3367,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       : null,
                   color: remainingStock > 0 ? Colors.green : Colors.grey,
                   tooltip: remainingStock > 0
-                      ? 'Add one more (${remainingStock} left)'
-                      : 'Out of stock',
+                      ? '${t('calcAddOneMore')} ($remainingStock ${t('calcLeftShort')})'
+                      : t('outOfStockToast'),
                 ),
               ),
             ]),
@@ -3385,7 +3390,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               onPressed: () => setState(() => _expandedDrinkName = null),
               icon: Icon(Icons.close, size: isMobile ? 16 : 18),
               label:
-                  Text('Close', style: TextStyle(fontSize: isMobile ? 12 : 14)),
+                  Text(t('close'), style: TextStyle(fontSize: isMobile ? 12 : 14)),
               style: TextButton.styleFrom(foregroundColor: theme.hintColor),
             ),
           ),
@@ -3419,7 +3424,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Total Amount:',
+                Text('${t('total')}:',
                     style: TextStyle(
                         fontSize: isMobile ? 16 : 20,
                         fontWeight: FontWeight.bold,
@@ -3454,7 +3459,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
           controller: _amountPaidController,
           keyboardType: TextInputType.number,
           decoration: InputDecoration(
-            hintText: 'Enter amount in ${CurrencyHelper.getSymbol()}',
+            hintText: '${t('calcEnterAmount')} ${CurrencyHelper.getSymbol()}',
             prefixIcon: Icon(Icons.attach_money, size: isMobile ? 20 : 24),
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -3517,14 +3522,14 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   Padding(
                       padding: EdgeInsets.only(top: 4.0),
                       child: Text(
-                          'Tap to refresh • Change to give back to customer',
+                          t('calcTapToRefreshChange'),
                           style: TextStyle(
                               color: Colors.green,
                               fontSize: isMobile ? 12 : 14))),
                 if (_balance < 0)
                   Padding(
                       padding: EdgeInsets.only(top: 4.0),
-                      child: Text('Tap to refresh • Customer needs to pay more',
+                      child: Text(t('calcTapToRefreshDue'),
                           style: TextStyle(
                               color: Colors.red,
                               fontSize: isMobile ? 12 : 14))),
@@ -3707,7 +3712,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
           ),
           SizedBox(height: 4),
           Text(
-            'Money will be transferred FROM this number TO your merchant account',
+            t('calcMomoTransferHint'),
             style: TextStyle(
               fontSize: isMobile ? 10 : 11,
               color: theme.hintColor,

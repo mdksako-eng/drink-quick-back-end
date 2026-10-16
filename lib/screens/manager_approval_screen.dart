@@ -193,23 +193,23 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Approve ${request['username']} as ${request['requestedRole']}?\n\nEnter the 6-digit code sent to the company owner\'s email:'),
+            Text('${t('mgrApproveAsk')} ${request['username']} (${request['requestedRole']}) ?\n\n${t('mgrApproveCodeHint')}'),
             const SizedBox(height: 16),
             TextField(
               controller: codeController,
               keyboardType: TextInputType.number,
               maxLength: 6,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Code',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: t('codeLabel'),
+                border: const OutlineInputBorder(),
                 counterText: '',
               ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t('cancel'))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
@@ -389,7 +389,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
                     )
                   : const Icon(Icons.refresh),
               onPressed: _isLoading ? null : _loadPendingRequests,
-              tooltip: 'Refresh',
+              tooltip: t('refresh'),
             ),
           ],
         ),

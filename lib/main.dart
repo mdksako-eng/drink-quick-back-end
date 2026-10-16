@@ -269,7 +269,7 @@ class MyAppState extends State<MyApp> {
             builder: (context, lang, _) => MaterialApp(
               key: ValueKey('app_$lang'),
               navigatorKey: navigatorKey,
-              title: 'Drinks Ordering and Management',
+              title: t('appWindowTitle'),
               debugShowCheckedModeBanner: false,
               theme: _buildLightTheme(primaryColor,
                   compact: themeProvider.compactMode),
