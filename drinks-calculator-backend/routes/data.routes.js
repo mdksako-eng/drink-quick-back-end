@@ -27,6 +27,7 @@ const {
 } = require('../utils/shiftMath');
 const orderVoid = require('../utils/orderVoid');
 const orderReturn = require('../utils/orderReturn');
+const { priceCart, parseCart } = require('../utils/orderPricing');
 
 const MANAGER_ROLES = ['Manager', 'Administrator', 'Admin'];
 
@@ -224,6 +225,52 @@ router.get('/orders', async (req, res) => {
   } catch (error) {
     console.error('GET /orders error:', error.message);
     res.status(500).json({ message: 'Failed to load orders' });
+  }
+});
+
+/**
+ * Price a cart from the company's own catalogue.
+ *
+ * Additive endpoint: no existing flow calls it yet. It is the primitive the till
+ * needs to stop trusting its own arithmetic — today a payment request only has to
+ * be `> 0` (routes/payment.routes.js), so a buggy or modified app could collect
+ * less than the sale is worth. `POST /api/orders/quote` answers "what is this cart
+ * really worth?" using prices the server reads itself.
+ *
+ * Body: { items: [{ drinkId, quantity? }] } — one entry per unit, as the cart is
+ * built. Reply: { valid, total, unitCount, lines, unknown, rejected }.
+ */
+router.post('/orders/quote', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const { lines, error } = parseCart(req.body);
+    if (error) return res.status(400).json({ message: error });
+
+    // Collect the ids defensively: priceCart reports malformed lines itself.
+    const ids = [...new Set(
+      lines
+        .filter((l) => l && typeof l === 'object' && l.drinkId !== undefined && l.drinkId !== null)
+        .map((l) => String(l.drinkId).slice(0, 100))
+    )];
+
+    const priceById = new Map();
+    if (ids.length > 0) {
+      const result = await req.db.query(
+        `SELECT id, price FROM drinks
+          WHERE company_id = $1 AND is_active = true AND id::text = ANY($2::text[])`,
+        [companyId, ids]
+      );
+      for (const row of result.rows) {
+        priceById.set(String(row.id), Number(row.price));
+      }
+    }
+
+    res.json(priceCart(lines, priceById));
+  } catch (err) {
+    console.error('POST /orders/quote error:', err.message);
+    res.status(500).json({ message: 'Failed to price the cart' });
   }
 });
 
