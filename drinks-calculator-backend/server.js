@@ -2,7 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { Pool } = require('pg');
-const bcrypt = require('bcryptjs');
+// Native bcrypt: the hashing runs on libuv's threadpool instead of the event
+// loop, so a login burst cannot freeze payments or /health. Hashes are the same
+// $2b$ format, so every existing password keeps verifying unchanged.
+const bcrypt = require('bcrypt');
 require('dotenv').config();
 
 const app = express();
@@ -14,6 +17,7 @@ const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinReq
 const { generateSessionToken, getSessionUser, requireSession } = require('./middleware/sessionAuth');
 const { requirePlan } = require('./middleware/planAuth');
 const legalAcceptance = require('./utils/legalAcceptance');
+const { createQueue } = require('./utils/authQueue');
 
 // ========== PASSWORD HELPERS ===========
 // Passwords are stored as bcrypt hashes ($2a$ / $2b$ / $2y$).
@@ -29,6 +33,12 @@ const { getCompanyOwnerId, canEditStaff } = require('./utils/staffPermissions');
 // live in a pure module so the rule is unit tested rather than embedded in a route.
 const passwordReset = require('./utils/passwordReset');
 const passwordResetStore = require('./utils/passwordResetStore');
+
+// ========== PASSWORD WORK LIMIT ==========
+// bcrypt is CPU work. Even on the threadpool, a login storm can take every thread
+// and make the API feel dead; this keeps at most AUTH_CONCURRENCY hashes running
+// and lets the rest queue while sales, payments and /health are still served.
+const authQueue = createQueue(process.env.AUTH_CONCURRENCY || 8);
 
 // ========== RATE LIMITING (in-memory) ==========
 const rateLimitBuckets = new Map();
@@ -934,7 +944,7 @@ app.post('/api/auth/reset-password-code', async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Invalid or expired code' });
     }
     
-    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [await bcrypt.hash(newPassword, 10), stored.userId]);
+    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [await authQueue.run(() => bcrypt.hash(newPassword, 10)), stored.userId]);
     delete resetCodes[email];
     
     res.json({ status: 'success', message: 'Password reset successfully!' });
@@ -1028,7 +1038,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
     
     // 🔒 Hash the password before storing — never persist plaintext
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await authQueue.run(() => bcrypt.hash(password, 10));
 
     const result = await pool.query(
       `INSERT INTO users (username, email, password, phone, role, company_id, security_question1, security_question2, email_verified) 
@@ -1208,11 +1218,11 @@ app.post('/api/auth/login', async (req, res) => {
     // 🔒 Verify password — supports bcrypt hashes and legacy plaintext (migrates on success)
     let passwordValid = false;
     if (isBcryptHash(user.password)) {
-      passwordValid = await bcrypt.compare(password, user.password);
+      passwordValid = await authQueue.run(() => bcrypt.compare(password, user.password));
     } else {
       passwordValid = password === user.password;
       if (passwordValid) {
-        const hashed = await bcrypt.hash(password, 10);
+        const hashed = await authQueue.run(() => bcrypt.hash(password, 10));
         await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashed, user.id]);
         console.log(`🔒 Migrated user ${user.id} from plaintext to hashed password`);
       }
@@ -1566,7 +1576,7 @@ app.post('/api/auth/create-staff', requireSession(pool), async (req, res) => {
     } catch (e) { /* owner column may not exist yet */ }
     
     // 🔒 Hash the password before storing
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await authQueue.run(() => bcrypt.hash(password, 10));
 
     // 🔐 OWNERS can add staff instantly. Co-managers' additions require the
     // owner to verify with the code emailed to them (join request flow).
