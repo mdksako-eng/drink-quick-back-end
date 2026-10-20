@@ -28,6 +28,7 @@ const {
 const orderVoid = require('../utils/orderVoid');
 const orderReturn = require('../utils/orderReturn');
 const { priceCart, parseCart } = require('../utils/orderPricing');
+const orderQuote = require('../utils/orderQuote');
 
 const MANAGER_ROLES = ['Manager', 'Administrator', 'Admin'];
 
@@ -267,7 +268,23 @@ router.post('/orders/quote', async (req, res) => {
       }
     }
 
-    res.json(priceCart(lines, priceById));
+    const priced = priceCart(lines, priceById);
+
+    // A valid quote is signed so the payment route can refuse any other amount
+    // (utils/orderQuote). No secret configured = no token = feature still off.
+    const signed = priced.valid
+      ? orderQuote.signQuote({
+          companyId,
+          total: priced.total,
+          unitCount: priced.unitCount,
+        }, orderQuote.quoteSecret())
+      : null;
+
+    res.json({
+      ...priced,
+      quoteToken: signed ? signed.token : null,
+      expiresAt: signed ? signed.expiresAt : null,
+    });
   } catch (err) {
     console.error('POST /orders/quote error:', err.message);
     res.status(500).json({ message: 'Failed to price the cart' });

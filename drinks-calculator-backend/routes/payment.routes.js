@@ -20,6 +20,7 @@ const paymentGuard = require('../utils/paymentGuard');
 // a portal the user cannot act on.
 const campayRefusal = require('../utils/campayRefusal');
 const { paymentQrDataUri } = require('../utils/paymentQr');
+const orderQuote = require('../utils/orderQuote');
 const { rawBodyOf } = require('../utils/requestBody');
 // Shared secret for verifying /api/payment/webhook calls (set in env).
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
@@ -527,6 +528,24 @@ router.post('/payment/campay-initiate', async (req, res) => {
       });
     }
 
+    // The amount must be the one the server priced for this cart (utils/orderQuote).
+    const quoteVerdict = orderQuote.checkQuote({
+      token: (req.body || {}).quoteToken,
+      companyId: user.company_id,
+      amount: value,
+      secret: orderQuote.quoteSecret(),
+      required: orderQuote.quoteRequired(),
+    });
+    if (!quoteVerdict.ok) {
+      return res.status(400).json({
+        success: false,
+        error: quoteVerdict.code === 'amount_mismatch'
+          ? 'The amount does not match the priced cart'
+          : 'This payment needs a server-priced quote',
+        code: quoteVerdict.code,
+      });
+    }
+
     const companyRes = await req.db.query(
       `SELECT ${CAMPAY_SELECT} FROM companies WHERE id = $1`,
       [user.company_id]
@@ -795,6 +814,25 @@ router.post('/payment/initiate', async (req, res) => {
     }
     if ((paymentMethod === 'mtn' || paymentMethod === 'orange') && !customerPhone) {
       return res.status(400).json({ error: 'Customer phone is required' });
+    }
+
+    // The amount must be the one the server priced for this cart (utils/orderQuote).
+    // Off until ORDER_QUOTE_SECRET is configured; a supplied token is always checked.
+    const quoteVerdict = orderQuote.checkQuote({
+      token: (req.body || {}).quoteToken,
+      companyId,
+      amount,
+      secret: orderQuote.quoteSecret(),
+      required: orderQuote.quoteRequired(),
+    });
+    if (!quoteVerdict.ok) {
+      return res.status(400).json({
+        success: false,
+        error: quoteVerdict.code === 'amount_mismatch'
+          ? 'The amount does not match the priced cart'
+          : 'This payment needs a server-priced quote',
+        code: quoteVerdict.code,
+      });
     }
 
     // ✅ Validate phone number format (operator-specific methods only)

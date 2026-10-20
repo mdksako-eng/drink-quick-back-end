@@ -975,6 +975,33 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       return false;
     }
 
+    // ✅ Ask the server to price the cart. It answers with the authoritative
+    // total and, when configured, a signed token the payment routes accept — so a
+    // payment can never collect less than the catalogue says. A null reply
+    // (older backend, offline) leaves the sale on the previous behaviour.
+    String? quoteToken;
+    final quote = await PaymentService.quoteCart([
+      for (final drink in _selectedDrinks) {'drinkId': drink.id},
+    ]);
+    if (quote != null && quote['valid'] == true) {
+      final serverTotal = (quote['total'] as num?)?.toDouble();
+      if (serverTotal != null &&
+          (serverTotal - amount).abs() > 0.009) {
+        // Never charge a total the operator did not see on the screen.
+        final message =
+            '${t('calcPriceChanged')} ${CurrencyHelper.format(serverTotal)}';
+        debugPrint('⚠️ Cart priced ${CurrencyHelper.format(serverTotal)} by the '
+            'server, ${CurrencyHelper.format(amount)} on the till');
+        setState(() {
+          _paymentStatus = 'failed';
+          _paymentMessage = message;
+        });
+        Helpers.showToast(message, isError: true);
+        return false;
+      }
+      quoteToken = quote['quoteToken'] as String?;
+    }
+
     // ✅ Initiate payment via backend.
     // Prefer the company's OWN CamerPay account when it is connected — the money
     // then reaches this bar directly. When the bar has not connected CamerPay the
@@ -985,6 +1012,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       customerPhone: customerPhone,
       paymentMethod: paymentMethod,
       orderId: orderId,
+      quoteToken: quoteToken,
     );
     if (result['success'] != true && result['fallback'] == true) {
       debugPrint(
@@ -994,6 +1022,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         customerPhone: customerPhone,
         paymentMethod: paymentMethod,
         orderId: orderId,
+        quoteToken: quoteToken,
       );
     }
 

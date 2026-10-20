@@ -176,6 +176,7 @@ class PaymentService {
     required String customerPhone,
     required String paymentMethod,
     required String orderId,
+    String? quoteToken,
   }) async {
     try {
       final token = await SecureStorageService.getSessionToken();
@@ -197,6 +198,8 @@ class PaymentService {
           'customerPhone': customerPhone,
           'paymentMethod': paymentMethod,
           'orderId': orderId,
+          if (quoteToken != null && quoteToken.isNotEmpty)
+            'quoteToken': quoteToken,
         }),
       );
 
@@ -219,6 +222,36 @@ class PaymentService {
     }
   }
 
+  /// Ask the server what this cart is really worth.
+  ///
+  /// The reply carries `total` (priced from the company's own catalogue) and,
+  /// when the backend has a signing secret, `quoteToken`. Payment routes refuse
+  /// an amount that differs from the signed total, so this is what makes the
+  /// till's arithmetic verifiable instead of trusted. Returns null when the
+  /// endpoint is unavailable (older backend, offline) — the sale then proceeds
+  /// exactly as before, because the server only enforces what it can verify.
+  static Future<Map<String, dynamic>?> quoteCart(
+      List<Map<String, dynamic>> items) async {
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      if (token == null) return null;
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/orders/quote'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'items': items}),
+      );
+      if (response.statusCode != 200) return null;
+      final decoded = jsonDecode(response.body);
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+    } catch (e) {
+      print('⚠️ Cart quote unavailable: $e');
+      return null;
+    }
+  }
+
   /// Try to collect through the company's OWN CamerPay account.
   ///
   /// Returns the SAME shape as [initiatePayment] (`success`, `transactionId`,
@@ -231,6 +264,7 @@ class PaymentService {
     required String customerPhone,
     required String paymentMethod,
     required String orderId,
+    String? quoteToken,
   }) async {
     try {
       final token = await SecureStorageService.getSessionToken();
@@ -252,6 +286,8 @@ class PaymentService {
           'customerPhone': customerPhone,
           'paymentMethod': paymentMethod,
           'orderId': orderId,
+          if (quoteToken != null && quoteToken.isNotEmpty)
+            'quoteToken': quoteToken,
         }),
       );
 
@@ -276,9 +312,13 @@ class PaymentService {
 
       // These codes mean "this bar is not ready for CamerPay", which is not a
       // payment failure — the caller then uses the legacy rail.
-      final code =
-          (data['error'] ?? (decoded is Map ? decoded['error'] : null) ?? '')
-              .toString();
+      // Prefer a machine code when the server sent one (`quote_required`,
+      // `amount_mismatch`), otherwise its human message.
+      final code = (data['code'] ??
+              data['error'] ??
+              (decoded is Map ? decoded['error'] : null) ??
+              '')
+          .toString();
       const fallbackCodes = {
         'campay_not_connected',
         'webhook_not_configured',
