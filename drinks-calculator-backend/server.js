@@ -14,7 +14,7 @@ const app = express();
 const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail } = require('./utils/email.service');
 
 // ========== SESSION AUTH (DB-backed) ==========
-const { generateSessionToken, getSessionUser, requireSession } = require('./middleware/sessionAuth');
+const { generateSessionToken, getSessionUser, requireSession, invalidateSession, invalidateUserSessions } = require('./middleware/sessionAuth');
 const { requirePlan } = require('./middleware/planAuth');
 const legalAcceptance = require('./utils/legalAcceptance');
 const { createQueue } = require('./utils/authQueue');
@@ -86,15 +86,16 @@ const pool = new Pool({
   family: 4
 });
 
-// Keep connection alive middleware
-app.use(async (req, res, next) => {
-  try {
-    await pool.query('SELECT 1');
-  } catch (e) {
-    // Ignore keep-alive errors
-  }
-  next();
+// Idle Postgres clients: pg-pool discards a connection that died while idle, but
+// an unhandled 'error' event would crash the process — so log it instead.
+pool.on('error', (err) => {
+  console.error('⚠️ Idle Postgres client error (dropped):', err.message);
 });
+
+// NOTE: there used to be an `app.use` here that ran `SELECT 1` on EVERY request
+// "to keep the connection alive". It doubled the database round-trip of every
+// call — including static legal pages and /health — while the pool already keeps
+// TCP connections alive (`keepAlive` + `idleTimeoutMillis`). Removed.
 
 // Test connection and setup tables
 (async () => {
@@ -1323,6 +1324,8 @@ app.post('/api/auth/login', async (req, res) => {
         'UPDATE user_sessions SET is_active = false, terminated_at = NOW() WHERE user_id = $1 AND is_active = true',
         [user.id]
       );
+      // Kill the previous device immediately, not one cache TTL later.
+      invalidateUserSessions(user.id);
       
       const sessionToken = generateSessionToken();
       await pool.query(
@@ -1537,6 +1540,7 @@ app.post('/api/auth/logout', async (req, res) => {
           'UPDATE user_sessions SET is_active = false, expires_at = NOW(), terminated_at = NOW() WHERE session_token = $1',
           [token]
         );
+        invalidateSession(token);
         console.log('🔓 Session invalidated:', token.substring(0, 20) + '...');
       }
     }
@@ -1690,6 +1694,8 @@ app.post('/api/auth/block-user/:id', requireSession(pool), async (req, res) => {
       'UPDATE users SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, username, email, role, is_active',
       [userId]
     );
+    // Blocked means blocked now: drop every cached session of that user.
+    invalidateUserSessions(userId);
     
     res.json({ status: 'success', message: `${result.rows[0].username} blocked`, data: { user: { id: result.rows[0].id, username: result.rows[0].username, role: result.rows[0].role, isActive: false } } });
   } catch (error) {
@@ -2604,6 +2610,7 @@ app.post('/api/auth/approve-login', async (req, res) => {
           'UPDATE user_sessions SET is_active = false, terminated_at = NOW() WHERE session_token = $1',
           [existingSessionToken]
         );
+        invalidateSession(existingSessionToken);
         console.log(`🔒 Session terminated: ${existingSessionToken}`);
       }
       

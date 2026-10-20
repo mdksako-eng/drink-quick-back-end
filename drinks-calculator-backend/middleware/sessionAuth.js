@@ -2,6 +2,16 @@
 // A session token is only valid if it exists in user_sessions,
 // is active, and has not expired.
 const crypto = require('crypto');
+const { createSessionCache } = require('../utils/sessionCache');
+
+// Short-lived cache in front of the session query below. Every authenticated
+// request otherwise costs a database round-trip; with the cache the common case is
+// free. Revocations delete the entry explicitly (see the invalidators at the end),
+// so the 30 s window only affects expiry, not a logout or a block.
+// SESSION_CACHE_TTL_MS=0 disables it.
+const sessionCache = createSessionCache({
+  ttlMs: Number(process.env.SESSION_CACHE_TTL_MS ?? 30000),
+});
 
 // Cryptographically random session token (not guessable like 'token_<id>_<ts>').
 function generateSessionToken() {
@@ -9,8 +19,13 @@ function generateSessionToken() {
 }
 
 // Returns the authenticated user row for a session token, or null.
+// Cached for SESSION_CACHE_TTL_MS so a screen making several calls costs one
+// lookup, not one per call.
 async function getSessionUser(db, token) {
   if (!token) return null;
+  const cached = sessionCache.get(token);
+  if (cached) return cached;
+
   const result = await db.query(
     `SELECT u.id, u.username, u.email, u.role, u.company_id, u.is_active
      FROM user_sessions s
@@ -20,7 +35,18 @@ async function getSessionUser(db, token) {
   );
   const user = result.rows[0];
   if (!user || !user.is_active) return null;
+  sessionCache.set(token, user);
   return user;
+}
+
+/** Forget one session (logout, this device only). */
+function invalidateSession(token) {
+  sessionCache.delete(token);
+}
+
+/** Forget every session of a user (blocked, locked, terminated on another device). */
+function invalidateUserSessions(userId) {
+  sessionCache.deleteForUser(userId);
 }
 
 // Express middleware: requires a valid Bearer session token.
@@ -48,4 +74,10 @@ function requireSession(db) {
   };
 }
 
-module.exports = { generateSessionToken, getSessionUser, requireSession };
+module.exports = {
+  generateSessionToken,
+  getSessionUser,
+  requireSession,
+  invalidateSession,
+  invalidateUserSessions,
+};
