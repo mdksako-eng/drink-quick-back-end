@@ -544,6 +544,14 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _handleSignup() async {
+    // The Register button is disabled until the box is ticked, but this method is
+    // also reached by the connectivity auto-retry, so the consent rule lives here
+    // too — a signup must never start without it.
+    if (!_agreeToTerms) {
+      _showErrorDialog('Error', t('auth_mustAcceptTerms'), Icons.verified_user,
+          Colors.orange);
+      return;
+    }
     if (!_signupFormKey.currentState!.validate()) return;
     if (_signupPasswordController.text != _confirmPasswordController.text) {
       _showErrorDialog(

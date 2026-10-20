@@ -565,6 +565,8 @@ const Map<String, String> _en = {
   'auth_companyCodeRequired': 'Company Code *',
   'auth_streetCityRegion': 'Street, city, region',
   'auth_iAgree': 'I agree to the',
+  'auth_mustAcceptTerms':
+      'Please accept the Terms of Service and the Privacy Policy to create an account.',
   'auth_and': 'and',
   'auth_creating': 'Creating...',
   'auth_alreadyHave': 'Already have an account?',
@@ -2045,6 +2047,8 @@ const Map<String, String> _fr = {
   'auth_companyCodeRequired': "Code de l'entreprise *",
   'auth_streetCityRegion': 'Rue, ville, région',
   'auth_iAgree': "J'accepte les",
+  'auth_mustAcceptTerms':
+      'Veuillez accepter les conditions d\'utilisation et la politique de confidentialité pour créer un compte.',
   'auth_and': 'et la',
   'auth_creating': 'Création...',
   'auth_alreadyHave': 'Vous avez déjà un compte ?',

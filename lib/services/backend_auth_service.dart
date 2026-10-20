@@ -185,6 +185,11 @@ class BackendAuthService {
         'companyCode': companyCode,
         'companyAddress': companyAddress,
         'securityQuestions': securityQuestions,
+        // Consent is enforced by the screen (the Register button is disabled until
+        // the box is ticked and `_handleSignup` re-checks it). Sending it lets the
+        // backend stamp WHO accepted WHICH legal version and WHEN — before this,
+        // nothing was recorded anywhere.
+        'termsAccepted': true,
       });
 
       final response = await http

@@ -13,6 +13,7 @@ const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinReq
 // ========== SESSION AUTH (DB-backed) ==========
 const { generateSessionToken, getSessionUser, requireSession } = require('./middleware/sessionAuth');
 const { requirePlan } = require('./middleware/planAuth');
+const legalAcceptance = require('./utils/legalAcceptance');
 
 // ========== PASSWORD HELPERS ===========
 // Passwords are stored as bcrypt hashes ($2a$ / $2b$ / $2y$).
@@ -436,6 +437,20 @@ app.use(async (req, res, next) => {
       // Guarded by an app_flags marker so it runs exactly once.
       try {
         await pool.query(`CREATE TABLE IF NOT EXISTS app_flags (name TEXT PRIMARY KEY, value TEXT NOT NULL)`);
+
+        // 📜 Consent evidence: who accepted which legal text, and when. Kept in its
+        // own table so `users` stays untouched and each document can be audited
+        // separately (the register route writes two rows per signup).
+        await pool.query(`CREATE TABLE IF NOT EXISTS legal_acceptances (
+          id BIGSERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          document TEXT NOT NULL,
+          version TEXT NOT NULL,
+          accepted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          ip TEXT
+        )`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS legal_acceptances_user_idx
+          ON legal_acceptances (user_id, document)`);
         const flag = await pool.query(`SELECT 1 FROM app_flags WHERE name = 'grandfathered_pro_v1'`);
         if (flag.rows.length === 0) {
           const updated = await pool.query(
@@ -933,11 +948,27 @@ app.post('/api/auth/reset-password-code', async (req, res) => {
 // REGISTER
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, email, password, phone, securityQuestions, registerAsManager, companyId, companyName, companyCode, companyAddress } = req.body;
+    const { username, email, password, phone, securityQuestions, registerAsManager, companyId, companyName, companyCode, companyAddress, termsAccepted } = req.body;
     console.log(`👤 New registration: ${username}`);
     
     if (!username || !email || !password) {
       return res.status(400).json({ status: 'error', message: 'Username, email, and password are required' });
+    }
+
+    // 📜 The checkbox used to live only in the app, so a direct API call could
+    // register without consent and nothing was ever recorded. An explicit "false"
+    // is refused now; an old build that sends nothing is tolerated until
+    // LEGAL_ACCEPTANCE_REQUIRED=true, and its acceptance is simply not stamped.
+    const acceptanceVerdict = legalAcceptance.checkAcceptance({
+      accepted: termsAccepted,
+      required: legalAcceptance.acceptanceRequired(),
+    });
+    if (!acceptanceVerdict.ok) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'You must accept the Terms of Service and Privacy Policy to create an account',
+        code: acceptanceVerdict.code,
+      });
     }
     
     const existingEmail = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
@@ -1008,6 +1039,30 @@ app.post('/api/auth/register', async (req, res) => {
     );
     
     const newUser = result.rows[0];
+
+    // 📜 Stamp the consent: two rows (terms + privacy) carrying the version the
+    // server actually served. Best-effort so a database hiccup can never block a
+    // signup, but loud, because a silent miss would mean no evidence.
+    if (acceptanceVerdict.record) {
+      try {
+        const rows = legalAcceptance.acceptanceRows({
+          userId: newUser.id,
+          version: legalAcceptance.legalVersion(),
+          ip: (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '')
+            .toString().split(',')[0].trim() || null,
+        });
+        for (const row of rows) {
+          await pool.query(
+            `INSERT INTO legal_acceptances (user_id, document, version, accepted_at, ip)
+             VALUES ($1,$2,$3,$4,$5)`,
+            [row.user_id, row.document, row.version, row.accepted_at, row.ip]
+          );
+        }
+        console.log(`📜 Legal acceptance recorded for user ${newUser.id} (v${rows[0].version})`);
+      } catch (e) {
+        console.error('⚠️ Legal acceptance NOT recorded:', e.message);
+      }
+    }
     
     // 🔐 If this registration created a new company, mark the user as its OWNER
     if (createdNewCompany && finalCompanyId) {

@@ -1,0 +1,24 @@
+-- sql/legal_acceptances.sql
+-- Consent evidence for the Terms of Service and the Privacy Policy.
+--
+-- WHY: the signup checkbox used to live only in the Flutter widget — nothing was
+-- sent, stored or auditable, so nobody could prove a user ever agreed, and a
+-- direct call to /api/auth/register skipped consent entirely.
+--
+-- The backend also creates this table at boot (idempotent), so running this script
+-- by hand is only needed to put the schema in place before a deploy.
+CREATE TABLE IF NOT EXISTS legal_acceptances (
+  id BIGSERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  document TEXT NOT NULL,               -- 'terms' | 'privacy'
+  version TEXT NOT NULL,                -- LEGAL_VERSION of the text served
+  accepted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ip TEXT                               -- first X-Forwarded-For hop, for evidence
+);
+
+CREATE INDEX IF NOT EXISTS legal_acceptances_user_idx
+  ON legal_acceptances (user_id, document);
+
+-- One pair of rows per registration. Audit a user with:
+--   SELECT document, version, accepted_at, ip
+--     FROM legal_acceptances WHERE user_id = 42 ORDER BY document;
