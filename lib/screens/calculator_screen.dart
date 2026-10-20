@@ -1,6 +1,7 @@
 // screens/calculator_screen.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../widgets/drink_avatar.dart';
 import '../utils/i18n.dart' show t;
@@ -32,6 +33,7 @@ import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/payment_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:drinks_calculator_fixed/screens/notifications_screen.dart';
 import '../main.dart' show ThemeProvider;
 
@@ -1012,9 +1014,15 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
     final transactionId = result['transactionId'];
 
-    // Orange Money web payment: open the hosted checkout page first.
     final paymentUrl = result['paymentUrl'] as String?;
-    if (paymentUrl != null && paymentUrl.isNotEmpty) {
+    final qrPng = result['qrPng'] as String?;
+
+    // Card is paid on the CUSTOMER'S phone: the waiting dialog shows a QR, so the
+    // till is never pulled into a browser and no device is handed over. Mobile
+    // money keeps the old behaviour (open the provider page straight away).
+    if (paymentMethod != 'card' &&
+        paymentUrl != null &&
+        paymentUrl.isNotEmpty) {
       final uri = Uri.parse(paymentUrl);
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok) await launchUrl(uri);
@@ -1027,6 +1035,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       paymentMethod: paymentMethod,
       transactionId: transactionId,
       companyName: _companyName,
+      paymentUrl: paymentUrl,
+      qrPng: qrPng,
     );
 
     if (!confirmed) {
@@ -1077,14 +1087,33 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   // 💬 PAYMENT CONFIRMATION DIALOG
   // ============================================================
 
+  /// Waiting dialog for a non-cash payment.
+  ///
+  /// For card, [qrPng] is the backend-rendered QR of [paymentUrl]: the customer
+  /// pays on THEIR phone (card number + 3-D Secure happen on CamerPay/Stripe),
+  /// so staff never reads a number and nothing has to be handed over. The two
+  /// buttons let the operator open the page here or send it to the customer.
   Future<bool> _showPaymentConfirmationDialog({
     required double amount,
     required String customerPhone,
     required String paymentMethod,
     required String transactionId,
     required String companyName,
+    String? paymentUrl,
+    String? qrPng,
   }) async {
     final completer = Completer<bool>();
+    // Decoded once, before the dialog opens: Image.memory works on bytes.
+    Uint8List? qrBytes;
+    if (qrPng != null && qrPng.isNotEmpty) {
+      try {
+        qrBytes = base64Decode(qrPng.split(',').last);
+      } catch (e) {
+        debugPrint('QR payload could not be decoded: $e');
+      }
+    }
+    final payUrl = paymentUrl ?? '';
+    final canPayByLink = payUrl.isNotEmpty;
     bool _isDialogActive = true;
     Timer? _pollingTimer;
     int _attempts = 0;
@@ -1133,13 +1162,36 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.phone_android,
-                      size: 60, color: Colors.orange),
-                  SizedBox(height: 16),
-                  Text(
-                    t('calcCheckPhonePin'),
-                    textAlign: TextAlign.center,
-                  ),
+                  if (qrBytes != null) ...[
+                    // White pad on purpose: the till theme may be dark, and a QR
+                    // on a dark background does not scan.
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Image.memory(qrBytes,
+                          width: 200, height: 200, gaplessPlayback: true),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(t('payScanQr'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text(t('payScanQrHint'),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey.shade600)),
+                  ] else ...[
+                    Icon(Icons.phone_android,
+                        size: 60, color: Colors.orange),
+                    SizedBox(height: 16),
+                    Text(
+                      t('calcCheckPhonePin'),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -1151,19 +1203,20 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       children: [
                         Text(t('paymentDetails')),
                         Text(
-                          'Amount: ${CurrencyHelper.format(amount)}',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          '${t('total')}: ${CurrencyHelper.format(amount)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         Text(
-                          'To: $companyName',
-                          style:
-                              TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                        Text(
-                          'Phone: $customerPhone',
+                          '${t('payTo')}: $companyName',
                           style:
                               const TextStyle(fontSize: 12, color: Colors.grey),
                         ),
+                        if (customerPhone.isNotEmpty)
+                          Text(
+                            '${t('phoneNumber')}: $customerPhone',
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.grey),
+                          ),
                       ],
                     ),
                   ),
@@ -1180,6 +1233,28 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 ],
               ),
               actions: [
+                if (canPayByLink)
+                  TextButton(
+                    onPressed: () async {
+                      final uri = Uri.parse(payUrl);
+                      final ok = await launchUrl(uri,
+                          mode: LaunchMode.externalApplication);
+                      if (!ok) await launchUrl(uri);
+                    },
+                    child: Text(t('payOpenHere')),
+                  ),
+                if (canPayByLink)
+                  TextButton(
+                    onPressed: () async {
+                      try {
+                        await SharePlus.instance.share(ShareParams(
+                            text: '${t('payShareText')} $payUrl'));
+                      } catch (e) {
+                        debugPrint('Payment link could not be shared: $e');
+                      }
+                    },
+                    child: Text(t('paySendLink')),
+                  ),
                 TextButton(
                   onPressed: () async {
                     _isDialogActive = false;

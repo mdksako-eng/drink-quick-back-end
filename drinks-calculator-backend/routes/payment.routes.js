@@ -19,6 +19,7 @@ const paymentGuard = require('../utils/paymentGuard');
 // utils/campayRefusal.js): CamerPay's own sentence names a third party and links to
 // a portal the user cannot act on.
 const campayRefusal = require('../utils/campayRefusal');
+const { paymentQrDataUri } = require('../utils/paymentQr');
 const { rawBodyOf } = require('../utils/requestBody');
 // Shared secret for verifying /api/payment/webhook calls (set in env).
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
@@ -588,12 +589,19 @@ router.post('/payment/campay-initiate', async (req, res) => {
 
     console.log(`📲 CamerPay collection started: company ${user.company_id}, ${amountXaf} XAF, ${rail || 'any rail'}`);
 
+    const checkoutUrl = data.payUrl || data.redirectUrl || null;
+    // Drawn here, in the same request that created the payment, so the QR can
+    // never point at another sale. The till shows it and the customer pays on
+    // their own phone — no card data, no device hand-over, no phone number.
+    const qrPng = await paymentQrDataUri(checkoutUrl);
+
     return res.json({
       success: true,
       data: {
         provider: 'campay',
         transactionId,
-        checkoutUrl: data.payUrl || data.redirectUrl || null,
+        checkoutUrl,
+        qrPng,
         amount: amountXaf,
         currency: 'XAF',
         rail: rail || null,
@@ -974,12 +982,16 @@ router.post('/payment/initiate', async (req, res) => {
     console.log(`   Transaction: ${transactionId}`);
     console.log(`   Order ID: ${orderId}`);
 
+    // Same QR as the CamerPay route: the customer pays on their own phone.
+    const qrPng = await paymentQrDataUri(paymentUrl);
+
     // ✅ Return success with transaction ID
     res.json({
       success: true,
       transactionId: transactionId,
       auto,
       paymentUrl,
+      qrPng,
       status: 'pending',
       message: auto
         ? `Payment request sent to ${customerPhone}. Please approve on your phone.`

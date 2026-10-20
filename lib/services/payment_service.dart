@@ -266,6 +266,9 @@ class PaymentService {
           'provider': 'campay',
           'transactionId': data['transactionId'],
           'paymentUrl': data['checkoutUrl'] ?? data['payUrl'],
+          // PNG (data URI) of the same link, drawn by the backend so the till
+          // needs no QR package — see backend/utils/paymentQr.js.
+          'qrPng': data['qrPng'],
           'amount': data['amount'],
           'estimatedFee': data['estimatedFee'],
         };
