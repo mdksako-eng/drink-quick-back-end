@@ -41,19 +41,28 @@ const passwordResetStore = require('./utils/passwordResetStore');
 const authQueue = createQueue(process.env.AUTH_CONCURRENCY || 8);
 
 // ========== RATE LIMITING (in-memory) ==========
-const rateLimitBuckets = new Map();
-const RATE_MAX_ATTEMPTS = 10;
-const RATE_WINDOW_MS = 15 * 60 * 1000;
+// Same rule as before — 10 attempts per key per 15 minutes — but the state now
+// lives in a bounded, self-pruning module instead of a Map that never released a
+// key (utils/rateLimiter.js).
+const { createRateLimiter } = require('./utils/rateLimiter');
+const accountLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
+// Per-source ceiling: an attacker who rotates usernames defeats a per-account
+// limit, so the network is capped as well. Higher than the per-account limit on
+// purpose — a whole bar shares one IP.
+const sourceLimiter = createRateLimiter({ max: 30, windowMs: 15 * 60 * 1000 });
 
+/** Kept for the existing login / password-reset call sites. */
 function checkRateLimit(key) {
-  const now = Date.now();
-  const entry = rateLimitBuckets.get(key);
-  if (!entry || now > entry.resetAt) {
-    rateLimitBuckets.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
-    return true;
-  }
-  entry.count += 1;
-  return entry.count <= RATE_MAX_ATTEMPTS;
+  return accountLimiter.check(key);
+}
+
+/** First hop of X-Forwarded-For (Render), otherwise the socket address. */
+function clientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  return String(raw || req.ip || req.socket?.remoteAddress || '')
+    .split(',')[0]
+    .trim();
 }
 
 // ========== POSTGRESQL SETUP ==========
@@ -462,6 +471,22 @@ pool.on('error', (err) => {
         )`);
         await pool.query(`CREATE INDEX IF NOT EXISTS legal_acceptances_user_idx
           ON legal_acceptances (user_id, document)`);
+
+        // 🔎 Hot-path indexes (sql/indexes_hot_paths.sql). IF NOT EXISTS makes this a
+        // no-op after the first boot, and a failure is logged rather than fatal — a
+        // missing index slows a report, a failed boot stops every till.
+        for (const indexSql of [
+          'CREATE INDEX IF NOT EXISTS idx_orders_company_date ON orders (company_id, date DESC)',
+          'CREATE INDEX IF NOT EXISTS idx_payment_tx_company_created ON payment_transactions (company_id, created_at DESC)',
+          'CREATE INDEX IF NOT EXISTS idx_inventory_tx_company_date ON inventory_transactions (company_id, date DESC)',
+          'CREATE INDEX IF NOT EXISTS idx_drinks_company_active ON drinks (company_id, is_active)',
+        ]) {
+          try {
+            await pool.query(indexSql);
+          } catch (e) {
+            console.error('⚠️ Index not created:', e.message);
+          }
+        }
         const flag = await pool.query(`SELECT 1 FROM app_flags WHERE name = 'grandfathered_pro_v1'`);
         if (flag.rows.length === 0) {
           const updated = await pool.query(
@@ -1159,6 +1184,16 @@ app.post('/api/auth/login', async (req, res) => {
     
     if (!password || (!email && !username)) {
       return res.status(400).json({ status: 'error', message: 'Email/username and password required' });
+    }
+
+    // ⏱️ Per-network ceiling first: cheap, and it stops an attacker who rotates
+    // usernames to dodge the per-account limit — before any hashing is done.
+    const source = clientIp(req);
+    if (source && !sourceLimiter.check(`login-ip:${source}`)) {
+      return res.status(429).json({
+        status: 'error',
+        message: 'Too many login attempts from this network. Try again in 15 minutes.',
+      });
     }
 
     // ⏱️ Simple rate limit to slow down brute-force attempts
