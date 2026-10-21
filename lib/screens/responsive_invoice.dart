@@ -59,7 +59,9 @@ class _ResponsiveInvoiceState extends State<ResponsiveInvoice> {
   static const Color successColor = Color(0xFF4CAF50);
   static const Color warningColor = Color(0xFFFF9800);
   static const Color errorColor = Color(0xFFF44336);
-  static const Color backgroundColor = Color(0xFFF8F9FA);
+  /// Light-mode card tint. It used to be a `static const` near-white, which made
+  /// the white `textPrimary` invisible on it in dark mode — now theme-aware.
+  Color get backgroundColor => _infoCardColor;
 
   /// Theme-aware text colours: the invoice must follow the app's theme (and stay
   /// readable on it) instead of being a fixed light page with dark text. These
@@ -75,6 +77,16 @@ class _ResponsiveInvoiceState extends State<ResponsiveInvoice> {
   Color get _surfaceColor => Theme.of(context).cardColor;
   Color get _pageColor => Theme.of(context).scaffoldBackgroundColor;
   static const Color lightBlueBg = Color(0xFFE8F4FD);
+
+  /// The two tinted boxes below used to be fixed light colours. Their text is
+  /// `textPrimary`, which is WHITE in dark mode — so white on near-white made the
+  /// company details and the totals summary disappear. In dark mode they become a
+  /// translucent tint of the primary colour instead.
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+  Color get _infoCardColor =>
+      _isDark ? primaryColor.withValues(alpha: 0.10) : backgroundColor;
+  Color get _summaryBoxColor =>
+      _isDark ? primaryColor.withValues(alpha: 0.16) : lightBlueBg;
   static const Color purpleButtonColor = Color(0xFF764BA2);
 
   String get _invoiceId => widget.orderId?.isNotEmpty == true ? widget.orderId! : DateTime.now().millisecondsSinceEpoch.toString();
@@ -428,7 +440,7 @@ class _ResponsiveInvoiceState extends State<ResponsiveInvoice> {
         ...entries.map((e) { final d = e.value['drink'] as Drink; final q = e.value['quantity'] as int; final t = e.value['total'] as double; return Padding(padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16), child: Row(children: [Expanded(flex: 3, child: Text(e.key, style: const TextStyle(fontSize: 14))), Expanded(child: Center(child: Text('$q', style: const TextStyle(fontSize: 14)))), Expanded(child: Align(alignment: Alignment.centerRight, child: Text(_formatCurrency(d.price), style: const TextStyle(fontSize: 14)))), Expanded(child: Align(alignment: Alignment.centerRight, child: Text(_formatCurrency(t), style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: primaryColor))))])); }).toList(),
       ])),
       const SizedBox(height: 24),
-      Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: lightBlueBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: primaryColor.withValues(alpha: 0.3))), child: Column(children: [
+      Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: _summaryBoxColor, borderRadius: BorderRadius.circular(12), border: Border.all(color: primaryColor.withValues(alpha: 0.3))), child: Column(children: [
         _summaryRow(t('inv_totalAmount'), _formatCurrency(widget.totalAmount), true), const SizedBox(height: 12),
         _summaryRow(t('inv_amountReceived'), _formatCurrency(widget.amountPaid)), const SizedBox(height: 12),
         Divider(color: primaryColor.withValues(alpha: 0.3)), const SizedBox(height: 12),

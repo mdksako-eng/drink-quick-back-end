@@ -1569,12 +1569,38 @@ router.post('/inventory-transactions', async (req, res) => {
     const companyId = resolveCompanyId(req, res);
     if (companyId == null) return;
     const body = pickWritable('inventory_transactions', { ...req.body, company_id: companyId });
-    const cols = Object.keys(body);
-    const sql = `INSERT INTO inventory_transactions (${cols.join(', ')}) VALUES (${cols.map((c, i) => `$${i + 1}`).join(', ')}) RETURNING *`;
-    const result = await req.db.query(sql, cols.map(c => body[c]));
+
+    const insert = (payload) => {
+      const cols = Object.keys(payload);
+      const sql = `INSERT INTO inventory_transactions (${cols.join(', ')}) VALUES (${cols.map((c, i) => `$${i + 1}`).join(', ')}) RETURNING *`;
+      return req.db.query(sql, cols.map((c) => payload[c]));
+    };
+
+    let result;
+    try {
+      result = await insert(body);
+    } catch (insertErr) {
+      // The app sends a client-generated id ("txn_…"). If that column is an
+      // auto-number SERIAL, Postgres rejects the text id and the WHOLE movement is
+      // lost as a generic 500 (this is why stocktake adjustments failed). Let the
+      // database assign the id instead of dropping the stock movement.
+      const looksLikeIdTypeError = body.id !== undefined &&
+        (insertErr.code === '22P02' || /invalid input syntax/i.test(insertErr.message || ''));
+      if (looksLikeIdTypeError) {
+        console.warn('⚠️ POST /inventory-transactions retry without client id:', insertErr.message);
+        const { id, ...withoutId } = body;
+        result = await insert(withoutId);
+      } else {
+        throw insertErr;
+      }
+    }
+
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error('POST /inventory-transactions error:', error.message);
+    // A bare "Failed to save transaction" told nobody anything. Log the Postgres
+    // code, detail and column so the next occurrence is diagnosable from the logs.
+    console.error('POST /inventory-transactions error:', error.message,
+      '| code:', error.code || '-', '| detail:', error.detail || '-', '| column:', error.column || '-');
     res.status(500).json({ message: 'Failed to save transaction' });
   }
 });
