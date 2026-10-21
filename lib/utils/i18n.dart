@@ -1494,6 +1494,12 @@ const Map<String, String> _en = {
   'payShareText': 'Pay here:',
   'payTo': 'To',
   'calcPriceChanged': 'The price changed — the cart is now',
+  'completingOrder': 'Completing order',
+  'offlineQueueFull':
+      'Too many sales are waiting to be synced — reconnect before selling more',
+  'offlineElectronicBlocked':
+      'Card and Mobile Money need a connection. Use cash or reconnect.',
+  'offlineCashOnly': 'Offline: this sale will sync when you reconnect',
   'enterPhone': 'Enter your phone number',
   'phoneNumber': 'Phone number',
   'payToMerchant': 'Send payment to',
@@ -2975,6 +2981,13 @@ const Map<String, String> _fr = {
   'payShareText': 'Payer ici :',
   'payTo': 'À',
   'calcPriceChanged': 'Le prix a changé — le panier est maintenant',
+  'completingOrder': 'Finalisation de la commande',
+  'offlineQueueFull':
+      'Trop de ventes attendent la synchronisation — reconnectez-vous avant de vendre',
+  'offlineElectronicBlocked':
+      'La carte et le Mobile Money nécessitent une connexion. Utilisez les espèces ou reconnectez-vous.',
+  'offlineCashOnly':
+      'Hors ligne : cette vente sera synchronisée à la reconnexion',
   'enterPhone': 'Entrez votre numéro de téléphone',
   'phoneNumber': 'Numéro de téléphone',
   'payToMerchant': 'Envoyez le paiement à',

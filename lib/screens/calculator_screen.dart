@@ -32,6 +32,8 @@ import 'package:drinks_calculator_fixed/widgets/floating_ai_button.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/payment_service.dart';
+import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
+import 'package:drinks_calculator_fixed/utils/offline_gate.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:drinks_calculator_fixed/screens/notifications_screen.dart';
@@ -77,6 +79,16 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   final TextEditingController _customerPhoneController =
       TextEditingController();
   bool _isProcessingPayment = false;
+
+  /// 0..1 progress of the "completing order" stages (order → server → stock), shown
+  /// as a percentage on the Pay button so a slow sync looks like progress, not a
+  /// frozen screen.
+  double _completionProgress = 0.0;
+
+  void _setCompletionProgress(double value) {
+    if (!mounted) return;
+    setState(() => _completionProgress = value.clamp(0.0, 1.0));
+  }
   String? _paymentStatus;
   String? _paymentMessage;
   final TextEditingController _searchController = TextEditingController();
@@ -843,6 +855,35 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       }
     }
 
+    // 📶 Offline policy — company tills only (utils/offline_gate.dart):
+    //   • card / MTN / Orange need the server, so they cannot be taken offline;
+    //   • cash may be sold offline and queued, until the unsynced queue hits its cap;
+    //   • once that cap is reached nothing completes until a sync succeeds — the
+    //     requirement is "not synced → cannot complete", and the books stay honest.
+    final authForGate = Provider.of<AuthProvider>(context, listen: false);
+    final syncState = Provider.of<SyncProvider>(context, listen: false);
+    final gate = OfflineGate.decide(
+      isCompanyTill: authForGate.user?.companyId != null,
+      isOnline: syncState.isOnline,
+      pendingSync: syncState.pendingSyncCount,
+      isElectronic: _selectedPaymentMethod != PaymentMethod.cash,
+    );
+    if (gate == OfflineSaleDecision.blockedQueueFull) {
+      Helpers.showToast(
+          '${t('offlineQueueFull')} (${syncState.pendingSyncCount})',
+          isError: true);
+      return;
+    }
+    if (gate == OfflineSaleDecision.blockedOfflineElectronic) {
+      Helpers.showToast(t('offlineElectronicBlocked'), isError: true);
+      return;
+    }
+    if (gate == OfflineSaleDecision.allowedOfflineCash) {
+      // Not an error: the sale goes through and syncs later, but the operator must
+      // know it is not on the server yet.
+      Helpers.showToast(t('offlineCashOnly'));
+    }
+
     String? customerName;
     if (_customerNameForOrder != null && _customerNameForOrder!.isNotEmpty) {
       customerName = _customerNameForOrder;
@@ -861,6 +902,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
     setState(() {
       _isProcessingPayment = true;
+      _completionProgress = 0.0;
       _paymentStatus = null;
       _paymentMessage = null;
     });
@@ -945,6 +987,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     } finally {
       setState(() {
         _isProcessingPayment = false;
+        _completionProgress = 0.0;
       });
     }
   }
@@ -1077,6 +1120,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     }
 
     // ✅ Complete the order
+    _setCompletionProgress(0.35);
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     final staffName =
         Provider.of<AuthProvider>(context, listen: false).currentUser?.username ??
@@ -1087,6 +1131,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       customerName,
       staffName: staffName,
     );
+    _setCompletionProgress(0.70);
 
     // 🔒 Atomic stock commit; the payment is already collected, so on failure we
     // roll the order back and tell the operator to reconcile.
@@ -1106,8 +1151,10 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       return false;
     }
 
+    _setCompletionProgress(0.90);
     // ✅ Update transaction status in Supabase
     await SupabaseService.updateTransactionStatus(orderId, 'completed');
+    _setCompletionProgress(1.0);
 
     return true;
   }
@@ -1324,6 +1371,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   // ============================================================
 
   Future<bool> _processCashPayment(String customerName) async {
+    _setCompletionProgress(0.40);
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     final staffName =
         Provider.of<AuthProvider>(context, listen: false).currentUser?.username ??
@@ -1334,6 +1382,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       customerName,
       staffName: staffName,
     );
+    _setCompletionProgress(0.75);
 
     // 🔒 Commit the stock atomically. If the last unit was taken by someone
     // else in the meantime the sale is rolled back instead of going negative.
@@ -1988,7 +2037,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                                                 size: 22, color: Colors.white),
                                         label: Text(
                                             _isProcessingPayment
-                                                ? 'Processing...'
+                                                ? '${t('completingOrder')} ${(_completionProgress * 100).round()}%'
                                                 : t('finalizePurchase'),
                                             style: const TextStyle(
                                                 fontSize: 16,
