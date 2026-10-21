@@ -17,6 +17,7 @@ const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinReq
 const { generateSessionToken, getSessionUser, requireSession, invalidateSession, invalidateUserSessions } = require('./middleware/sessionAuth');
 const { requirePlan } = require('./middleware/planAuth');
 const legalAcceptance = require('./utils/legalAcceptance');
+const { safeEqual } = require('./utils/safeCompare');
 const { createQueue } = require('./utils/authQueue');
 
 // ========== PASSWORD HELPERS ===========
@@ -84,8 +85,11 @@ console.log('🔍 DATABASE_URL is set:', databaseUrl ? 'YES' : 'NO');
 
 const pool = new Pool({
   connectionString: databaseUrl,
-  ssl: { 
-    rejectUnauthorized: false 
+  ssl: {
+    // Supabase presents a publicly-trusted certificate; PGSSL_STRICT=true verifies
+    // it and rejects a man-in-the-middle. Off by default because a wrong CA chain
+    // would stop the backend from connecting at all — try it on staging first.
+    rejectUnauthorized: process.env.PGSSL_STRICT === 'true'
   },
   connectionTimeoutMillis: 30000,
   idleTimeoutMillis: 60000,
@@ -817,9 +821,14 @@ app.use(async (req, res, next) => {
   }
 });
 // ========== ADMIN AUTH ==========
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
-if (!process.env.ADMIN_PASSWORD) {
-  console.error('⚠️  WARNING: ADMIN_PASSWORD env var is NOT set. Falling back to the default "admin123" — this is INSECURE. Set ADMIN_PASSWORD in the environment immediately.');
+// The platform-admin override must NEVER work with a built-in default: an unset
+// variable used to fall back to a public string, so anyone could send
+// `X-Admin-Password: admin123` and act as a platform Administrator (block or delete
+// any account). No secret = no override, and the reason is logged at boot.
+const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || '').trim();
+const ADMIN_OVERRIDE_ENABLED = ADMIN_PASSWORD.length >= 12;
+if (!ADMIN_OVERRIDE_ENABLED) {
+  console.error('⚠️  ADMIN_PASSWORD is unset or shorter than 12 characters: the platform-admin override and admin panel login are DISABLED. Set a long random ADMIN_PASSWORD to use them.');
 }
 
 const verifyAdmin = (req, res, next) => {
@@ -827,9 +836,10 @@ const verifyAdmin = (req, res, next) => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ success: false, message: 'No token provided' });
   }
-  
+
   const token = authHeader.split(' ')[1];
-  if (token === ADMIN_PASSWORD) {
+  // Constant-time compare: `===` leaks how many characters matched.
+  if (ADMIN_OVERRIDE_ENABLED && safeEqual(token, ADMIN_PASSWORD)) {
     next();
   } else {
     res.status(403).json({ success: false, message: 'Wrong admin password' });
@@ -840,9 +850,9 @@ const verifyAdmin = (req, res, next) => {
 // alongside the normal session token: it means "act as a platform
 // Administrator" for account actions (block / unblock / delete).
 function isPlatformAdminRequest(req) {
-  if (!ADMIN_PASSWORD) return false;
+  if (!ADMIN_OVERRIDE_ENABLED) return false;
   const provided = req.headers['x-admin-password'];
-  return typeof provided === 'string' && provided.length > 0 && provided === ADMIN_PASSWORD;
+  return typeof provided === 'string' && safeEqual(provided, ADMIN_PASSWORD);
 }
 
 // ========== PASSWORD RESET WITH EMAIL CODE ==========
@@ -1582,7 +1592,7 @@ app.post('/api/auth/logout', async (req, res) => {
           [token]
         );
         invalidateSession(token);
-        console.log('🔓 Session invalidated:', token.substring(0, 20) + '...');
+        console.log('🔓 Session invalidated (token redacted from logs)');
       }
     }
     
@@ -2299,7 +2309,7 @@ app.post('/api/auth/validate-session', async (req, res) => {
       return res.json({ valid: false, terminated: false });
     }
     
-    console.log('🔍 Validating token:', token.substring(0, 20) + '...');
+    console.log('🔍 Validating session token (value redacted from logs)');
     
     // Clean expired sessions
     await pool.query(
