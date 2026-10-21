@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../providers/auth_provider.dart';
 import '../utils/helpers.dart';
+import '../utils/color_helper.dart';
 import '../config/api_config.dart';
 import '../services/secure_storage_service.dart';
 import '../utils/i18n.dart';
@@ -67,7 +68,7 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
     });
   }
 
-  Color get _primaryColor => Color(int.parse(_primaryColorHex.replaceFirst('#', '0xFF')));
+  Color get _primaryColor => parseHexColor(_primaryColorHex);
 
   Future<void> _checkAdminAccess() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);

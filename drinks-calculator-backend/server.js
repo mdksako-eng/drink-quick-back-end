@@ -1267,6 +1267,12 @@ app.post('/api/auth/login', async (req, res) => {
     if (!passwordValid) {
       return res.status(401).json({ status: 'error', message: 'Invalid credentials' });
     }
+
+    // ✅ A correct password clears this account's attempt counter. Without this, a
+    // busy staff member who logs in on several devices (or reopens the app) could
+    // spend the 10-attempts-per-15-minutes budget on *successful* logins and then
+    // be locked out of their own account.
+    accountLimiter.reset(`login:${email || username}`);
     
     const userRole = user.role;
     const finalDeviceId = deviceId || req.headers['user-agent'] || 'unknown';

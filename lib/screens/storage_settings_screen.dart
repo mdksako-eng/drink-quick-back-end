@@ -9,6 +9,7 @@ import '../../../utils/i18n.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/services/storage_service.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
+import 'package:drinks_calculator_fixed/utils/color_helper.dart';
 import 'package:drinks_calculator_fixed/main.dart';
 import 'package:drinks_calculator_fixed/utils/payment_helper.dart';
 import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
@@ -330,8 +331,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               .setTheme(themeModeIndex == 1 ? ThemeMode.dark : ThemeMode.light);
 
           _primaryColor = prefs.getString('primary_color') ?? '#667EEA';
-          final newColor =
-              Color(int.parse(_primaryColor.replaceFirst('#', '0xFF')));
+          final newColor = parseHexColor(_primaryColor);
           _themeProvider.setPrimaryColor(newColor);
 
           _compactMode = prefs.getBool('compact_mode') ?? false;
@@ -405,7 +405,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     _themeProvider
         .setTheme(themeModeIndex == 1 ? ThemeMode.dark : ThemeMode.light);
     _primaryColor = prefs.getString('primary_color') ?? '#667EEA';
-    final newColor = Color(int.parse(_primaryColor.replaceFirst('#', '0xFF')));
+    final newColor = parseHexColor(_primaryColor);
     _themeProvider.setPrimaryColor(newColor);
     _compactMode = prefs.getBool('compact_mode') ?? false;
     _themeProvider.setCompactMode(_compactMode);
@@ -914,8 +914,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, _) {
         final theme = Theme.of(context);
-        final primaryColorValue =
-            Color(int.parse(_primaryColor.replaceFirst('#', '0xFF')));
+        final primaryColorValue = parseHexColor(_primaryColor);
         final primaryColorLight = primaryColorValue.withValues(alpha: 0.1);
         final primaryColorVeryLight = primaryColorValue.withValues(alpha: 0.05);
         final authProvider = Provider.of<AuthProvider>(context);
@@ -1161,8 +1160,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       onTap: () {
                         setState(() {
                           _primaryColor = color['code'];
-                          final newColor = Color(int.parse(
-                              color['code'].replaceFirst('#', '0xFF')));
+                          final newColor = parseHexColor(color['code']);
                           themeProvider.setPrimaryColor(newColor);
                           _markUnsaved();
                         });

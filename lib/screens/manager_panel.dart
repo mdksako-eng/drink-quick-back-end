@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../providers/auth_provider.dart';
 import '../utils/helpers.dart';
+import '../utils/color_helper.dart';
 import '../utils/staff_permissions.dart';
 import '../config/api_config.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
@@ -72,7 +73,7 @@ class _ManagerPanelState extends State<ManagerPanel>
   }
 
   Color get _primaryColor =>
-      Color(int.parse(_primaryColorHex.replaceFirst('#', '0xFF')));
+      parseHexColor(_primaryColorHex);
 
   Future<void> _loadStaff() async {
     setState(() => _isLoading = true);

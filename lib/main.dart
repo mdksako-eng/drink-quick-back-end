@@ -10,6 +10,7 @@ import 'package:drinks_calculator_fixed/screens/auth_screen.dart';
 import 'package:drinks_calculator_fixed/screens/calculator_screen.dart';
 import 'package:drinks_calculator_fixed/services/storage_service.dart';
 import 'package:drinks_calculator_fixed/utils/currency_helper.dart';
+import 'package:drinks_calculator_fixed/utils/color_helper.dart';
 import 'package:drinks_calculator_fixed/utils/flutter_assertion_guard.dart';
 import 'package:drinks_calculator_fixed/utils/i18n.dart';
 import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
@@ -90,7 +91,7 @@ class ThemeProvider extends ChangeNotifier {
     final compactMode = prefs.getBool('compact_mode') ?? false;
 
     _themeMode = themeModeIndex == 1 ? ThemeMode.dark : ThemeMode.light;
-    _primaryColor = Color(int.parse(primaryColorHex.replaceFirst('#', '0xFF')));
+    _primaryColor = parseHexColor(primaryColorHex);
     _compactMode = compactMode;
     _isInitialized = true;
     notifyListeners();

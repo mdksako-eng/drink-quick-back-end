@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 import '../services/backend_auth_service.dart';
 import '../utils/helpers.dart';
+import '../utils/color_helper.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 
 class ManagerApprovalScreen extends StatefulWidget {
@@ -62,7 +63,7 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
   }
 
   Color get _primaryColorValue =>
-      Color(int.parse(_primaryColor.replaceFirst('#', '0xFF')));
+      parseHexColor(_primaryColor);
 
   Future<void> _loadPendingRequests() async {
     if (!mounted || _isDisposed) return;
