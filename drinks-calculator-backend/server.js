@@ -1922,6 +1922,9 @@ app.put('/api/users/:id', verifyAdmin, async (req, res) => {
       [role, company_id, id]
     );
     if (result.rowCount === 0) return res.status(404).json({ status: 'error', message: 'User not found' });
+    // A role or company change must take effect at once, not after the session
+    // cache expires: drop that user's cached sessions before answering.
+    invalidateUserSessions(id);
     res.json({ status: 'success', message: 'User updated', data: { user: result.rows[0] } });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });

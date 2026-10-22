@@ -30,19 +30,52 @@ function isInactive(order) {
   return !!(order && order.is_active === false);
 }
 
+/** How long a staff member may correct a sale they rang themselves. */
+const STAFF_CORRECTION_WINDOW_MS = 10 * 60 * 1000;
+
 /**
  * Who may void (or restore) an order:
  *   * the company owner, and
- *   * any manager / administrator.
- * Staff must ask a manager — the same rule as the customer-approval flow.
+ *   * any manager / administrator;
+ *   * **a staff member, but only for a sale they rang themselves, within
+ *     `STAFF_CORRECTION_WINDOW_MS`** — the classic mistake (wrong drink, wrong
+ *     quantity) is noticed immediately, and sending the customer away to wait for
+ *     a manager is worse than letting the cashier correct it. It stays auditable:
+ *     the void still records who/when/why, restores the stock and shows on the
+ *     shift report, so a manager sees every correction.
  */
-function canVoidOrder({ user, isOwner = false } = {}) {
+function canVoidOrder({
+  user,
+  isOwner = false,
+  order = null,
+  now = Date.now(),
+  windowMs = STAFF_CORRECTION_WINDOW_MS,
+} = {}) {
   if (!user) return { ok: false, reason: 'Authentication required' };
   if (isOwner) return { ok: true };
   const role = (user.role || '').toString().trim().toLowerCase();
   if (role === 'manager' || role === 'administrator' || role === 'admin') {
     return { ok: true };
   }
+
+  if (role === 'staff') {
+    if (!order) {
+      return { ok: false, reason: 'Staff can only correct their own sale — ask a manager' };
+    }
+    const owner = String(order.staff_name || '').trim().toLowerCase();
+    const mine = owner.length > 0 &&
+      owner === String(user.username || '').trim().toLowerCase();
+    const soldAt = order.date ? new Date(order.date).getTime() : NaN;
+    const withinWindow = Number.isFinite(soldAt) && now >= soldAt && (now - soldAt) <= windowMs;
+    if (mine && withinWindow) return { ok: true, staffWindow: true };
+    return {
+      ok: false,
+      reason: mine
+        ? `A staff member can only correct their own sale within ${Math.round(windowMs / 60000)} minutes — ask a manager`
+        : 'Staff can only correct their own sale — ask a manager',
+    };
+  }
+
   return { ok: false, reason: 'Only a manager can void an order' };
 }
 
@@ -139,6 +172,7 @@ function summariseVoids(orders) {
 }
 
 module.exports = {
+  STAFF_CORRECTION_WINDOW_MS,
   isVoided,
   isInactive,
   canVoidOrder,

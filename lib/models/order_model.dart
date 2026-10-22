@@ -35,6 +35,10 @@ class PurchaseHistory {
   bool isActive;
   String customerName;
 
+  /// Who rang the sale. Kept so a staff member can be allowed to correct their own
+  /// sale (and only theirs) within the window — mirrors utils/order_correction_helper.
+  String staffName;
+
   /// Set when a manager corrected this order: the trace stays with the order so
   /// the shift report and this list can explain why a sale disappeared.
   DateTime? voidedAt;
@@ -49,6 +53,7 @@ class PurchaseHistory {
     required this.amountPaid,
     this.isActive = true,
     this.customerName = '',
+    this.staffName = '',
     this.voidedAt,
     this.voidReason = '',
     this.voidedByName = '',
@@ -65,6 +70,7 @@ class PurchaseHistory {
         'balance': balance,
         'isActive': isActive,
         'customerName': customerName,
+        'staffName': staffName,
         'voidedAt': voidedAt?.toIso8601String(),
         'voidReason': voidReason,
         'voidedByName': voidedByName,
@@ -80,6 +86,7 @@ class PurchaseHistory {
         amountPaid: json['amountPaid'].toDouble(),
         isActive: json['isActive'] ?? true,
         customerName: json['customerName'] ?? '',
+        staffName: (json['staffName'] ?? '').toString(),
         voidedAt: DateTime.tryParse('${json['voidedAt'] ?? ''}'),
         voidReason: (json['voidReason'] ?? '').toString(),
         voidedByName: (json['voidedByName'] ?? '').toString(),

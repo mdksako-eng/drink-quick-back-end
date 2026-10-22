@@ -14,6 +14,7 @@ import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/widgets/skeleton.dart';
 import '../utils/i18n.dart';
+import '../utils/order_correction_helper.dart';
 import '../utils/order_action_helper.dart';
 import '../utils/invoice_import_helper.dart';
 import '../utils/order_return_helper.dart';
@@ -71,6 +72,11 @@ class _SideSliderState extends State<SideSlider> {
   int? _companyAtLoad;
   final TextEditingController _searchController = TextEditingController();
   bool _canManageOrders = false;
+
+  /// Signed-in role and username, used to allow a staff member to correct their own
+  /// recent sale (see _canCorrect).
+  String _role = '';
+  String _username = '';
 
   static const Color _successColor = Color(0xFF27AE60);
   static const Color _errorColor = Color(0xFFE74C3C);
@@ -159,8 +165,20 @@ class _SideSliderState extends State<SideSlider> {
       _canManageOrders = role == 'administrator' ||
           role == 'admin' ||
           role == 'manager';
+      _role = role;
+      _username = authProvider.user?.username ?? '';
     });
   }
+
+  /// Managers correct any sale; a staff member only their own, within the window
+  /// (mirrors backend/utils/orderVoid.js via utils/order_correction_helper.dart).
+  bool _canCorrect(PurchaseHistory order) => OrderCorrection.canCorrect(
+        role: _role,
+        username: _username,
+        orderStaffName: order.staffName,
+        soldAt: order.date,
+        now: DateTime.now(),
+      );
 
   PurchaseHistory _convertOrderToPurchaseHistory(Order order) {
     final Map<String, int> itemCounts = {};
@@ -185,6 +203,7 @@ class _SideSliderState extends State<SideSlider> {
       amountPaid: (order.amountPaid ?? 0).toDouble(),
       isActive: order.isActive,
       customerName: order.customerName ?? '',
+      staffName: order.staffName ?? '',
       voidedAt: order.voidedAt,
       voidReason: order.voidReason,
       voidedByName: order.voidedByName,
@@ -290,7 +309,7 @@ class _SideSliderState extends State<SideSlider> {
   }
 
   Future<void> _toggleInvoiceStatus(PurchaseHistory order) async {
-    if (!_canManageOrders) {
+    if (!_canCorrect(order)) {
       _showToast(t('onlyManagersCanVoid'),
           isError: true);
       return;
@@ -490,7 +509,7 @@ class _SideSliderState extends State<SideSlider> {
     // Re-invoicing retires the original sale and has to move its stock back, so it
     // is a manager action — the same rule as voiding. The backend refuses the void
     // for anyone else, which would leave the sale counted twice.
-    if (!_canManageOrders) {
+    if (!_canCorrect(order)) {
       _showToast(t('reInvoiceNeedsManager'), isError: true);
       return;
     }

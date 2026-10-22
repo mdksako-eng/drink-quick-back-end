@@ -398,9 +398,6 @@ router.post('/orders/:id/void', async (req, res) => {
     const companyId = resolveCompanyId(req, res);
     if (companyId == null) return;
 
-    const allowed = orderVoid.canVoidOrder({ user: req.user });
-    if (!allowed.ok) return res.status(403).json({ message: allowed.reason });
-
     const found = await req.db.query(
       'SELECT * FROM orders WHERE id = $1 AND company_id = $2',
       [req.params.id, companyId]
@@ -409,6 +406,12 @@ router.post('/orders/:id/void', async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
     const order = found.rows[0];
+
+    // Permission is checked WITH the order: a staff member may correct their own
+    // sale within the window, which needs staff_name and date (utils/orderVoid.js).
+    const allowed = orderVoid.canVoidOrder({ user: req.user, order });
+    if (!allowed.ok) return res.status(403).json({ message: allowed.reason });
+
     if (orderVoid.isVoided(order)) {
       return res.status(409).json({ message: 'This order is already voided' });
     }
