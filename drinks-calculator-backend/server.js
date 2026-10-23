@@ -11,7 +11,7 @@ require('dotenv').config();
 const app = express();
 
 // ========== EMAIL SERVICE ==========
-const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail } = require('./utils/email.service');
+const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail, sendExistingAccountEmail } = require('./utils/email.service');
 
 // ========== SESSION AUTH (DB-backed) ==========
 const { generateSessionToken, getSessionUser, requireSession, invalidateSession, invalidateUserSessions } = require('./middleware/sessionAuth');
@@ -1054,7 +1054,32 @@ app.post('/api/auth/register', async (req, res) => {
     
     const existingEmail = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existingEmail.rows.length > 0) {
-      return res.status(400).json({ status: 'error', message: 'Email already registered' });
+      // 🔒 Anti-enumeration: answer EXACTLY like a fresh signup (same status, same
+      // shape, a throw-away token) and email the real owner instead. The old 400
+      // "Email already registered" let anyone harvest which addresses have an
+      // account here — a list worth more than any single password.
+      try {
+        await sendExistingAccountEmail(email, username);
+        console.log(`📧 Existing-account email sent to ${email}`);
+      } catch (e) {
+        console.log('⚠️ Existing-account email failed:', e.message);
+      }
+      return res.status(201).json({
+        status: 'success',
+        message: 'Account created! Check email to verify.',
+        data: {
+          pendingJoinApproval: false,
+          joinRequestId: null,
+          // ⚠️ Never the real row: the response must not differ from a new signup.
+          user: {
+            id: null, _id: null, username: username, email: email,
+            phone: null, role: 'Customer', companyId: null,
+            isActive: false, emailVerified: false, isOwner: false
+          },
+          // ⚠️ Placeholder token — no session exists, so it authenticates nothing.
+          token: generateSessionToken()
+        }
+      });
     }
     
     const existingUsername = await pool.query('SELECT id FROM users WHERE username = $1', [username]);

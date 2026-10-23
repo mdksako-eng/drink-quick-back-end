@@ -140,4 +140,32 @@ const sendJoinRequestEmail = async (ownerEmail, ownerName, requesterName, compan
 // Support report (bug / complaint) forwarded to the support inbox.
 const sendSupportReportEmail = async ({ to, subject, html }) => sendEmail(to, subject, html);
 
-module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail, sendSupportReportEmail, sendEmail, buildEmailPayload, isEmailConfigured };
+// ============================================================
+// EXISTING ACCOUNT (anti-enumeration)
+// ============================================================
+// 📧 Sent when a registration arrives for an address that already has an account.
+// The HTTP response is now identical to a fresh signup, so the endpoint no longer
+// reveals which addresses are registered. The real owner is told to sign in; a
+// stranger who typed that address learns nothing and nothing changes.
+const sendExistingAccountEmail = async (userEmail, username) => {
+  const html = `
+    <div style="font-family:Arial;max-width:500px;margin:0 auto;background:white;border-radius:15px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,0.1);">
+      <div style="background:linear-gradient(135deg,#38b000,#16a753);padding:30px;text-align:center;">
+        <h1 style="color:white;margin:0;">🍹 Drink Quick Cal</h1>
+        <p style="color:rgba(255,255,255,0.8);">Your account already exists</p>
+      </div>
+      <div style="padding:30px;">
+        <h2>Hello ${username || 'there'},</h2>
+        <p>Someone just tried to create a Drink Quick Cal account with this email address, but an account already exists for it.</p>
+        <p><b>If it was you:</b> simply sign in with your usual password. If you no longer remember it, use &laquo; Forgot password &raquo; on the sign-in screen.</p>
+        <p><b>If it was not you:</b> you can ignore this message — nothing has changed on your account.</p>
+      </div>
+    </div>`;
+  return await sendEmail(
+    userEmail,
+    'Your Drink Quick Cal account already exists',
+    html
+  );
+};
+
+module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendExistingAccountEmail, sendJoinRequestEmail, sendSupportReportEmail, sendEmail, buildEmailPayload, isEmailConfigured };
