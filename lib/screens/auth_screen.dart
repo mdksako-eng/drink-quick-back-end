@@ -9,6 +9,8 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
+import 'package:drinks_calculator_fixed/services/backend_auth_service.dart';
+import 'package:drinks_calculator_fixed/utils/helpers.dart';
 import 'package:drinks_calculator_fixed/config/api_config.dart';
 import 'calculator_screen.dart';
 import 'dart:async';
@@ -496,6 +498,15 @@ class _AuthScreenState extends State<AuthScreen> {
           _loginUsernameController.text.trim(), _loginPasswordController.text);
       if (mounted) setState(() => _isLoggingIn = false);
       if (success) {
+        // 📜 Consent gate: an account a manager created never saw the terms, and
+        // everyone is asked again after the text changes (LEGAL_VERSION). The app
+        // blocks until accepted; the acceptance is stamped server-side with the
+        // version, the moment and the caller's IP.
+        final allowed = await _ensureLegalAcceptance();
+        if (!allowed) {
+          if (mounted) setState(() => _isLoggingIn = false);
+          return;
+        }
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -541,6 +552,63 @@ class _AuthScreenState extends State<AuthScreen> {
         }
       }
     }
+  }
+
+  /// Shows the consent gate when the user has not accepted the current legal text.
+  ///
+  /// Returns true when they may continue (already accepted, accepted now, or the
+  /// status could not be read — a gate we cannot verify must never lock a till).
+  /// Returns false only when they actively decline.
+  Future<bool> _ensureLegalAcceptance() async {
+    final status = await BackendAuthService.legalStatus();
+    if (status == null) return true; // unavailable → do not block
+    if (status['accepted'] == true) return true;
+
+    if (!mounted) return true;
+    final accepted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(t('legalGateTitle')),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(t('legalGateBody')),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () =>
+                    _openUrl(ApiConfig.termsOfServiceForLanguage),
+                child: Text(t('termsOfService')),
+              ),
+              TextButton(
+                onPressed: () => _openUrl(ApiConfig.privacyPolicyForLanguage),
+                child: Text(t('privacyPolicy')),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t('legalGateDecline')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(t('legalGateAccept')),
+          ),
+        ],
+      ),
+    );
+
+    if (accepted != true) return false;
+    final recorded = await BackendAuthService.acceptLegal();
+    if (!recorded && mounted) {
+      Helpers.showToast(t('legalGateFailed'), isError: true);
+    }
+    // The user did accept; a storage hiccup must not sign them out silently.
+    return true;
   }
 
   Future<void> _handleSignup() async {

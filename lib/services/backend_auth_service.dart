@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'secure_storage_service.dart';
 
 class BackendAuthService {
   // ✅ NOW PUBLIC - accessible from anywhere
@@ -12,6 +13,43 @@ class BackendAuthService {
   // ✅ CORRECT ENDPOINTS - Using public baseUrl
   static const String _loginEndpoint = '$baseUrl/api/auth/login';
   static const String _registerEndpoint = '$baseUrl/api/auth/register';
+
+  /// Has the signed-in user accepted the CURRENT terms / privacy text?
+  ///
+  /// Returns null when the endpoint is unavailable (older backend, offline) — the
+  /// caller then never blocks anyone: a gate we cannot verify must not lock a till.
+  static Future<Map<String, dynamic>?> legalStatus() async {
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      if (token == null || token.isEmpty) return null;
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/auth/legal/status'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(_backendTimeout);
+      if (response.statusCode != 200) return null;
+      final decoded = jsonDecode(response.body);
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+    } catch (e) {
+      debugPrint('⚠️ Legal status unavailable: $e');
+      return null;
+    }
+  }
+
+  /// Record acceptance of the current text (idempotent on the server).
+  static Future<bool> acceptLegal() async {
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      if (token == null || token.isEmpty) return false;
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/auth/legal/accept'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(_backendTimeout);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ acceptLegal error: $e');
+      return false;
+    }
+  }
   static const String _logoutEndpoint = '$baseUrl/api/auth/logout';
   static const String _currentUserEndpoint = '$baseUrl/api/auth/me';
   static const String _testEndpoint = '$baseUrl/api/test';

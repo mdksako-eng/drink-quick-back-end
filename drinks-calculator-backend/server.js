@@ -1615,6 +1615,66 @@ app.get('/api/auth/me', requireSession(pool), async (req, res) => {
   }
 });
 
+// ========== LEGAL CONSENT (signed-in) ==========
+// 📜 Has the signed-in user accepted the CURRENT text? Two cases must be asked
+// again: an account a manager created (it never saw the terms), and everyone after
+// the text changes (bump LEGAL_VERSION). The app calls this right after login.
+app.get('/api/auth/legal/status', requireSession(pool), async (req, res) => {
+  try {
+    const version = legalAcceptance.legalVersion();
+    const rows = await pool.query(
+      `SELECT document, version FROM legal_acceptances
+        WHERE user_id = $1 ORDER BY id DESC LIMIT 50`,
+      [req.user.id]
+    );
+    res.json({
+      version,
+      accepted: legalAcceptance.hasAcceptedCurrentVersion(rows.rows, version),
+    });
+  } catch (error) {
+    console.error('GET /api/auth/legal/status error:', error.message);
+    res.status(500).json({ message: 'Failed to read the legal status' });
+  }
+});
+
+// 📜 Record acceptance of the current text. Idempotent: accepting twice in the same
+// version writes nothing the second time, so a retry cannot fake a second consent.
+app.post('/api/auth/legal/accept', requireSession(pool), async (req, res) => {
+  try {
+    const version = legalAcceptance.legalVersion();
+    const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '')
+      .toString().split(',')[0].trim() || null;
+    const rows = legalAcceptance.acceptanceRows({
+      userId: req.user.id, version, ip,
+    });
+
+    for (const row of rows) {
+      await pool.query(
+        `INSERT INTO legal_acceptances (user_id, document, version, accepted_at, ip)
+         SELECT $1,$2,$3,$4,$5
+          WHERE NOT EXISTS (
+            SELECT 1 FROM legal_acceptances
+             WHERE user_id = $1 AND document = $2 AND version = $3)`,
+        [row.user_id, row.document, row.version, row.accepted_at, row.ip]
+      );
+    }
+
+    await auditLog.record(pool, {
+      companyId: req.user.company_id ?? null,
+      actorId: req.user.id,
+      actorName: req.user.username || req.user.email || '',
+      action: 'legal.accept',
+      target: `user:${req.user.id}`,
+      detail: `version ${version}`,
+    });
+
+    res.json({ status: 'success', version, accepted: true });
+  } catch (error) {
+    console.error('POST /api/auth/legal/accept error:', error.message);
+    res.status(500).json({ message: 'Failed to record the acceptance' });
+  }
+});
+
 // ✅ LOGOUT - Invalidate session
 app.post('/api/auth/logout', async (req, res) => {
   try {

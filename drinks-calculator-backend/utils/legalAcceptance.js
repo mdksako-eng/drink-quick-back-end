@@ -58,9 +58,31 @@ function acceptanceRows({
   }));
 }
 
+/**
+ * Has this user accepted the CURRENT text of every document?
+ *
+ * Used by `GET /api/auth/legal/status`: an account created by a manager never saw
+ * the terms, and a user who accepted an older version has not accepted the new one.
+ * Both cases must be asked again.
+ *
+ * @param {Array<{document: string, version: string}>} rows acceptance rows for the user
+ * @param {string} version the version currently published
+ */
+function hasAcceptedCurrentVersion(rows, version = DEFAULT_VERSION) {
+  const wanted = (version || '').toString().trim();
+  if (!wanted) return false;
+  const accepted = new Set(
+    (Array.isArray(rows) ? rows : [])
+      .filter((row) => row && String(row.version) === wanted)
+      .map((row) => String(row.document))
+  );
+  return DOCUMENTS.every((document) => accepted.has(document));
+}
+
 module.exports = {
   checkAcceptance,
   acceptanceRows,
+  hasAcceptedCurrentVersion,
   legalVersion,
   acceptanceRequired,
   DOCUMENTS,

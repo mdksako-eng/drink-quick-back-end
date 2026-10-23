@@ -1506,6 +1506,12 @@ const Map<String, String> _en = {
   'refundFailed': 'Could not record the refund',
   'refundInvalid': 'A positive amount and a reason are required',
   'refundNeedsManager': 'Only a manager can record a refund',
+  'legalGateTitle': 'Terms and Privacy Policy',
+  'legalGateBody':
+      'Before continuing, please review and accept our Terms of Service and Privacy Policy.',
+  'legalGateAccept': 'I accept',
+  'legalGateDecline': 'Not now',
+  'legalGateFailed': 'Could not save your acceptance — it will be asked again next time',
   'offlineQueueFull':
       'Too many sales are waiting to be synced — reconnect before selling more',
   'offlineElectronicBlocked':
@@ -3004,6 +3010,13 @@ const Map<String, String> _fr = {
   'refundFailed': 'Impossible d\'enregistrer le remboursement',
   'refundInvalid': 'Un montant positif et un motif sont requis',
   'refundNeedsManager': 'Seul un gérant peut enregistrer un remboursement',
+  'legalGateTitle': 'Conditions et politique de confidentialité',
+  'legalGateBody':
+      'Avant de continuer, veuillez consulter et accepter nos conditions d\'utilisation et notre politique de confidentialité.',
+  'legalGateAccept': "J'accepte",
+  'legalGateDecline': 'Plus tard',
+  'legalGateFailed':
+      'Impossible d\'enregistrer votre acceptation — elle sera redemandée la prochaine fois',
   'offlineQueueFull':
       'Trop de ventes attendent la synchronisation — reconnectez-vous avant de vendre',
   'offlineElectronicBlocked':
