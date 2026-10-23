@@ -191,4 +191,31 @@ const sendLoginOtpEmail = async (userEmail, code, username) => {
   return await sendEmail(userEmail, 'Your Drink Quick Cal sign-in code', html);
 };
 
-module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendExistingAccountEmail, sendLoginOtpEmail, sendJoinRequestEmail, sendSupportReportEmail, sendEmail, buildEmailPayload, isEmailConfigured };
+// ============================================================
+// USERNAME TAKEN (anti-enumeration)
+// ============================================================
+// 📧 The register endpoint answers a taken username exactly like a fresh signup, so
+// it cannot be used to probe which usernames exist. The address the visitor typed is
+// the only place the real reason can be told, so it goes there.
+const sendUsernameTakenEmail = async (userEmail, username) => {
+  const html = `
+    <div style="font-family:Arial;max-width:500px;margin:0 auto;background:white;border-radius:15px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,0.1);">
+      <div style="background:linear-gradient(135deg,#667EEA,#764BA2);padding:30px;text-align:center;">
+        <h1 style="color:white;margin:0;">🍹 Drink Quick Cal</h1>
+        <p style="color:rgba(255,255,255,0.8);">We could not finish your signup</p>
+      </div>
+      <div style="padding:30px;">
+        <h2>Hello,</h2>
+        <p>Someone tried to create a Drink Quick Cal account with this email address, but the username <b>${username}</b> is already taken.</p>
+        <p><b>Nothing was created and nothing has changed.</b> Please try again with a different username.</p>
+        <p style="color:#666;font-size:13px;">If it was not you, you can ignore this message.</p>
+      </div>
+    </div>`;
+  return await sendEmail(
+    userEmail,
+    'We could not finish creating your Drink Quick Cal account',
+    html
+  );
+};
+
+module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendExistingAccountEmail, sendLoginOtpEmail, sendUsernameTakenEmail, sendJoinRequestEmail, sendSupportReportEmail, sendEmail, buildEmailPayload, isEmailConfigured };

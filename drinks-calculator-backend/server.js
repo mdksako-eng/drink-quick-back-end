@@ -11,7 +11,7 @@ require('dotenv').config();
 const app = express();
 
 // ========== EMAIL SERVICE ==========
-const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail, sendExistingAccountEmail, sendLoginOtpEmail, isEmailConfigured } = require('./utils/email.service');
+const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail, sendExistingAccountEmail, sendLoginOtpEmail, sendUsernameTakenEmail, isEmailConfigured } = require('./utils/email.service');
 
 // ========== SESSION AUTH (DB-backed) ==========
 const { generateSessionToken, getSessionUser, requireSession, invalidateSession, invalidateUserSessions } = require('./middleware/sessionAuth');
@@ -1099,7 +1099,30 @@ app.post('/api/auth/register', async (req, res) => {
     
     const existingUsername = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
     if (existingUsername.rows.length > 0) {
-      return res.status(400).json({ status: 'error', message: 'Username already taken' });
+      // 🔒 Same anti-enumeration rule as the email branch above: answer exactly like
+      // a fresh signup and tell the truth only in the email sent to the address the
+      // visitor typed. The address is free, so the message says what actually went
+      // wrong (a taken username) instead of pretending an account was created.
+      try {
+        await sendUsernameTakenEmail(email, username);
+        console.log(`📧 Username-taken email sent to ${email}`);
+      } catch (e) {
+        console.log('⚠️ Username-taken email failed:', e.message);
+      }
+      return res.status(201).json({
+        status: 'success',
+        message: 'Account created! Check email to verify.',
+        data: {
+          pendingJoinApproval: false,
+          joinRequestId: null,
+          user: {
+            id: null, _id: null, username: username, email: email,
+            phone: null, role: 'Customer', companyId: null,
+            isActive: false, emailVerified: false, isOwner: false
+          },
+          token: generateSessionToken()
+        }
+      });
     }
     
     let finalCompanyId = null;
