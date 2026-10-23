@@ -11,12 +11,18 @@ require('dotenv').config();
 const app = express();
 
 // ========== EMAIL SERVICE ==========
-const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail, sendExistingAccountEmail } = require('./utils/email.service');
+const { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendJoinRequestEmail, sendExistingAccountEmail, sendLoginOtpEmail, isEmailConfigured } = require('./utils/email.service');
 
 // ========== SESSION AUTH (DB-backed) ==========
 const { generateSessionToken, getSessionUser, requireSession, invalidateSession, invalidateUserSessions } = require('./middleware/sessionAuth');
 const { requirePlan } = require('./middleware/planAuth');
 const legalAcceptance = require('./utils/legalAcceptance');
+const twoFactor = require('./utils/twoFactor');
+
+// 🔐 Pending login challenges for opted-in managers/owners/admins. In-memory,
+// capped and self-pruning (see utils/twoFactor.js): a restart drops pending codes,
+// which only means the user asks for a new one.
+const otpChallenges = twoFactor.createChallengeStore();
 const { safeEqual } = require('./utils/safeCompare');
 const auditLog = require('./utils/auditLog');
 const { createQueue } = require('./utils/authQueue');
@@ -190,6 +196,15 @@ pool.on('error', (err) => {
         console.log('✅ Company subscription columns ensured (plan, plan_expires_at, subscription_status)');
       } catch (subColErr) {
         console.log('⚠️ Subscription columns warning:', subColErr.message);
+      }
+
+      // 🔐 SECOND FACTOR — opt-in email code for managers/owners/admins. Defaults to
+      // false, so deploying this column changes nobody's login.
+      try {
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN DEFAULT false`);
+        console.log('✅ Second-factor column ensured (users.two_factor_enabled)');
+      } catch (tfColErr) {
+        console.log('⚠️ Second-factor column warning:', tfColErr.message);
       }
 
       // 🟢 NOTCH PAY — per-company credentials so B2C money goes to the
@@ -1274,12 +1289,12 @@ app.post('/api/auth/login', async (req, res) => {
     let result;
     if (email) {
       result = await pool.query(
-        'SELECT id, username, email, password, role, email_verified, company_id, is_active FROM users WHERE email = $1',
+        'SELECT id, username, email, password, role, email_verified, company_id, is_active, two_factor_enabled FROM users WHERE email = $1',
         [email]
       );
     } else {
       result = await pool.query(
-        'SELECT id, username, email, password, role, email_verified, company_id, is_active FROM users WHERE username = $1',
+        'SELECT id, username, email, password, role, email_verified, company_id, is_active, two_factor_enabled FROM users WHERE username = $1',
         [username]
       );
     }
@@ -1343,6 +1358,58 @@ app.post('/api/auth/login', async (req, res) => {
     // spend the 10-attempts-per-15-minutes budget on *successful* logins and then
     // be locked out of their own account.
     accountLimiter.reset(`login:${email || username}`);
+
+    // 🔐 SECOND FACTOR — opt-in email code for managers/owners/admins.
+    //
+    // The app retries this SAME login with `otpCode` added, so a valid code simply
+    // falls through to the session creation below and the rest of this route is
+    // untouched. With the feature off (the default) not one line here runs.
+    if (twoFactor.requiresSecondFactor({
+      // 🔒 Both must hold: the user opted in AND the operator switched the feature
+      // on. The env flag is the kill switch — with it unset, no till can ever be
+      // stranded at the login screen by a half-deployed rollout.
+      enabled: user.two_factor_enabled === true && process.env.TWO_FACTOR_ENABLED === 'true',
+      role: user.role,
+      emailConfigured: isEmailConfigured(),
+    })) {
+      const submitted = req.body && typeof req.body.otpCode === 'string'
+        ? req.body.otpCode.trim()
+        : (req.body ? req.body.otpCode : undefined);
+      const verdict = twoFactor.checkChallenge({ userId: user.id, code: submitted });
+      if (!verdict.ok) {
+        if (verdict.code === 'missing' || verdict.code === 'expired') {
+          // Start a challenge: one fresh code, emailed. Only one is ever alive.
+          const code = otpChallenges.create({ userId: user.id });
+          let delivered = false;
+          try {
+            await sendLoginOtpEmail(user.email, code, user.username);
+            delivered = true;
+            console.log(`📧 Login code sent to ${user.email}`);
+          } catch (e) {
+            console.log('⚠️ Login code email failed:', e.message);
+          }
+          if (delivered) {
+            return res.status(401).json({
+              status: 'otp_required',
+              message: 'Enter the 6-digit code we just emailed you',
+            });
+          }
+          // Undeliverable code: refusing here would lock a manager out of their own
+          // till because the mailer is down. Continue without the second factor.
+          console.log('⚠️ Second factor skipped: the code could not be delivered');
+        } else if (verdict.code === 'tooManyAttempts') {
+          return res.status(401).json({
+            status: 'otp_required',
+            message: 'Too many wrong codes — sign in again to get a new one',
+          });
+        } else {
+          return res.status(401).json({
+            status: 'otp_invalid',
+            message: `Wrong code. ${verdict.attemptsLeft} tries left`,
+          });
+        }
+      }
+    }
     
     const userRole = user.role;
     const finalDeviceId = deviceId || req.headers['user-agent'] || 'unknown';
@@ -1697,6 +1764,56 @@ app.post('/api/auth/legal/accept', requireSession(pool), async (req, res) => {
   } catch (error) {
     console.error('POST /api/auth/legal/accept error:', error.message);
     res.status(500).json({ message: 'Failed to record the acceptance' });
+  }
+});
+
+// ========== SECOND FACTOR (opt-in) ==========
+// 🔐 Turns the email code on/off for the signed-in account. Managers, owners and
+// admins only: they are the roles that can move money and change settings, and the
+// ones `requiresSecondFactor` actually challenges. Staff logins stay untouched.
+app.post('/api/auth/2fa', requireSession(pool), async (req, res) => {
+  try {
+    if (!twoFactor.isSecondFactorRole(req.user.role)) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Two-factor authentication is only available for managers and administrators',
+      });
+    }
+
+    const enabled = req.body && req.body.enabled === true;
+    // 🔒 The whole feature sits behind a server switch until every till can answer
+    // the challenge: an opt-in before that would strand the manager at the login
+    // screen with no way to enter a code.
+    if (enabled && process.env.TWO_FACTOR_ENABLED !== 'true') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Two-factor authentication is not enabled on this server yet',
+      });
+    }
+    if (enabled && !isEmailConfigured()) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Email is not configured on this server, so a code could not be delivered',
+      });
+    }
+
+    await pool.query('UPDATE users SET two_factor_enabled = $1 WHERE id = $2', [enabled, req.user.id]);
+    // Turning it off drops any pending code immediately.
+    if (!enabled) otpChallenges.clear(req.user.id);
+
+    await auditLog.record(pool, {
+      companyId: req.user.company_id ?? null,
+      actorId: req.user.id,
+      actorName: req.user.username || req.user.email || '',
+      action: 'user.twoFactor',
+      target: `user:${req.user.id}`,
+      detail: enabled ? 'enabled' : 'disabled',
+    });
+
+    res.json({ status: 'success', twoFactorEnabled: enabled });
+  } catch (error) {
+    console.error('POST /api/auth/2fa error:', error.message);
+    res.status(500).json({ status: 'error', message: 'Failed to update the second factor' });
   }
 });
 

@@ -168,4 +168,27 @@ const sendExistingAccountEmail = async (userEmail, username) => {
   );
 };
 
-module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendExistingAccountEmail, sendJoinRequestEmail, sendSupportReportEmail, sendEmail, buildEmailPayload, isEmailConfigured };
+// ============================================================
+// LOGIN SECOND FACTOR (opt-in email code)
+// ============================================================
+// 🔐 Sent when a manager/owner/admin who opted into a second factor signs in. The
+// code is short-lived (10 minutes, 5 tries) and consumed on first use.
+const sendLoginOtpEmail = async (userEmail, code, username) => {
+  const html = `
+    <div style="font-family:Arial;max-width:500px;margin:0 auto;background:white;border-radius:15px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,0.1);">
+      <div style="background:linear-gradient(135deg,#667EEA,#764BA2);padding:30px;text-align:center;">
+        <h1 style="color:white;margin:0;">🍹 Drink Quick Cal</h1>
+        <p style="color:rgba(255,255,255,0.8);">Sign-in verification code</p>
+      </div>
+      <div style="padding:30px;">
+        <h2>Hello ${username || 'there'},</h2>
+        <p>Someone is signing in to your account. Enter this code to continue:</p>
+        <div style="font-size:34px;font-weight:bold;letter-spacing:8px;text-align:center;padding:18px;background:#f4f5ff;border-radius:12px;">${code}</div>
+        <p style="color:#666;font-size:13px;">The code expires in 10 minutes and works once.</p>
+        <p style="color:#666;font-size:13px;">If it was not you, do not share this code — and change your password.</p>
+      </div>
+    </div>`;
+  return await sendEmail(userEmail, 'Your Drink Quick Cal sign-in code', html);
+};
+
+module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendExistingAccountEmail, sendLoginOtpEmail, sendJoinRequestEmail, sendSupportReportEmail, sendEmail, buildEmailPayload, isEmailConfigured };
