@@ -99,4 +99,32 @@ void main() {
       expect(availability.allows(PayRail.mtn), isFalse);
     });
   });
+
+  // The live state: CamerPay publishes no per-rail list, so `notchpayChannels()`
+  // returns null and the app holds `unknown` forever. Both Mobile Money rails must
+  // stay offered — that is what makes MTN *and* Orange show "Available now" under
+  // them in the upgrade sheet. Without this, Orange looked broken next to MTN.
+  group('unknown availability keeps every rail offered', () {
+    test('MTN and Orange are both allowed when the server has no opinion', () {
+      const availability = PayChannelAvailability.unknown;
+      expect(availability.known, isFalse);
+      expect(availability.allows(PayRail.mtn), isTrue);
+      expect(availability.allows(PayRail.orange), isTrue);
+      expect(availability.allows(PayRail.card), isTrue);
+    });
+
+    test('every rail in the sheet is covered by the same rule', () {
+      const availability = PayChannelAvailability.unknown;
+      for (final rail in kPayRails) {
+        expect(availability.allows(rail), isTrue,
+            reason: '$rail must stay offered');
+      }
+    });
+
+    test('a 200 with an unexpected shape cannot disable a Mobile Money rail', () {
+      final availability = PayChannelAvailability.fromJson(const {'known': false});
+      expect(availability.allows(PayRail.mtn), isTrue);
+      expect(availability.allows(PayRail.orange), isTrue);
+    });
+  });
 }
