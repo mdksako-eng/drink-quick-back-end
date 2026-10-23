@@ -48,7 +48,7 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
   bool _voiceContinuous = false;
   String _loadingLabel = '';
   String _voiceStatus = '';
-  bool _voiceFeedbackEnabled = true;
+  bool _voiceFeedbackEnabled = false;
   double _speechRate = 0.5;
   String _speechLanguage = 'en-US';
   String _voiceGender = 'female';

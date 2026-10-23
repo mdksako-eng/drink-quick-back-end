@@ -2,6 +2,8 @@
 import 'package:flutter/foundation.dart';
 import '../models/subscription_model.dart';
 import '../services/subscription_service.dart';
+import '../services/voice_service.dart';
+import '../utils/voice_access.dart';
 
 class PlanProvider extends ChangeNotifier {
   SubscriptionInfo _info = const SubscriptionInfo();
@@ -72,8 +74,21 @@ class PlanProvider extends ChangeNotifier {
       // Mark the plan as resolved even when the fetch failed: the gate then
       // falls back to the local/default state instead of blocking the app.
       _hasLoaded = true;
+      _syncVoiceEntitlement();
       notifyListeners();
     }
+  }
+
+  /// 🔒 Tells `VoiceService` whether this plan includes voice.
+  ///
+  /// Voice is a paid capability that ships OFF, so an unresolved plan (boot, a
+  /// failed first fetch) is a "no". A later successful fetch flips it on without a
+  /// restart; a downgrade flips it off immediately.
+  void _syncVoiceEntitlement() {
+    VoiceService.setPlanAllowsVoice(voiceAllowedForPlan(
+      planResolved: _hasLoaded,
+      grantsAiFeature: canAccess('ai'),
+    ));
   }
 
   /// Begin a card payment for [plan]; returns the checkout URL (or null).

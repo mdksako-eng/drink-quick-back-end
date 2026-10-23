@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/voice_access.dart';
 
 class VoiceService {
   final stt.SpeechToText _speech = stt.SpeechToText();
@@ -13,8 +14,27 @@ class VoiceService {
 
   /// 🌐 Global voice (TTS) switch for the WHOLE app — AI replies, order
   /// announcements, notifications, everything. Persisted per device.
-  static bool voiceEnabled = true;
+  ///
+  /// **OFF by default**: a fresh install is silent until the user turns it on.
+  static bool voiceEnabled = false;
   static const String _voiceEnabledKey = 'app_voice_enabled';
+
+  /// 🔒 Plan entitlement, pushed here by `PlanProvider` every time the plan is
+  /// resolved. Voice is a paid capability, so this starts false and only a plan
+  /// that actually grants it turns it true.
+  static bool planAllowsVoice = false;
+
+  /// The single question every speak site should ask: may we make a sound?
+  ///
+  /// True only when the plan grants voice AND the user switched it on. A downgrade
+  /// silences the app immediately without erasing the user's preference.
+  static bool get voiceAllowed =>
+      voiceOutputAllowed(allowedByPlan: planAllowsVoice, userEnabled: voiceEnabled);
+
+  /// Called by `PlanProvider` after each plan fetch (see `_syncVoiceEntitlement`).
+  static void setPlanAllowsVoice(bool allowed) {
+    planAllowsVoice = allowed;
+  }
 
   // 🗣️ Speech identity (per device): UI language ('en'/'fr'), TTS locale,
   // recognition locale and voice gender. Kept in memory so every speak() and
@@ -38,7 +58,8 @@ class VoiceService {
   static Future<void> loadVoiceEnabled() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      voiceEnabled = prefs.getBool(_voiceEnabledKey) ?? true;
+      // ⚠️ Missing key = never chosen = OFF. Only an explicit "on" speaks.
+      voiceEnabled = prefs.getBool(_voiceEnabledKey) ?? false;
     } catch (_) {}
   }
 
@@ -159,7 +180,12 @@ class VoiceService {
 
   Future<void> speak(String text) async {
     if (text.isEmpty) return;
-    if (!voiceEnabled) return; // 🌐 Global app-wide voice switch
+    if (!voiceAllowed) {
+      // 🌐 Off by default, and 🔒 silent unless the plan grants voice.
+      debugPrint('🔇 Voice off (plan=${planAllowsVoice ? 'ok' : 'no'}, '
+          'switch=${voiceEnabled ? 'on' : 'off'}) — skipping: $text');
+      return;
+    }
     if (!_ttsInitialized) {
       debugPrint('TTS not initialized, cannot speak: $text');
       return;

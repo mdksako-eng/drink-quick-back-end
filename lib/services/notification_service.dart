@@ -201,7 +201,9 @@ class NotificationService extends ChangeNotifier {
 
   Future<void> _speak(String text) async {
     if (!_soundEnabled) return;
-    if (!VoiceService.voiceEnabled) return; // 🌐 global app-wide voice switch (AI screen toggle)
+    // 🌐 Global voice switch + 🔒 plan entitlement: notifications are never spoken
+    // on a plan that does not include voice.
+    if (!VoiceService.voiceAllowed) return;
     try {
       await tts.platformSpeak(text);
     } catch (e) {
