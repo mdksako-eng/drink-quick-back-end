@@ -14,17 +14,25 @@ class PaymentsStatus {
   const PaymentsStatus({
     required this.mode,
     required this.liveReady,
-    this.notchPayConfigured = false,
+    this.providerConfigured = false,
     this.hint,
   });
 
   /// 'live' or 'test'.
   final String mode;
   final bool liveReady;
-  final bool notchPayConfigured;
+  /// True when the payment account (CamerPay) has its credentials set.
+  final bool providerConfigured;
   final String? hint;
 
-  bool get isLive => mode.toLowerCase() == 'live' && liveReady;
+  /// True only when a rail can take REAL money.
+  ///
+  /// CamerPay cannot reveal sandbox-vs-live from its token — the account declares it
+  /// (`CAMERPAY_ACCOUNT_LIVE=true`, reported as `accountDeclaredLive`), and the
+  /// backend folds that into `liveReady`. So `liveReady` IS the honest answer; the
+  /// old rule also demanded `mode == 'live'`, and since the CamerPay payload has no
+  /// `mode` field at all, that kept the app on "TEST" forever.
+  bool get isLive => liveReady;
 
   /// Shown in the subscription screen while the rails are still in test mode.
   String get shortLabel => isLive ? 'LIVE' : 'TEST';
@@ -35,10 +43,19 @@ class PaymentsStatus {
   );
 
   factory PaymentsStatus.fromJson(Map<String, dynamic> json) {
+    // CamerPay payload: provider/configured/accountDeclaredLive/liveReady/hint.
+    // The Notch Pay shape (mode/notchpayMode) is still parsed so an older backend
+    // cannot crash the screen — it just reports test until it is updated.
+    final declaredLive = json['accountDeclaredLive'] == true;
+    final liveReady = json['liveReady'] == true;
+    final rawMode = json['mode'] ?? json['notchpayMode'];
     return PaymentsStatus(
-      mode: (json['mode'] ?? json['notchpayMode'] ?? 'unknown').toString(),
-      liveReady: json['liveReady'] == true,
-      notchPayConfigured: json['notchpayConfigured'] == true,
+      mode: (rawMode ??
+              (liveReady || declaredLive ? 'live' : 'test'))
+          .toString(),
+      liveReady: liveReady,
+      providerConfigured: json['configured'] == true ||
+          json['notchpayConfigured'] == true,
       hint: json['hint']?.toString(),
     );
   }
