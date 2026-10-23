@@ -18,6 +18,7 @@ const { generateSessionToken, getSessionUser, requireSession, invalidateSession,
 const { requirePlan } = require('./middleware/planAuth');
 const legalAcceptance = require('./utils/legalAcceptance');
 const { safeEqual } = require('./utils/safeCompare');
+const auditLog = require('./utils/auditLog');
 const { createQueue } = require('./utils/authQueue');
 
 // ========== PASSWORD HELPERS ===========
@@ -475,6 +476,40 @@ pool.on('error', (err) => {
         )`);
         await pool.query(`CREATE INDEX IF NOT EXISTS legal_acceptances_user_idx
           ON legal_acceptances (user_id, document)`);
+
+        // 💸 Refunds are RECORDED here; the money moves in the provider dashboard
+        // (no refund API is wired). The row is the company's proof of who/why/how
+        // much, plus the provider reference that ties it to the statement.
+        await pool.query(`CREATE TABLE IF NOT EXISTS refunds (
+          id BIGSERIAL PRIMARY KEY,
+          company_id INTEGER NOT NULL,
+          order_id TEXT,
+          amount NUMERIC(12,2) NOT NULL,
+          reason TEXT NOT NULL,
+          reference TEXT DEFAULT '',
+          method TEXT DEFAULT 'card',
+          performed_by INTEGER,
+          performed_by_name TEXT DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'approved',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS refunds_company_created_idx
+          ON refunds (company_id, created_at DESC)`);
+
+        // 🧾 One row per sensitive action (block/delete/role change, refund, staff
+        // sale correction) so "who did that?" survives the log rotation.
+        await pool.query(`CREATE TABLE IF NOT EXISTS audit_log (
+          id BIGSERIAL PRIMARY KEY,
+          company_id INTEGER,
+          actor_id INTEGER,
+          actor_name TEXT DEFAULT '',
+          action TEXT NOT NULL,
+          target TEXT DEFAULT '',
+          detail TEXT DEFAULT '',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS audit_log_company_created_idx
+          ON audit_log (company_id, created_at DESC)`);
 
         // 🔎 Hot-path indexes (sql/indexes_hot_paths.sql). IF NOT EXISTS makes this a
         // no-op after the first boot, and a failure is logged rather than fatal — a
@@ -1747,6 +1782,15 @@ app.post('/api/auth/block-user/:id', requireSession(pool), async (req, res) => {
     );
     // Blocked means blocked now: drop every cached session of that user.
     invalidateUserSessions(userId);
+    // 📜 Durable trace: "who blocked whom" must outlive the log rotation.
+    await auditLog.record(pool, {
+      companyId: req.user?.company_id ?? null,
+      actorId: req.user?.id ?? null,
+      actorName: req.user?.username || req.user?.email || '',
+      action: 'user.block',
+      target: `user:${userId}`,
+      detail: result.rows[0]?.username || '',
+    });
     
     res.json({ status: 'success', message: `${result.rows[0].username} blocked`, data: { user: { id: result.rows[0].id, username: result.rows[0].username, role: result.rows[0].role, isActive: false } } });
   } catch (error) {
@@ -1925,6 +1969,15 @@ app.put('/api/users/:id', verifyAdmin, async (req, res) => {
     // A role or company change must take effect at once, not after the session
     // cache expires: drop that user's cached sessions before answering.
     invalidateUserSessions(id);
+    // 📜 Trace the change itself, not just its effect.
+    await auditLog.record(pool, {
+      companyId: req.user?.company_id ?? null,
+      actorId: req.user?.id ?? null,
+      actorName: req.user?.username || req.user?.email || '',
+      action: 'user.role',
+      target: `user:${id}`,
+      detail: `role=${role ?? 'unchanged'} company=${company_id ?? 'unchanged'}`,
+    });
     res.json({ status: 'success', message: 'User updated', data: { user: result.rows[0] } });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });

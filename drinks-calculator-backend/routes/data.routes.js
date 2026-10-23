@@ -27,6 +27,8 @@ const {
 } = require('../utils/shiftMath');
 const orderVoid = require('../utils/orderVoid');
 const orderReturn = require('../utils/orderReturn');
+const refundRecord = require('../utils/refundRecord');
+const auditLog = require('../utils/auditLog');
 const { priceCart, parseCart } = require('../utils/orderPricing');
 const orderQuote = require('../utils/orderQuote');
 
@@ -1605,6 +1607,112 @@ router.post('/inventory-transactions', async (req, res) => {
     console.error('POST /inventory-transactions error:', error.message,
       '| code:', error.code || '-', '| detail:', error.detail || '-', '| column:', error.column || '-');
     res.status(500).json({ message: 'Failed to save transaction' });
+  }
+});
+
+/**
+ * 💸 Record a refund that was already issued in the provider's dashboard.
+ *
+ * There is NO refund API wired here: the money moves at CamPay/Notch Pay. What this
+ * endpoint stores is the company's proof — who refunded, why, how much, and the
+ * provider reference that ties the row to the statement. That is also what closes
+ * the "money collected but the sale rolled back" hole: the manager records it and it
+ * stops being invisible.
+ *
+ * Manager / owner only: a refund is money leaving the business.
+ */
+router.post('/orders/:id/refund', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const role = (req.user.role || '').toString().trim().toLowerCase();
+    const isManager =
+      role === 'manager' || role === 'administrator' || role === 'admin';
+    if (!isManager) {
+      return res.status(403).json({ message: 'Only a manager can record a refund' });
+    }
+
+    const found = await req.db.query(
+      'SELECT id, total_amount FROM orders WHERE id = $1 AND company_id = $2',
+      [req.params.id, companyId]
+    );
+    if (found.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const previous = await req.db.query(
+      `SELECT COALESCE(SUM(amount), 0) AS refunded FROM refunds
+        WHERE order_id = $1 AND company_id = $2 AND status = 'approved'`,
+      [req.params.id, companyId]
+    );
+
+    const body = req.body || {};
+    const verdict = refundRecord.validateRefund({
+      amount: body.amount,
+      reason: body.reason,
+      reference: body.reference,
+      orderTotal: found.rows[0].total_amount,
+      alreadyRefunded: Number(previous.rows[0] && previous.rows[0].refunded),
+    });
+    if (!verdict.ok) return res.status(400).json({ message: verdict.reason });
+
+    const row = refundRecord.buildRefundRow({
+      companyId,
+      orderId: req.params.id,
+      amount: verdict.amount,
+      reason: body.reason,
+      reference: body.reference,
+      method: body.method,
+      performedBy: req.user.id,
+      performedByName: req.user.username || req.user.email || '',
+    });
+
+    const inserted = await req.db.query(
+      `INSERT INTO refunds
+         (company_id, order_id, amount, reason, reference, method,
+          performed_by, performed_by_name, status, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [row.company_id, row.order_id, row.amount, row.reason, row.reference,
+       row.method, row.performed_by, row.performed_by_name, row.status, row.created_at]
+    );
+
+    await auditLog.record(req.db, {
+      companyId,
+      actorId: req.user.id,
+      actorName: row.performed_by_name,
+      action: 'refund.record',
+      target: `order:${req.params.id}`,
+      detail: `${verdict.amount} — ${row.reason}` +
+        (row.reference ? ` (ref ${row.reference})` : ' (no reference)'),
+    });
+
+    res.status(201).json({ ...inserted.rows[0], note: verdict.note });
+  } catch (error) {
+    console.error('POST /orders/:id/refund error:', error.message);
+    res.status(500).json({ message: 'Failed to record the refund' });
+  }
+});
+
+/** Recent refunds, for the manager's books. Manager / owner only. */
+router.get('/refunds', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const role = (req.user.role || '').toString().trim().toLowerCase();
+    if (!(role === 'manager' || role === 'administrator' || role === 'admin')) {
+      return res.status(403).json({ message: 'Only a manager can read the refunds' });
+    }
+
+    const result = await req.db.query(
+      `SELECT * FROM refunds WHERE company_id = $1 ORDER BY created_at DESC LIMIT 100`,
+      [companyId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('GET /refunds error:', error.message);
+    res.status(500).json({ message: 'Failed to load refunds' });
   }
 });
 
