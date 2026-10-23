@@ -9,6 +9,7 @@ import '../providers/auth_provider.dart';
 import '../providers/drink_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/order_provider.dart';
+import '../services/backend_auth_service.dart';
 import '../services/company_branding_service.dart';
 import '../services/secure_storage_service.dart';
 import '../utils/helpers.dart';
@@ -229,10 +230,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// 🔐 The opt-in switch for the email second factor.
+  ///
+  /// Hidden until the server says the feature is ready (`available`), so a manager
+  /// never sees a switch that cannot deliver a code. The state comes from the
+  /// server, never from a local guess.
+  Widget _twoFactorCard(ThemeData theme, Color primary) {
+    if (!_twoFactorAvailable) return const SizedBox.shrink();
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: SwitchListTile(
+        secondary: Icon(Icons.verified_user, color: primary),
+        title: Text(t('twoFactorTitle'),
+            style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(_twoFactorEnabled
+            ? t('twoFactorOnHint')
+            : t('twoFactorOffHint')),
+        value: _twoFactorEnabled,
+        onChanged: _twoFactorBusy
+            ? null
+            : (value) async {
+                setState(() => _twoFactorBusy = true);
+                final result =
+                    await BackendAuthService.setTwoFactor(value);
+                if (!mounted) return;
+                setState(() {
+                  _twoFactorBusy = false;
+                  if (result != null) _twoFactorEnabled = result;
+                });
+                if (result == null) {
+                  Helpers.showToast(t('twoFactorFailed'), isError: true);
+                } else {
+                  Helpers.showToast(
+                      result ? t('twoFactorEnabledToast') : t('twoFactorDisabledToast'));
+                }
+              },
+      ),
+    );
+  }
+
+  // 🔐 Second-factor state, read from the server (never guessed locally).
+  bool _twoFactorAvailable = false;
+  bool _twoFactorEnabled = false;
+  bool _twoFactorBusy = false;
+  bool _twoFactorLoaded = false;
+
+  /// Loads the second-factor state once per screen. Done here rather than in an
+  /// initState override so the existing lifecycle stays untouched; `mounted` guards
+  /// the setState.
+  void _loadTwoFactorOnce() {
+    if (_twoFactorLoaded) return;
+    _twoFactorLoaded = true;
+    BackendAuthService.twoFactorStatus().then((status) {
+      if (!mounted || status == null) return;
+      setState(() {
+        _twoFactorAvailable = status['available'] == true;
+        _twoFactorEnabled = status['enabled'] == true;
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final auth = context.watch<AuthProvider>();
+    _loadTwoFactorOnce();
     final user = auth.user;
     final primary = theme.primaryColor;
 
@@ -296,6 +359,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 14),
           _securityCard(theme, primary, user.id, isCustomer: isCustomer),
+          // 🔐 Second factor: only the roles the server actually challenges can see
+          // it — a staff or customer login never asks for a code.
+          if (isManager || isAdmin || isOwner) ...[
+            const SizedBox(height: 14),
+            _twoFactorCard(theme, primary),
+          ],
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,

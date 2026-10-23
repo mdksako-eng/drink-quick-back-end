@@ -50,6 +50,55 @@ class BackendAuthService {
       return false;
     }
   }
+
+  /// 🔐 Reads the second-factor state: `enabled` for this account and `available`
+  /// (the operator switched the feature on and the mailer works). Returns null when
+  /// the call failed, so the UI can simply stay quiet.
+  static Future<Map<String, dynamic>?> twoFactorStatus() async {
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      if (token == null || token.isEmpty) return null;
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/auth/2fa'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(_backendTimeout);
+      if (response.statusCode != 200) return null;
+      final decoded = jsonDecode(response.body);
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+    } catch (e) {
+      debugPrint('⚠️ Two-factor status unavailable: $e');
+      return null;
+    }
+  }
+
+  /// 🔐 Turns the email second factor on/off for the signed-in account.
+  ///
+  /// Managers/owners/admins only — the server refuses anyone else, and it also
+  /// refuses while the operator has not switched the feature on. Returns the new
+  /// state, or null when the call failed (offline, older backend, not allowed).
+  static Future<bool?> setTwoFactor(bool enabled) async {
+    try {
+      final token = await SecureStorageService.getSessionToken();
+      if (token == null || token.isEmpty) return null;
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/auth/2fa'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'enabled': enabled}),
+      ).timeout(_backendTimeout);
+      if (response.statusCode != 200) return null;
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded['twoFactorEnabled'] is bool) {
+        return decoded['twoFactorEnabled'] as bool;
+      }
+      return enabled;
+    } catch (e) {
+      debugPrint('❌ setTwoFactor error: $e');
+      return null;
+    }
+  }
   static const String _logoutEndpoint = '$baseUrl/api/auth/logout';
   static const String _currentUserEndpoint = '$baseUrl/api/auth/me';
   static const String _testEndpoint = '$baseUrl/api/test';

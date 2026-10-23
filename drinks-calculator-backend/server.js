@@ -1768,6 +1768,27 @@ app.post('/api/auth/legal/accept', requireSession(pool), async (req, res) => {
 });
 
 // ========== SECOND FACTOR (opt-in) ==========
+// 🔐 Reports whether this account has the second factor on, and whether the server
+// is ready to deliver a code. `available: false` is why the app hides the switch
+// instead of offering something that cannot work yet.
+app.get('/api/auth/2fa', requireSession(pool), async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT two_factor_enabled FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    res.json({
+      enabled: result.rows[0]?.two_factor_enabled === true,
+      available: process.env.TWO_FACTOR_ENABLED === 'true'
+        && isEmailConfigured()
+        && twoFactor.isSecondFactorRole(req.user.role),
+    });
+  } catch (error) {
+    console.error('GET /api/auth/2fa error:', error.message);
+    res.status(500).json({ status: 'error', message: 'Failed to read the second factor' });
+  }
+});
+
 // 🔐 Turns the email code on/off for the signed-in account. Managers, owners and
 // admins only: they are the roles that can move money and change settings, and the
 // ones `requiresSecondFactor` actually challenges. Staff logins stay untouched.
