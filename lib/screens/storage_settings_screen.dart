@@ -2780,7 +2780,11 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         ),
                         Switch(
                           value: _mtnEnabled,
-                          onChanged: (isManager && _notchpaySyncId.isNotEmpty)
+                          // ⚠️ This was gated on the Notch Pay sync id, so no company
+                          // could enable a rail until they filled in a field for the
+                          // provider we removed. CamerPay is the provider now, so its
+                          // connection is the honest condition.
+                          onChanged: (isManager && _campayConnected)
                               ? (value) {
                                   setState(() {
                                     _mtnEnabled = value;
@@ -3005,7 +3009,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         ),
                         Switch(
                           value: _orangeEnabled,
-                          onChanged: (isManager && _notchpaySyncId.isNotEmpty)
+                          // CamerPay's connection replaces the removed Notch Pay id.
+                          onChanged: (isManager && _campayConnected)
                               ? (value) {
                                   setState(() {
                                     _orangeEnabled = value;
@@ -3030,7 +3035,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         ),
                         Switch(
                           value: _cardEnabled,
-                          onChanged: (isManager && _notchpaySyncId.isNotEmpty)
+                          // CamerPay's connection replaces the removed Notch Pay id.
+                          onChanged: (isManager && _campayConnected)
                               ? (value) {
                                   setState(() {
                                     _cardEnabled = value;
