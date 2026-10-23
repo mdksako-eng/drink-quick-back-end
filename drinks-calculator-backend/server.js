@@ -1832,6 +1832,15 @@ app.post('/api/auth/unblock-user/:id', requireSession(pool), async (req, res) =>
     );
     
     res.json({ status: 'success', message: `${result.rows[0].username} unblocked`, data: { user: { id: result.rows[0].id, username: result.rows[0].username, role: result.rows[0].role, isActive: true } } });
+    // 📜 Same durable trace as blocking.
+    await auditLog.record(pool, {
+      companyId: req.user?.company_id ?? null,
+      actorId: req.user?.id ?? null,
+      actorName: req.user?.username || req.user?.email || '',
+      action: 'user.unblock',
+      target: `user:${userId}`,
+      detail: result.rows[0]?.username || '',
+    });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });
   }
@@ -1904,7 +1913,17 @@ app.delete('/api/auth/users/:id', verifyAdmin, async (req, res) => {
     if (user.role === 'Administrator') return res.status(403).json({ status: 'error', message: 'Cannot delete Administrator' });
     
     await pool.query('DELETE FROM users WHERE id = $1', [userId]);
-    
+
+    // 📜 A permanent deletion must leave a trace that outlives the row.
+    await auditLog.record(pool, {
+      companyId: req.user?.company_id ?? null,
+      actorId: req.user?.id ?? null,
+      actorName: req.user?.username || req.user?.email || '',
+      action: 'user.delete',
+      target: `user:${user.id}`,
+      detail: `${user.username} (${user.role})`,
+    });
+
     res.json({ status: 'success', message: `${user.username} deleted permanently`, data: { deletedUser: { id: user.id, username: user.username, role: user.role } } });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });
