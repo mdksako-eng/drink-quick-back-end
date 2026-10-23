@@ -250,6 +250,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 final inventoryProvider =
                     Provider.of<InventoryProvider>(this.context, listen: false);
 
+                // 🔢 Read the new total BEFORE the provider call: `addStock` mutates
+                // the very object we hold (`_inventoryItems[index].quantity += q`),
+                // so computing it afterwards added the restock a second time — the
+                // notification said "total: 20" for a shelf that really holds 15, and
+                // the low/out-of-stock checks below tested that inflated number.
+                final newTotal = item.quantity + quantity;
+
                 // Add stock to inventory (provider handles everything)
                 await inventoryProvider.addStock(
                   drinkId: item.drinkId,
@@ -261,7 +268,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 );
 
                 // 🔔 Notify the in-app notification center
-                final newTotal = item.quantity + quantity;
                 NotificationService().showStockRestocked(
                   drinkName: item.drinkName,
                   quantity: quantity,

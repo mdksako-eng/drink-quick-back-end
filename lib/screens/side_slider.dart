@@ -931,7 +931,9 @@ class _SideSliderState extends State<SideSlider> {
                                     color: Colors.white.withOpacity(0.3)),
                               ),
                               child: Text(
-                                '${filteredOrders.length} ${filteredOrders.length == 1 ? t('invItem') : t('invItems')}',
+                                // 🔢 This badge counts ORDERS, not items: it used to
+                                // read "5 items" while listing 5 sales.
+                                '${t('orders')}: ${filteredOrders.length}',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 11,

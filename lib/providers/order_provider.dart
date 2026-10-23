@@ -8,6 +8,7 @@ import 'package:drinks_calculator_fixed/models/drink_model.dart';
 import 'package:drinks_calculator_fixed/utils/helpers.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/notification_service.dart';
+import 'package:drinks_calculator_fixed/utils/order_totals.dart';
 
 class Order {
   final String id;
@@ -326,9 +327,12 @@ class OrderProvider with ChangeNotifier {
       await _saveOrders();
 
       // 🔔 Notify the in-app notification center
+      // 🔢 Count UNITS, not cart lines: the cart merges a repeated drink into one
+      // line with a quantity (calculator_screen builds `quantity: entry.value`), so
+      // `copiedItems.length` reported "1 item" for a sale of 24 crates.
       NotificationService().showOrderCreated(
         orderId: order.id,
-        itemCount: copiedItems.length,
+        itemCount: totalUnits(copiedItems),
         totalAmount: totalAmount,
       );
 
