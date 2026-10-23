@@ -1228,7 +1228,7 @@ class AuthProvider with ChangeNotifier {
   // ============================================================
 // ✅ COMPLETE FIXED LOGIN METHOD
 // ============================================================
-  Future<bool> login(String username, String password) async {
+  Future<bool> login(String username, String password, {String? otpCode}) async {
     if (_isDisposed) return false;
 
     debugPrint('🔑 AuthProvider.login() called for: $username');
@@ -1259,9 +1259,27 @@ class AuthProvider with ChangeNotifier {
         final result = await _backendAuth.login(
           username: username,
           password: password,
+          otpCode: otpCode,
           deviceId: deviceId,
           deviceName: deviceName,
         );
+
+        // 🔐 Second factor: the server issued no session because it wants a 6-digit
+        // code (or the one we sent was wrong). Surfaced the same way as
+        // EMAIL_NOT_VERIFIED, so the login screen can act on it and retry with the
+        // code — the whole flow is one endpoint called twice.
+        final otpData = result['data'];
+        final otpStatus = otpData is Map ? otpData['status']?.toString() : null;
+        if (otpStatus == 'otp_required' || otpStatus == 'otp_invalid') {
+          final message = (result['message']?.toString() ?? '')
+              .replaceFirst('❌ ', '')
+              .trim();
+          _error = '${otpStatus == 'otp_required' ? 'OTP_REQUIRED' : 'OTP_INVALID'}|'
+              '${message.isEmpty ? 'Enter the 6-digit code' : message}';
+          _isLoading = false;
+          _safeNotifyListeners();
+          return false;
+        }
 
         debugPrint('📨 Login result:');
         debugPrint('   Success: ${result['success']}');

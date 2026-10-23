@@ -503,7 +503,9 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   // ========== LOGIN / SIGNUP ==========
-  Future<void> _handleLogin() async {
+  /// [otpCode] is set only on the retry after the server asked for a second factor:
+  /// the same login is sent again with the code attached.
+  Future<void> _handleLogin({String? otpCode}) async {
     if (!_loginFormKey.currentState!.validate()) return;
     await _checkConnectivity();
     if (!_hasInternetConnection) {
@@ -514,7 +516,8 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final success = await authProvider.login(
-          _loginUsernameController.text.trim(), _loginPasswordController.text);
+          _loginUsernameController.text.trim(), _loginPasswordController.text,
+          otpCode: otpCode);
       if (mounted) setState(() => _isLoggingIn = false);
       if (success) {
         // 📜 Consent gate: an account a manager created never saw the terms, and
@@ -536,6 +539,18 @@ class _AuthScreenState extends State<AuthScreen> {
         final errorMsg = authProvider.error ?? t('auth_invalidCredentials');
 
         if (mounted) {
+          // 🔐 Second factor: ask for the emailed code and send the same login again.
+          // A wrong code brings us straight back here, and the server's own limit
+          // (5 tries, 10 minutes) ends the loop.
+          if (errorMsg.startsWith('OTP_REQUIRED|') ||
+              errorMsg.startsWith('OTP_INVALID|')) {
+            final message = errorMsg.split('|').sublist(1).join('|');
+            final code = await _promptLoginCode(message);
+            if (code != null && code.isNotEmpty && mounted) {
+              await _handleLogin(otpCode: code);
+            }
+            return;
+          }
           // ✅ Handle email verification error from provider
           if (errorMsg.startsWith('EMAIL_NOT_VERIFIED|')) {
             final message = errorMsg.replaceFirst('EMAIL_NOT_VERIFIED|', '');
@@ -571,6 +586,47 @@ class _AuthScreenState extends State<AuthScreen> {
         }
       }
     }
+  }
+
+  /// Asks for the 6-digit sign-in code. Returns null when the user cancels.
+  Future<String?> _promptLoginCode(String message) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(t('twoFactorTitle')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 24, letterSpacing: 8),
+              decoration: InputDecoration(
+                  labelText: t('twoFactorCodeLabel'),
+                  border: const OutlineInputBorder()),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(t('cancel'))),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: Text(t('confirm'))),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
   }
 
   /// Shows the consent gate when the user has not accepted the current legal text.

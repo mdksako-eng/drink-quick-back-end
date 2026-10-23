@@ -334,6 +334,7 @@ class BackendAuthService {
   Future<Map<String, dynamic>> login({
     required String username,
     required String password,
+    String? otpCode,
     String? deviceId,
     String? deviceName,
   }) async {
@@ -357,6 +358,8 @@ class BackendAuthService {
         'password': password,
         'deviceId': deviceId,
         'deviceName': deviceName,
+        // 🔐 Sent only on the retry, after the server answered `otp_required`.
+        if (otpCode != null) 'otpCode': otpCode,
       });
 
       debugPrint('📤 Sending login request to: $_loginEndpoint');

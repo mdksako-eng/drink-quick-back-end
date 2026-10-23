@@ -1412,6 +1412,8 @@ const Map<String, String> _en = {
   // seventeen call sites do not each need a key.
   'auth_codeSentHint': 'Check your email for the 6-digit code.\n\nIf you don\'t see it, check spam or try again.',
   'auth_resetEmailsLeftToday': 'Reset emails left today',
+  'twoFactorTitle': 'Sign-in verification',
+  'twoFactorCodeLabel': '6-digit code',
   'authCheckConnection': 'Please check your internet connection and try again.',
   'authFormat': 'Format',
   'authRegisterAsManager': 'Register as a company manager',
@@ -2919,6 +2921,8 @@ const Map<String, String> _fr = {
   'orderNumber': 'Commande',
   'auth_codeSentHint': 'Vérifiez votre e-mail : un code à 6 chiffres y a été envoyé.\n\nSi vous ne le voyez pas, regardez dans les spams ou réessayez.',
   'auth_resetEmailsLeftToday': 'E-mails de réinitialisation restants aujourd\'hui',
+  'twoFactorTitle': 'Vérification de connexion',
+  'twoFactorCodeLabel': 'Code à 6 chiffres',
   'authCheckConnection': 'Vérifiez votre connexion internet et réessayez.',
   'authFormat': 'Format',
   'authRegisterAsManager': 'Créer un compte gérant d\'entreprise',
