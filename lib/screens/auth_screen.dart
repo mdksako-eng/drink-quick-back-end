@@ -54,6 +54,11 @@ class _AuthScreenState extends State<AuthScreen> {
   StreamSubscription? _connectivitySubscription;
 
   bool _codeSent = false;
+
+  /// 🔢 How many reset emails this address may still request today (from the
+  /// endpoint's `remainingToday`). Shown next to the code field so a customer who
+  /// is about to hit the 3/day limit can see it coming instead of meeting a 429.
+  int? _resetEmailsLeftToday;
   bool _codeVerified = false;
   bool _useEmailCode = true;
   final _phoneController = TextEditingController();
@@ -285,10 +290,24 @@ class _AuthScreenState extends State<AuthScreen> {
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
-        setState(() => _codeSent = true);
+        // 🔢 The endpoint answers with the remaining daily allowance — surface it
+        // now, while the customer is still looking at the screen.
+        int? remaining;
+        try {
+          final body = json.decode(response.body);
+          if (body is Map && body['remainingToday'] is num) {
+            remaining = (body['remainingToday'] as num).toInt();
+          }
+        } catch (_) {}
+        setState(() {
+          _codeSent = true;
+          _resetEmailsLeftToday = remaining;
+        });
         _showSuccessDialog(
             t('auth_codeSent'),
-            t('auth_codeSentHint'),
+            remaining == null
+                ? t('auth_codeSentHint')
+                : '${t('auth_codeSentHint')}\n\n${t('auth_resetEmailsLeftToday')}: $remaining',
             Icons.email,
             Colors.green,
             () {});
@@ -1853,6 +1872,13 @@ class _AuthScreenState extends State<AuthScreen> {
           Text(t('auth_codeSentTo') + ' ' + _forgotEmailController.text,
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.grey, fontSize: 14)),
+          // 🔢 Remaining daily allowance, so hitting the 3/day cap is not a surprise.
+          if (_resetEmailsLeftToday != null) ...[
+            const SizedBox(height: 6),
+            Text('${t('auth_resetEmailsLeftToday')}: $_resetEmailsLeftToday',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          ],
           const SizedBox(height: 20),
           TextFormField(
               enabled: !_isVerifyingCode,

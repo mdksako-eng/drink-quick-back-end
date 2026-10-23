@@ -1411,6 +1411,7 @@ const Map<String, String> _en = {
   // 'Success!' are translated inside _showErrorDialog/_showSuccessDialog, so the
   // seventeen call sites do not each need a key.
   'auth_codeSentHint': 'Check your email for the 6-digit code.\n\nIf you don\'t see it, check spam or try again.',
+  'auth_resetEmailsLeftToday': 'Reset emails left today',
   'authCheckConnection': 'Please check your internet connection and try again.',
   'authFormat': 'Format',
   'authRegisterAsManager': 'Register as a company manager',
@@ -2917,6 +2918,7 @@ const Map<String, String> _fr = {
   'invFilter': 'Filtre',
   'orderNumber': 'Commande',
   'auth_codeSentHint': 'Vérifiez votre e-mail : un code à 6 chiffres y a été envoyé.\n\nSi vous ne le voyez pas, regardez dans les spams ou réessayez.',
+  'auth_resetEmailsLeftToday': 'E-mails de réinitialisation restants aujourd\'hui',
   'authCheckConnection': 'Vérifiez votre connexion internet et réessayez.',
   'authFormat': 'Format',
   'authRegisterAsManager': 'Créer un compte gérant d\'entreprise',
