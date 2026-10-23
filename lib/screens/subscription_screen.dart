@@ -818,7 +818,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 
   /// One short line under a payment option: why it is disabled, or what tapping
-  /// it will do. Null when there is nothing useful to say.
+  /// it will do. An enabled rail ALWAYS gets a line — MTN and Orange used to come
+  /// out blank because the old code only spoke when the server had an opinion, and
+  /// CamerPay publishes no per-rail availability list.
   Widget? _railSubtitle(PayRail rail, PayChannelAvailability availability) {
     if (!availability.allows(rail)) {
       return Text(t('payChannelUnavailable'),
@@ -828,10 +830,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       return Text(t('payChannelCardHint'),
           style: TextStyle(fontSize: 12, color: Colors.grey[600]));
     }
-    if (availability.known) {
-      return Text(t('payChannelReady'),
-          style: TextStyle(fontSize: 12, color: Colors.green[700]));
-    }
-    return null;
+    // The rail is offered, so say so. CamerPay stays the authority on whether the
+    // account can charge it; if it cannot, its own page refuses with a clear reason.
+    return Text(t('payChannelReady'),
+        style: TextStyle(fontSize: 12, color: Colors.green[700]));
   }
 }
