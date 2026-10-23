@@ -1495,6 +1495,17 @@ const Map<String, String> _en = {
   'payTo': 'To',
   'calcPriceChanged': 'The price changed — the cart is now',
   'completingOrder': 'Completing order',
+  'refundTitle': 'Refund',
+  'refundHint':
+      'Record a refund you already issued in the provider dashboard (CamPay). The money moves there; this keeps the proof.',
+  'refundAmount': 'Amount',
+  'refundReason': 'Reason',
+  'refundReference': 'Provider reference (optional)',
+  'refundRecord': 'Record refund',
+  'refundRecorded': 'Refund recorded',
+  'refundFailed': 'Could not record the refund',
+  'refundInvalid': 'A positive amount and a reason are required',
+  'refundNeedsManager': 'Only a manager can record a refund',
   'offlineQueueFull':
       'Too many sales are waiting to be synced — reconnect before selling more',
   'offlineElectronicBlocked':
@@ -2982,6 +2993,17 @@ const Map<String, String> _fr = {
   'payTo': 'À',
   'calcPriceChanged': 'Le prix a changé — le panier est maintenant',
   'completingOrder': 'Finalisation de la commande',
+  'refundTitle': 'Remboursement',
+  'refundHint':
+      'Enregistrez un remboursement déjà effectué dans le tableau de bord du prestataire (CamPay). L\'argent y est débité ; ceci conserve la preuve.',
+  'refundAmount': 'Montant',
+  'refundReason': 'Motif',
+  'refundReference': 'Référence du prestataire (facultatif)',
+  'refundRecord': 'Enregistrer le remboursement',
+  'refundRecorded': 'Remboursement enregistré',
+  'refundFailed': 'Impossible d\'enregistrer le remboursement',
+  'refundInvalid': 'Un montant positif et un motif sont requis',
+  'refundNeedsManager': 'Seul un gérant peut enregistrer un remboursement',
   'offlineQueueFull':
       'Trop de ventes attendent la synchronisation — reconnectez-vous avant de vendre',
   'offlineElectronicBlocked':

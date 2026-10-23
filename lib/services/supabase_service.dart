@@ -1467,6 +1467,33 @@ class SupabaseService {
     }
   }
 
+  /// Records a refund the manager already issued in the provider's dashboard.
+  /// The backend stores who/why/how much plus the provider reference — there is no
+  /// refund API, so this row is the company's proof.
+  static Future<bool> recordRefund({
+    required String orderId,
+    required double amount,
+    required String reason,
+    String reference = '',
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiConfig.apiBase}/orders/$orderId/refund'),
+        headers: await _authedHeaders(),
+        body: jsonEncode({
+          'amount': amount,
+          'reason': reason,
+          'reference': reference,
+        }),
+      );
+      print('   Refund record response: ${response.statusCode}');
+      return response.statusCode == 201;
+    } catch (e) {
+      print('❌ recordRefund error: $e');
+      return false;
+    }
+  }
+
   // ============================================================
   // ⚙️ SETTINGS
   // ============================================================

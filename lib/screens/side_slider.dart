@@ -505,6 +505,75 @@ class _SideSliderState extends State<SideSlider> {
     }
   }
 
+  /// 💸 Record a refund that was already issued in the provider's dashboard.
+  ///
+  /// Manager only: the money has left the business, so the row (who / why / how much
+  /// / provider reference) is the company's proof. No refund API is called — the
+  /// provider dashboard does the money move.
+  Future<void> _recordRefund(PurchaseHistory order) async {
+    if (!_canManageOrders) {
+      _showToast(t('refundNeedsManager'), isError: true);
+      return;
+    }
+
+    final amountController =
+        TextEditingController(text: order.totalAmount.toStringAsFixed(2));
+    final reasonController = TextEditingController();
+    final referenceController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t('refundTitle')),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(t('refundHint'), style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: t('refundAmount')),
+            ),
+            TextField(
+              controller: reasonController,
+              decoration: InputDecoration(labelText: t('refundReason')),
+            ),
+            TextField(
+              controller: referenceController,
+              decoration: InputDecoration(labelText: t('refundReference')),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(t('refundRecord')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final amount = double.tryParse(amountController.text.trim()) ?? 0;
+    final reason = reasonController.text.trim();
+    if (amount <= 0 || reason.isEmpty) {
+      _showToast(t('refundInvalid'), isError: true);
+      return;
+    }
+
+    final ok = await SupabaseService.recordRefund(
+      orderId: order.id,
+      amount: amount,
+      reason: reason,
+      reference: referenceController.text.trim(),
+    );
+    _showToast(ok ? t('refundRecorded') : t('refundFailed'), isError: !ok);
+  }
+
   Future<void> _importInvoice(PurchaseHistory order) async {
     // Re-invoicing retires the original sale and has to move its stock back, so it
     // is a manager action — the same rule as voiding. The backend refuses the void
@@ -2029,6 +2098,35 @@ class _SideSliderState extends State<SideSlider> {
                         ),
                       ),
                     ),
+                    const SizedBox(width: 12),
+                    if (_canManageOrders)
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _recordRefund(order);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: widget.primaryColor,
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              vertical: isMobile ? 14.0 : 16.0,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          icon: Icon(Icons.currency_exchange,
+                              size: isMobile ? 18.0 : 20.0),
+                          label: Text(
+                            t('refundTitle'),
+                            style: TextStyle(
+                              fontSize: isMobile ? 14.0 : 15.0,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
                     const SizedBox(width: 12),
                     if (_canManageOrders)
                       Expanded(
