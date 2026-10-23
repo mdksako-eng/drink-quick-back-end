@@ -750,7 +750,12 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       await _loadUserSettings(user.id);
       await CurrencyHelper.refresh();
       await PaymentHelper.refresh();
-      await Provider.of<PlanProvider>(context, listen: false).refresh();
+      // 🔐 Tell the plan provider who is signed in BEFORE fetching the plan: a
+      // platform administrator bypasses every plan gate (the backend does the same
+      // in requirePlan), so their role must be known before any screen asks.
+      final planProvider = Provider.of<PlanProvider>(context, listen: false);
+      planProvider.setIsAdmin(authProvider.isAdmin);
+      await planProvider.refresh();
 
       if (!authProvider.isOnline) {
         debugPrint('❌ No internet - cannot load company data');

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/subscription_model.dart';
 import '../services/subscription_service.dart';
 import '../services/voice_service.dart';
+import '../utils/plan_gate_logic.dart';
 import '../utils/voice_access.dart';
 
 class PlanProvider extends ChangeNotifier {
@@ -43,9 +44,30 @@ class PlanProvider extends ChangeNotifier {
   }
 
   /// Whether the current plan grants access to [feature].
+  ///
+  /// A platform administrator is let through regardless of the plan — the backend
+  /// already does exactly that in `requirePlan`, so the app must not be stricter
+  /// than the server it is talking to.
   bool canAccess(String feature) {
     final required = _featurePlans[feature] ?? 'pro';
-    return _rank(_info.plan) >= _rank(required);
+    return featureAccessAllowed(
+      isAdmin: _isAdmin,
+      planGrants: _rank(_info.plan) >= _rank(required),
+    );
+  }
+
+  /// 🔐 True when the signed-in user is a platform administrator.
+  ///
+  /// Pushed in after login (see `main.dart`) because this provider resolves the
+  /// plan only and never reads the auth state itself.
+  bool _isAdmin = false;
+  bool get isAdmin => _isAdmin;
+
+  /// Called right after login / session restore, before the plan is fetched.
+  void setIsAdmin(bool isAdmin) {
+    if (_isAdmin == isAdmin) return;
+    _isAdmin = isAdmin;
+    notifyListeners();
   }
 
   /// Returns a human price for a plan (e.g. "5,000 XAF") or ''.

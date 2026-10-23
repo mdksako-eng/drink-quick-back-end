@@ -51,3 +51,19 @@ PlanGateDecision planGateDecision({
   if (!hasLoaded) return PlanGateDecision.waiting;
   return PlanGateDecision.showPlans;
 }
+
+/// Does this user get into a plan-gated feature?
+///
+/// A platform administrator bypasses the plan entirely. That is not a new rule
+/// invented here: the backend already lets administrators through `requirePlan`
+/// (`middleware/planAuth.js`, "Owners / administrators always have full access"),
+/// so hiding a screen from them in the app would only hide a door that is already
+/// open on the server — the worst of both worlds, a feature they cannot see but
+/// could use.
+///
+/// Everyone else is decided by their company's plan, exactly as before.
+bool featureAccessAllowed({
+  required bool isAdmin,
+  required bool planGrants,
+}) =>
+    isAdmin || planGrants;
