@@ -187,3 +187,32 @@ describe('shift / cash-up hardening', () => {
     expect(routes).toContain("status = 'closed', cash_counted = $1");
   });
 });
+
+describe('money / audit evidence hardening', () => {
+  // Found live on 2026-10-24: public.refunds, public.audit_log and
+  // public.legal_acceptances were the only public tables left with RLS off, so the
+  // anon key shipped in the app could read every refund and every sensitive action.
+  const LOCKED = ['refunds', 'audit_log', 'legal_acceptances'];
+
+  test('server.js enables RLS and revokes the client roles at boot', () => {
+    const server = read('server.js');
+    for (const table of LOCKED) {
+      expect(server).toContain(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+      expect(server).toContain(`REVOKE ALL ON ${table} FROM anon, authenticated`);
+    }
+  });
+
+  test('the schema scripts that create them lock them too', () => {
+    for (const sql of [read('sql/legal_acceptances.sql'), read('sql/refunds_audit.sql')]) {
+      expect(sql).toContain('ENABLE ROW LEVEL SECURITY');
+      expect(sql).toContain('FROM anon, authenticated');
+    }
+  });
+
+  test('the tier-1 RLS script covers them as well', () => {
+    const sql = read('sql/enable_rls.sql');
+    for (const table of LOCKED) {
+      expect(sql).toMatch(new RegExp(`ALTER TABLE\\s+${table}\\s+ENABLE ROW LEVEL SECURITY`));
+    }
+  });
+});

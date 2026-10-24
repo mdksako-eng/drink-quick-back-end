@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS legal_acceptances (
 CREATE INDEX IF NOT EXISTS legal_acceptances_user_idx
   ON legal_acceptances (user_id, document);
 
+-- The anon key shipped inside the app must never read who accepted which legal
+-- text, or from which IP. RLS with zero policies means no anon/authenticated
+-- access at all; the backend connects as the table owner (postgres) and bypasses
+-- RLS, so nothing in the app breaks. The backend also does this at boot.
+ALTER TABLE legal_acceptances ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON legal_acceptances FROM anon, authenticated;
+
 -- One pair of rows per registration. Audit a user with:
 --   SELECT document, version, accepted_at, ip
 --     FROM legal_acceptances WHERE user_id = 42 ORDER BY document;

@@ -12,7 +12,8 @@
 --   the Node backend, which uses the postgres connection and is not
 --   affected by RLS). After running this:
 --     • The anon key can NO LONGER read users, sessions, login
---       requests, or approval logs.
+--       requests, approval logs, or the money/audit evidence tables
+--       (refunds, audit_log, legal_acceptances).
 --     • Nobody can read plaintext passwords (or anything else) from
 --       those tables using the public key in the app.
 --
@@ -29,6 +30,12 @@ ALTER TABLE users              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_sessions      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE login_requests     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE approval_logs      ENABLE ROW LEVEL SECURITY;
+
+-- Money / audit evidence. Created by sql/refunds_audit.sql and
+-- sql/legal_acceptances.sql; backend-only, the app never reads them.
+ALTER TABLE legal_acceptances  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE refunds            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log          ENABLE ROW LEVEL SECURITY;
 
 -- We found pre-existing policies granting the PUBLIC role
 -- (i.e. the anon key used by the app) full access to these tables.
@@ -55,7 +62,8 @@ DROP POLICY IF EXISTS "Users can insert approval logs"   ON public.approval_logs
 -- ------------------------------------------------------------
 SELECT relname AS table_name, relrowsecurity AS rls_enabled
 FROM pg_class
-WHERE relname IN ('users','user_sessions','login_requests','approval_logs')
+WHERE relname IN ('users','user_sessions','login_requests','approval_logs',
+                  'refunds','audit_log','legal_acceptances')
 ORDER BY relname;
 
 -- With RLS on and zero anon policies, this now returns:
@@ -70,6 +78,9 @@ SELECT id, username, email, password FROM users LIMIT 5;
 -- ALTER TABLE user_sessions  DISABLE ROW LEVEL SECURITY;
 -- ALTER TABLE login_requests DISABLE ROW LEVEL SECURITY;
 -- ALTER TABLE approval_logs  DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE legal_acceptances DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE refunds           DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE audit_log         DISABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- TIER 2 — REVIEW CAREFULLY BEFORE RUNNING

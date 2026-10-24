@@ -79,7 +79,7 @@ console.log('🔌 Connecting to PostgreSQL (Supabase)...');
 // 🏷️ Build identity, reported by GET /health. Bump RELEASE when you want to
 // confirm from the outside that a deploy actually went through; SERVER_STARTED_AT
 // resets on every restart (uptimeSeconds in the health payload).
-const RELEASE = '2026-10-14-payment-error-codes';
+const RELEASE = '2026-10-24-rls-lockdown';
 const SERVER_STARTED_AT = new Date();
 // Used by the startup banner below. CamerPay is the rail being migrated to;
 // Notch Pay is the legacy one still in place (see memory-bank/activeContext.md).
@@ -566,6 +566,25 @@ pool.on('error', (err) => {
       } catch (rlsErr) {
         console.log('⚠️ RLS lockdown warning for subscriptions/app_flags:', rlsErr.message);
       }
+      // 🔐 Same rule for the money/audit evidence tables created just above. Found on
+      // 2026-10-24: public.refunds, public.audit_log and public.legal_acceptances were
+      // the only public tables left with RLS off, so the anon key shipped in the app
+      // could read every refund, every sensitive action, and who accepted which legal
+      // text. Idempotent, and harmless for the app because the backend connects as the
+      // table owner (postgres) and bypasses RLS.
+      try {
+        await pool.query(`ALTER TABLE refunds ENABLE ROW LEVEL SECURITY`);
+        await pool.query(`REVOKE ALL ON refunds FROM anon, authenticated`);
+        await pool.query(`ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY`);
+        await pool.query(`REVOKE ALL ON audit_log FROM anon, authenticated`);
+        await pool.query(`ALTER TABLE legal_acceptances ENABLE ROW LEVEL SECURITY`);
+        await pool.query(`REVOKE ALL ON legal_acceptances FROM anon, authenticated`);
+        console.log('✅ RLS enabled on refunds + audit_log + legal_acceptances (anon access revoked)');
+      } catch (rlsErr) {
+        console.log('⚠️ RLS lockdown warning for refunds/audit_log/legal_acceptances:', rlsErr.message);
+      }
+
+
 
 
 

@@ -42,6 +42,16 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS audit_log_company_created_idx
   ON audit_log (company_id, created_at DESC);
 
+-- A refund row names who took money back and why; an audit row names who blocked,
+-- deleted or changed a role. Neither may be readable with the anon key shipped in
+-- the app. RLS with zero policies means no anon/authenticated access at all; the
+-- backend connects as the table owner (postgres) and bypasses RLS, so nothing in
+-- the app breaks. The backend also does this at boot.
+ALTER TABLE refunds ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON refunds FROM anon, authenticated;
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON audit_log FROM anon, authenticated;
+
 -- What did this manager do today?
 --   SELECT created_at, action, target, detail
 --     FROM audit_log WHERE actor_id = 7 AND created_at > NOW() - INTERVAL '1 day'
