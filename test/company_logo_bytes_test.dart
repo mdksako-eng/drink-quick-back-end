@@ -39,7 +39,7 @@ void main() {
   });
 
   group('PaymentsStatus', () {
-    test('only live + ready counts as live', () {
+    test('liveReady alone decides live (CamerPay reports no mode)', () {
       expect(
         const PaymentsStatus(mode: 'live', liveReady: true).isLive,
         isTrue,
@@ -48,9 +48,12 @@ void main() {
         const PaymentsStatus(mode: 'live', liveReady: false).isLive,
         isFalse,
       );
+      // The CamerPay payload has no `mode` field at all, so demanding
+      // `mode == 'live'` kept the app on TEST forever while real money moved.
+      // `liveReady` is the honest answer — see payments_status_service.dart.
       expect(
         const PaymentsStatus(mode: 'test', liveReady: true).isLive,
-        isFalse,
+        isTrue,
       );
       expect(PaymentsStatus.unknown.isLive, isFalse);
     });
@@ -71,13 +74,17 @@ void main() {
       });
       expect(status.mode, 'test');
       expect(status.liveReady, isFalse);
-      expect(status.notchPayConfigured, isTrue);
+      // The legacy Notch Pay key is still honoured, but the getter is the
+      // provider-neutral one (the rail is CamerPay now).
+      expect(status.providerConfigured, isTrue);
       expect(status.hint, 'add live keys');
     });
 
     test('falls back to notchpayMode and survives a thin payload', () {
       expect(PaymentsStatus.fromJson({'notchpayMode': 'live'}).mode, 'live');
-      expect(PaymentsStatus.fromJson(const {}).mode, 'unknown');
+      // A payload with no mode and nothing live reports 'test' — never a blank
+      // label and never 'unknown' (that is only the static default).
+      expect(PaymentsStatus.fromJson(const {}).mode, 'test');
     });
   });
 }
