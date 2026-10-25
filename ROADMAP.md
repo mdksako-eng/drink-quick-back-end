@@ -631,3 +631,59 @@ routes (five verification sites), plus one missing check:
 - Known gaps: no widget test for the dialog itself (its rules are unit tested); a refund is always
   assumed to be cash out of the drawer — there is no "credit note instead of cash" option yet.
 
+
+---
+
+## Phase 15 — Returnable containers: who is holding the shop's crates ✅ (2026-10-24)
+
+### Delivered
+- **The gap this closes**: the credit ledger answered "who owes me money"; nothing answered
+  "who owes me containers". Beer moves in returnable crates and bottles, so a crate sitting in
+  a customer's yard is money standing still — and it is the one capability eLeader has for the
+  African beer trade (Castel, deployed in Cameroon) that this app did not.
+- **A balance is never stored** — `outstanding = out − back − writeoff`, summed from the
+  movements exactly like `charged − paid` in the credit ledger, so two staff recording at the
+  same moment cannot lose an entry and a corrected ledger stays consistent with its history.
+- **The pile can never go below zero**: nobody gives back or writes off more than is actually
+  outstanding. The rule is pure and unit tested (`utils/containerLedger.js`,
+  `lib/utils/container_ledger_helper.dart`) and the route enforces it with the customer's
+  current count — it never trusts the client.
+- **Who decides what**: STAFF hand a container out and take one back at the counter (a physical
+  fact, like a restock); only a MANAGER writes one off (lost or broken) or changes the container
+  list. Containers are GOODS, not credit, so any customer account may hold them — approved or
+  not; refusing a blocked customer would only stop staff recording what really happened to the
+  shop's crates.
+- **Deposits stay informational**: `container_types.deposit_value` is only used to show what the
+  outstanding pile is worth. Nothing enters the shift or Z-report maths, so no money test moved.
+
+### Files
+- `drinks-calculator-backend/utils/containerLedger.js` + `tests/container_ledger.test.js` (19)
+- `drinks-calculator-backend/routes/data.routes.js` — 5 routes (`GET/POST /containers/types`,
+  `GET/POST /containers/transactions`, `GET /containers/outstanding`). The aggregate endpoint
+  exists on purpose: the movements list is capped at 500 rows, so totals must come from SQL.
+- `drinks-calculator-backend/server.js` — boot DDL + RLS + REVOKE for both tables
+- `drinks-calculator-backend/sql/rls_containers.sql` + 3 guard tests in `tests/schema_hardening.test.js`
+- `lib/models/container_model.dart`, `lib/utils/container_ledger_helper.dart` +
+  `test/container_ledger_test.dart` (13)
+- `lib/providers/container_provider.dart`, `lib/screens/containers_screen.dart`,
+  `lib/config/api_config.dart`, `lib/services/supabase_service.dart`, `lib/main.dart`,
+  `lib/widgets/custom_drawer.dart`, `lib/utils/i18n.dart` (`cont*` keys, 31 per language)
+
+### Validation
+- `node --check` on the three touched backend files -> clean
+- Backend **40 suites / 554 tests** passing (was 39 / 532)
+- `flutter test test/container_ledger_test.dart` -> 13 passing
+- `flutter analyze lib` -> 0 errors
+- i18n parity -> EN=1438 FR=1438, no key differences
+- Flutter suite: **418 passing, 1 pre-existing failure** in `test/company_logo_bytes_test.dart`
+  (line 74 asserts `status.notchPayConfigured`, a getter removed by the CamerPay migration —
+  unrelated to this phase, still open)
+
+### Still open
+- No auto-derivation from a sale: a crate sale does not create container lines (a shortcut
+  button on the invoice is the planned follow-up).
+- No supplier-side mirror ("containers the shop owes the distributor") — that belongs with the
+  supplier / purchase-order feature.
+- No deposit money flow: charging a deposit would touch the credit ledger and the Z-report, and
+  is deliberately not in this phase.
+

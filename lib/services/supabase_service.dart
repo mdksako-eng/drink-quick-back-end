@@ -913,6 +913,144 @@ class SupabaseService {
     }
   }
 
+  // ============================================================
+  // 🧺 RETURNABLE CONTAINERS (crates and bottles)
+  // ============================================================
+  // The credit ledger answers "who owes me money"; this answers "who owes me
+  // containers". STAFF record a container going out and coming back; only a
+  // MANAGER writes one off or changes the list. The backend is the authority
+  // (utils/containerLedger.js) and it owns the ceiling: nobody gives back more
+  // than went out.
+
+  /// The shop's container list ("Crate 33cl", "Bottle 65cl", …).
+  static Future<List<Map<String, dynamic>>?> getContainerTypes() async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.get(
+        Uri.parse(ApiConfig.dataContainerTypes),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode != 200) {
+        print('❌ Failed to load container types: ${response.statusCode}');
+        return null;
+      }
+      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase getContainerTypes error: $e');
+      return null;
+    }
+  }
+
+  /// Adds a container, or updates its deposit. Managers only (the backend
+  /// refuses anyone else with 403).
+  static Future<Map<String, dynamic>?> saveContainerType({
+    required String name,
+    double depositValue = 0,
+  }) async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataContainerTypes),
+        headers: await _authedHeaders(),
+        body: jsonEncode({
+          'name': name,
+          'deposit_value': depositValue,
+        }),
+      );
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        print('❌ Failed to save the container: ${response.statusCode}');
+        return null;
+      }
+      return Map<String, dynamic>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase saveContainerType error: $e');
+      return null;
+    }
+  }
+
+  /// The container movements, newest first (optionally one customer's).
+  static Future<List<Map<String, dynamic>>?> getContainerLedger({
+    int? customerId,
+  }) async {
+    if (!canUseSupabase) return null;
+    try {
+      final url = customerId == null
+          ? ApiConfig.dataContainerTransactions
+          : '${ApiConfig.dataContainerTransactions}?customer_id=$customerId';
+      final response = await http.get(
+        Uri.parse(url),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode != 200) {
+        print('❌ Failed to load the container ledger: ${response.statusCode}');
+        return null;
+      }
+      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase getContainerLedger error: $e');
+      return null;
+    }
+  }
+
+  /// Who is holding the shop's containers: one row per customer (biggest holder
+  /// first) plus the totals per container type.
+  static Future<Map<String, dynamic>?> getContainersOutstanding() async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.get(
+        Uri.parse(ApiConfig.dataContainersOutstanding),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode != 200) {
+        print('❌ Failed to load outstanding containers: ${response.statusCode}');
+        return null;
+      }
+      return Map<String, dynamic>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase getContainersOutstanding error: $e');
+      return null;
+    }
+  }
+
+  /// Records one movement: out, back, or (manager only) writeoff.
+  /// Returns the backend's answer — `{ entry, outstanding, totals }` — or null,
+  /// in which case the caller shows a toast. A refusal (409) is a real answer,
+  /// so the message is passed through rather than swallowed.
+  static Future<Map<String, dynamic>?> recordContainerMovement({
+    required int customerId,
+    required int containerTypeId,
+    required String kind,
+    required int quantity,
+    String? reason,
+  }) async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataContainerTransactions),
+        headers: await _authedHeaders(),
+        body: jsonEncode({
+          'customer_id': customerId,
+          'container_type_id': containerTypeId,
+          'kind': kind,
+          'quantity': quantity,
+          if (reason != null && reason.isNotEmpty) 'reason': reason,
+        }),
+      );
+      final decoded = jsonDecode(response.body);
+      if (response.statusCode != 201) {
+        print('❌ Container movement refused: ${response.statusCode} $decoded');
+        if (decoded is Map && decoded['message'] != null) {
+          return {'error': decoded['message'].toString()};
+        }
+        return null;
+      }
+      return Map<String, dynamic>.from(decoded);
+    } catch (e) {
+      print('❌ Supabase recordContainerMovement error: $e');
+      return null;
+    }
+  }
+
   /// Enrols a customer. The backend generates the customer number and decides
   /// the starting status: staff -> 'pending', manager -> 'approved'.
   static Future<Map<String, dynamic>?> enrollCustomer({

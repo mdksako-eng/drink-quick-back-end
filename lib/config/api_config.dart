@@ -125,6 +125,14 @@ class ApiConfig {
   static const String dataCustomerTransactions =
       '$apiBase/data/customers/transactions';
   static String dataCustomer(dynamic id) => '$apiBase/data/customers/$id';
+  // 🧺 Returnable containers (crates and bottles) — who is holding the shop's
+  // empties. A crate in a customer's yard is money standing still; the balance is
+  // summed from the movements by the backend, never stored.
+  static const String dataContainerTypes = '$apiBase/data/containers/types';
+  static const String dataContainerTransactions =
+      '$apiBase/data/containers/transactions';
+  static const String dataContainersOutstanding =
+      '$apiBase/data/containers/outstanding';
   // 🕒 Shifts (cash-up / Z-report). One open shift per person; a staff member
   // closes their own shift, a manager closes anyone's.
   static const String dataShifts = '$apiBase/data/shifts';

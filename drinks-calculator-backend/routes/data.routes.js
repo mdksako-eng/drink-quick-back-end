@@ -18,6 +18,17 @@ const {
   exceedsCreditLimit,
   sumLedger,
 } = require('../utils/customerApproval');
+// 🧺 Returnable containers (crates and bottles): the same "summed, never stored"
+// shape as the credit ledger, one layer down — who is holding the shop's crates.
+const {
+  canRecordContainers,
+  canManageTypes,
+  validateMovement,
+  sumContainers,
+  outstandingFor,
+  outstandingByType,
+  orderByOutstanding,
+} = require('../utils/containerLedger');
 const {
   summariseShift,
   canCloseShift,
@@ -1039,6 +1050,244 @@ router.post('/customers/transactions', async (req, res) => {
   } catch (error) {
     console.error('POST /customers/transactions error:', error.message);
     res.status(500).json({ message: 'Failed to record this ledger entry' });
+  }
+});
+
+// ============================================================
+// 🧺 CONTAINERS — who is holding the shop's crates and bottles
+// ============================================================
+// STAFF hand a container out and take one back: that is a physical fact at the
+// counter, like a restock. Only a MANAGER may write one off (lost or broken) or
+// change the container list. A balance is summed from the movements and never
+// stored, so two staff recording at once cannot lose an entry
+// (utils/containerLedger.js holds every rule).
+//
+// NOTE: containers are GOODS, not credit — any customer account may hold them,
+// approved or not. Refusing a blocked or pending customer would only stop staff
+// from recording what actually happened to the shop's crates.
+
+// The shop's container list ("Crate 33cl", "Bottle 65cl", …).
+router.get('/containers/types', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const result = await req.db.query(
+      'SELECT * FROM container_types WHERE company_id = $1 ORDER BY name ASC',
+      [companyId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('GET /containers/types error:', error.message);
+    res.status(500).json({ message: 'Failed to load the container list' });
+  }
+});
+
+// Add a container, or update its deposit. Managers only: it is shop setup, and
+// the same name twice in one company would split one pile into two.
+router.post('/containers/types', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const allowed = canManageTypes(req.user);
+    if (!allowed.ok) return res.status(403).json({ message: allowed.reason });
+
+    const name = String(req.body.name || '').trim().slice(0, 60);
+    if (!name) {
+      return res.status(400).json({ message: 'A container needs a name' });
+    }
+    const deposit = Number(req.body.deposit_value) || 0;
+    if (deposit < 0) {
+      return res.status(400).json({ message: 'A deposit cannot be negative' });
+    }
+
+    const existing = await req.db.query(
+      'SELECT * FROM container_types WHERE company_id = $1 AND LOWER(name) = LOWER($2)',
+      [companyId, name]
+    );
+    if (existing.rows[0]) {
+      const updated = await req.db.query(
+        `UPDATE container_types SET name = $1, deposit_value = $2, is_active = TRUE
+          WHERE id = $3 RETURNING *`,
+        [name, deposit, existing.rows[0].id]
+      );
+      return res.json(updated.rows[0]);
+    }
+
+    const inserted = await req.db.query(
+      `INSERT INTO container_types (company_id, name, deposit_value)
+       VALUES ($1,$2,$3) RETURNING *`,
+      [companyId, name, deposit]
+    );
+    res.status(201).json(inserted.rows[0]);
+  } catch (error) {
+    console.error('POST /containers/types error:', error.message);
+    res.status(500).json({ message: 'Failed to save this container' });
+  }
+});
+
+// The movements, newest first. Declared BEFORE any '/containers/:id' route so a
+// word is never mistaken for an id — the same trap the credit ledger documents.
+router.get('/containers/transactions', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const params = [companyId];
+    let sql = 'SELECT * FROM container_transactions WHERE company_id = $1';
+    if (req.query.customer_id) {
+      params.push(req.query.customer_id);
+      sql += ` AND customer_id = $${params.length}`;
+    }
+    sql += ' ORDER BY created_at DESC, id DESC LIMIT 500';
+    const result = await req.db.query(sql, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('GET /containers/transactions error:', error.message);
+    res.status(500).json({ message: 'Failed to load the container ledger' });
+  }
+});
+
+// Who is holding my crates, biggest holder first — the list a manager reads.
+// Deposit values are informational only: containers are goods, not cash, so
+// nothing here enters the shift or Z-report maths.
+router.get('/containers/outstanding', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const byCustomer = await req.db.query(
+      `SELECT c.id AS customer_id, c.customer_number, c.name,
+              COALESCE(SUM(CASE WHEN t.kind = 'out' THEN t.quantity
+                                WHEN t.kind IN ('back','writeoff') THEN -t.quantity
+                                ELSE 0 END), 0)::int AS outstanding
+         FROM customers c
+         LEFT JOIN container_transactions t
+           ON t.customer_id = c.id AND t.company_id = c.company_id
+        WHERE c.company_id = $1
+        GROUP BY c.id, c.customer_number, c.name`,
+      [companyId]
+    );
+
+    const types = await req.db.query(
+      'SELECT id, name, deposit_value FROM container_types WHERE company_id = $1',
+      [companyId]
+    );
+    const ledger = await req.db.query(
+      'SELECT container_type_id, kind, quantity FROM container_transactions WHERE company_id = $1',
+      [companyId]
+    );
+
+    const customers = orderByOutstanding(byCustomer.rows);
+    res.json({
+      customers,
+      totalOutstanding: customers.reduce(
+        (sum, row) => sum + (Number(row.outstanding) || 0),
+        0
+      ),
+      byType: outstandingByType(
+        types.rows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          depositValue: row.deposit_value,
+        })),
+        ledger.rows.map((row) => ({
+          containerTypeId: row.container_type_id,
+          kind: row.kind,
+          quantity: row.quantity,
+        }))
+      ),
+    });
+  } catch (error) {
+    console.error('GET /containers/outstanding error:', error.message);
+    res.status(500).json({ message: 'Failed to load who holds containers' });
+  }
+});
+
+// Hand a container out, take one back, or (manager only) write one off.
+// The ceiling is what the customer holds RIGHT NOW for that container, so nobody
+// can give back more than went out. Answers with the new outstanding count.
+router.post('/containers/transactions', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+
+    const kind = String(req.body.kind || '').toLowerCase();
+
+    const customerRes = await req.db.query(
+      'SELECT id FROM customers WHERE id = $1 AND company_id = $2',
+      [req.body.customer_id, companyId]
+    );
+    const customer = customerRes.rows[0] || null;
+    if (!customer) return res.status(404).json({ message: 'Unknown customer' });
+
+    const typeRes = await req.db.query(
+      'SELECT id FROM container_types WHERE id = $1 AND company_id = $2',
+      [req.body.container_type_id, companyId]
+    );
+    const containerType = typeRes.rows[0] || null;
+    if (!containerType) {
+      return res.status(404).json({ message: 'Unknown container' });
+    }
+
+    // What this customer holds right now, for every container type.
+    const ledgerRes = await req.db.query(
+      `SELECT container_type_id, kind, quantity FROM container_transactions
+        WHERE company_id = $1 AND customer_id = $2`,
+      [companyId, customer.id]
+    );
+    const entries = ledgerRes.rows.map((row) => ({
+      containerTypeId: row.container_type_id,
+      kind: row.kind,
+      quantity: row.quantity,
+    }));
+    const outstanding = outstandingFor(entries, containerType.id);
+
+    const allowed = validateMovement({
+      user: req.user,
+      kind,
+      quantity: req.body.quantity,
+      outstanding,
+    });
+    if (!allowed.ok) return res.status(409).json({ message: allowed.reason });
+
+    const inserted = await req.db.query(
+      `INSERT INTO container_transactions
+         (company_id, customer_id, container_type_id, kind, quantity, reason,
+          performed_by, performed_by_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING *`,
+      [
+        companyId,
+        customer.id,
+        containerType.id,
+        kind,
+        allowed.value,
+        req.body.reason ? String(req.body.reason).slice(0, 120) : null,
+        req.user.id,
+        req.user.username || null,
+      ]
+    );
+
+    await req.db.query('UPDATE customers SET updated_at = $1 WHERE id = $2', [
+      new Date(),
+      customer.id,
+    ]);
+
+    const after = [
+      ...entries,
+      {
+        containerTypeId: containerType.id,
+        kind,
+        quantity: allowed.value,
+      },
+    ];
+    res.status(201).json({
+      entry: inserted.rows[0],
+      outstanding: outstandingFor(after, containerType.id),
+      totals: sumContainers(after),
+    });
+  } catch (error) {
+    console.error('POST /containers/transactions error:', error.message);
+    res.status(500).json({ message: 'Failed to record this container movement' });
   }
 });
 

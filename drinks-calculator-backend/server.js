@@ -413,6 +413,58 @@ pool.on('error', (err) => {
       } catch (customerTableErr) {
         console.log('⚠️ customers table warning:', customerTableErr.message);
       }
+      // 🧺 RETURNABLE CONTAINERS — who is holding the shop's crates and bottles.
+      // The credit ledger answers "who owes me money"; this answers "who owes me
+      // containers" (a crate sitting in a customer's yard is money standing
+      // still). The balance is summed from the movements and never stored,
+      // exactly like `charged - paid`. Rules: utils/containerLedger.js.
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS container_types (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            name VARCHAR(60) NOT NULL,
+            deposit_value NUMERIC(12,2) DEFAULT 0,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await pool.query(
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_container_types_name ON container_types(company_id, name)`
+        );
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS container_transactions (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            customer_id INTEGER NOT NULL,
+            container_type_id INTEGER NOT NULL,
+            kind VARCHAR(10) NOT NULL,
+            quantity INTEGER NOT NULL,
+            reason VARCHAR(120),
+            performed_by INTEGER,
+            performed_by_name VARCHAR(120),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await pool.query(
+          `CREATE INDEX IF NOT EXISTS idx_container_tx_customer ON container_transactions(company_id, customer_id, container_type_id, created_at DESC)`
+        );
+        // SECURITY: same rule as the credit ledger — the anon key shipped in the
+        // app must never read or forge who holds the shop's containers.
+        await pool.query(`ALTER TABLE container_types ENABLE ROW LEVEL SECURITY`);
+        await pool.query(`REVOKE ALL ON container_types FROM anon, authenticated`);
+        await pool.query(
+          `ALTER TABLE container_transactions ENABLE ROW LEVEL SECURITY`
+        );
+        await pool.query(
+          `REVOKE ALL ON container_transactions FROM anon, authenticated`
+        );
+        console.log('✅ container types + container ledger tables ensured');
+      } catch (containerTableErr) {
+        console.log('⚠️ containers table warning:', containerTableErr.message);
+      }
+
+
 
       // 🧾 ORDER VOID — an order corrected after the fact keeps a trace
       // (who/when/why), stops counting as a sale and restores the stock, but is

@@ -17,6 +17,7 @@ import 'package:drinks_calculator_fixed/screens/auth_screen.dart';
 import 'package:drinks_calculator_fixed/screens/inventory_screen.dart';
 import 'package:drinks_calculator_fixed/screens/profile_screen.dart';
 import 'package:drinks_calculator_fixed/screens/customer_ledger_screen.dart';
+import 'package:drinks_calculator_fixed/screens/containers_screen.dart';
 import 'package:drinks_calculator_fixed/screens/shift_screen.dart';
 import 'package:drinks_calculator_fixed/screens/variance_screen.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
@@ -315,6 +316,18 @@ class CustomDrawer extends StatelessWidget {
                         MaterialPageRoute(
                             builder: (context) =>
                                 const CustomerLedgerScreen()));
+                  }, primaryColor: primaryColor),
+
+                // 🧺 Returnable containers: who is holding the shop's crates and
+                // bottles. Staff record them at the counter, a manager writes off.
+                if (!isCustomer)
+                  _buildDrawerItem(
+                      context, Icons.inventory_2_outlined, t('contMenu'), () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const ContainersScreen()));
                   }, primaryColor: primaryColor),
 
                 // 🕒 Shift / cash-up: the Z-report of this till.

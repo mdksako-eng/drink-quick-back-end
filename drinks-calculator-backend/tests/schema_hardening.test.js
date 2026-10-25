@@ -216,3 +216,38 @@ describe('money / audit evidence hardening', () => {
     }
   });
 });
+
+describe('returnable container hardening', () => {
+  test('server.js creates the container tables with RLS on and the roles revoked', () => {
+    const server = read('server.js');
+    expect(server).toContain('CREATE TABLE IF NOT EXISTS container_types');
+    expect(server).toContain('CREATE TABLE IF NOT EXISTS container_transactions');
+    expect(server).toContain('ALTER TABLE container_types ENABLE ROW LEVEL SECURITY');
+    expect(server).toContain('REVOKE ALL ON container_types FROM anon, authenticated');
+    expect(server).toContain('ALTER TABLE container_transactions ENABLE ROW LEVEL SECURITY');
+    expect(server).toContain(
+      'REVOKE ALL ON container_transactions FROM anon, authenticated'
+    );
+  });
+
+  test('a runnable RLS script exists for the container tables', () => {
+    const sql = read('sql/rls_containers.sql');
+    expect(sql).toContain('ALTER TABLE public.container_types ENABLE ROW LEVEL SECURITY');
+    expect(sql).toContain(
+      'ALTER TABLE public.container_transactions ENABLE ROW LEVEL SECURITY'
+    );
+    expect(sql).toContain(
+      'REVOKE ALL ON public.container_transactions FROM anon, authenticated'
+    );
+  });
+
+  test('the routes enforce the ceiling instead of trusting the client', () => {
+    // The pile may never go below zero and staff may not write off: the rule is
+    // pure (utils/containerLedger.js, unit tested), the route must actually call it
+    // with the customer's CURRENT outstanding count.
+    const routes = read('routes/data.routes.js');
+    expect(routes).toContain('validateMovement({');
+    expect(routes).toContain('outstandingFor(entries, containerType.id)');
+    expect(routes).toContain("'/containers/transactions'");
+  });
+});
