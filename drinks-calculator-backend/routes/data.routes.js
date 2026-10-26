@@ -42,6 +42,8 @@ const refundRecord = require('../utils/refundRecord');
 const auditLog = require('../utils/auditLog');
 const { priceCart, parseCart } = require('../utils/orderPricing');
 const orderQuote = require('../utils/orderQuote');
+// 💳 How a sale's money is split at the counter (full, change, or part on a tab).
+const orderPayment = require('../utils/orderPayment');
 
 const MANAGER_ROLES = ['Manager', 'Administrator', 'Admin'];
 
@@ -69,6 +71,7 @@ const WRITABLE = {
     'is_active', 'minimum_level', 'purchase_price', 'unit', 'barcode', 'units_per_pack',
     'unit_kind', 'production_date', 'expiry_date', 'created_at', 'updated_at'],
   orders: ['id', 'company_id', 'items', 'total_amount', 'amount_paid', 'balance',
+    'tab_amount', 'customer_id',
     'receipt_number', 'date', 'is_active', 'customer_name', 'staff_name', 'created_by', 'created_at',
     'voided_at', 'voided_by', 'voided_by_name', 'void_reason'],
   inventory: ['id', 'company_id', 'drink_id', 'drink_name', 'quantity', 'min_stock_level',
@@ -311,6 +314,37 @@ router.post('/orders', async (req, res) => {
     const body = pickWritable('orders', { ...req.body, company_id: companyId });
     if (body.items !== undefined && typeof body.items !== 'string') {
       body.items = JSON.stringify(body.items);
+    }
+
+    // 💳 Money honesty: the Z-report derives collected (sum of amount_paid) and
+    // on_credit (sales - collected) from these numbers, so an inconsistent split
+    // must never reach the table. A tab is a DEBT, so it must name a customer
+    // account of this company — that account is where the ledger keeps it.
+    if (body.total_amount !== undefined && body.amount_paid !== undefined) {
+      const check = orderPayment.validateOrderPayment({
+        total: body.total_amount,
+        paid: body.amount_paid,
+        tabAmount: body.tab_amount,
+        customerId: body.customer_id,
+      });
+      if (!check.ok) {
+        return res
+          .status(400)
+          .json({ message: check.reason, code: 'ORDER_PAYMENT' });
+      }
+      body.tab_amount = check.tabAmount;
+
+      if (check.tabAmount > 0) {
+        const owner = await req.db.query(
+          'SELECT id FROM customers WHERE id = $1 AND company_id = $2',
+          [body.customer_id, companyId]
+        );
+        if (owner.rowCount === 0) {
+          return res
+            .status(404)
+            .json({ message: 'Unknown customer for this tab' });
+        }
+      }
     }
     const insertOrder = (payload) => {
       const cols = Object.keys(payload);

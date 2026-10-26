@@ -475,6 +475,13 @@ pool.on('error', (err) => {
         await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS voided_by INTEGER`);
         await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS voided_by_name VARCHAR(120)`);
         await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS void_reason VARCHAR(200)`);
+        // 💳 Part-payment: the part of a sale that went on the customer's tab.
+        // It is NOT `balance` — that column means "change handed back" for a cash
+        // sale, so a tab (money still owed) gets its own field and the customer's
+        // credit ledger stays the single source of truth for the debt.
+        await pool.query(
+          `ALTER TABLE orders ADD COLUMN IF NOT EXISTS tab_amount NUMERIC(12,2) DEFAULT 0`
+        );
         console.log('✅ orders void columns ensured');
       } catch (orderVoidErr) {
         console.log('⚠️ orders void columns warning:', orderVoidErr.message);
