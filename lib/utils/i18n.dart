@@ -336,6 +336,10 @@ const Map<String, String> _en = {
   'purRefused': 'The server refused it',
   'purOffline': 'No connection: purchasing needs the server',
   'purReceiveConfirm': 'Add this delivery to the stock?',
+  // The forecast hands its recommendations over to a purchase order.
+  'purFromForecast': 'Order what is recommended',
+  'purForecastMissing': 'Not in the catalogue any more',
+  'purForecastNone': 'Nothing to order yet',
   'custTitle': 'Customers & credit',
   'custTabCustomers': 'Customers',
   'custTabApprovals': 'Approvals',
@@ -1815,6 +1819,10 @@ const Map<String, String> _fr = {
   'purRefused': 'Refusé par le serveur',
   'purOffline': 'Pas de connexion : les achats nécessitent le serveur',
   'purReceiveConfirm': 'Ajouter cette livraison au stock ?',
+  // La prévision transmet ses recommandations à une commande d’achat.
+  'purFromForecast': 'Commander ce qui est recommandé',
+  'purForecastMissing': 'Plus au catalogue',
+  'purForecastNone': 'Rien à commander pour l’instant',
   'custTitle': 'Clients et crédit',
   'custTabCustomers': 'Clients',
   'custTabApprovals': 'Approbations',

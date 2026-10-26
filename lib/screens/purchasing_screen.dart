@@ -20,7 +20,11 @@ import '../utils/i18n.dart';
 import '../widgets/offline_indicator.dart';
 
 class PurchasingScreen extends StatefulWidget {
-  const PurchasingScreen({super.key});
+  /// Lines handed over by the forecast screen, ready to become an order. When
+  /// they are present the new-order dialog opens already filled in.
+  final List<Map<String, dynamic>> prefillLines;
+
+  const PurchasingScreen({super.key, this.prefillLines = const []});
 
   @override
   State<PurchasingScreen> createState() => _PurchasingScreenState();
@@ -32,8 +36,15 @@ class _PurchasingScreenState extends State<PurchasingScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<PurchasingProvider>().load();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final provider = context.read<PurchasingProvider>();
+      await provider.load();
+      if (!mounted) return;
+      // A prefill only makes sense for someone who may actually create the
+      // order; anyone else simply sees the list.
+      if (widget.prefillLines.isNotEmpty && provider.canWrite(_role)) {
+        await _newOrder(provider, initialLines: widget.prefillLines);
+      }
     });
   }
 
@@ -269,8 +280,12 @@ class _PurchasingScreenState extends State<PurchasingScreen> {
   }
 
   /// Managers build a draft order: pick the supplier, add the lines, create it.
-  Future<void> _newOrder(PurchasingProvider provider) async {
-    final lines = <Map<String, dynamic>>[];
+  /// [initialLines] is how the forecast hands its recommendations over.
+  Future<void> _newOrder(
+    PurchasingProvider provider, {
+    List<Map<String, dynamic>>? initialLines,
+  }) async {
+    final lines = <Map<String, dynamic>>[...?initialLines];
     int? supplierId =
         provider.suppliers.isNotEmpty ? provider.suppliers.first.id : null;
 

@@ -9,6 +9,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/forecast_model.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/drink_provider.dart';
+import '../providers/auth_provider.dart';
+import '../utils/invoice_import_helper.dart';
+import 'purchasing_screen.dart';
 import '../services/expiry_alert_service.dart';
 import '../services/groq_service.dart';
 import '../services/supabase_service.dart';
@@ -520,8 +523,74 @@ class _ForecastScreenState extends State<ForecastScreen> {
         Text(t('forecastRecommendedOrder'),
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
+        // 🛒 The payoff of the forecast: turn what it recommends into a purchase
+        // order (draft → send → receive puts the stock back on the shelf).
+        if (_canOrder && result.items.any((i) => i.recommendedOrder > 0))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: FilledButton.icon(
+              onPressed: () => _orderFromForecast(result),
+              icon: const Icon(Icons.shopping_cart_outlined),
+              label: Text(t('purFromForecast')),
+            ),
+          ),
         ...result.items.map((i) => _buildForecastItem(i, primary)),
       ],
+    );
+  }
+
+  /// A manager commits the shop's money, so only they are offered the order
+  /// (the backend refuses anyone else either way).
+  bool get _canOrder {
+    final role =
+        (context.read<AuthProvider>().user?.role ?? '').trim().toLowerCase();
+    return role == 'manager' || role == 'administrator' || role == 'admin';
+  }
+
+  /// Turns the forecast's recommendations into purchase-order lines.
+  ///
+  /// Every line is resolved to the REAL catalogue drink by name
+  /// ([InvoiceImportHelper.findCatalogDrink]): receiving needs a drink id, so a
+  /// name that is no longer in the catalogue cannot be ordered — and rather than
+  /// invent a line or drop it silently, the whole action stops and says which
+  /// drink is missing. That is the same rule the invoice import follows.
+  Future<void> _orderFromForecast(ForecastResult result) async {
+    final catalogue =
+        Provider.of<DrinkProvider>(context, listen: false).customDrinks;
+    final lines = <Map<String, dynamic>>[];
+    final missing = <String>[];
+
+    for (final item in result.items) {
+      if (item.recommendedOrder <= 0) continue;
+      final drink =
+          InvoiceImportHelper.findCatalogDrink(item.drinkName, catalogue);
+      if (drink == null) {
+        missing.add(item.drinkName);
+        continue;
+      }
+      lines.add({
+        'drink_id': drink.id,
+        'drink_name': drink.name,
+        'quantity': item.recommendedOrder,
+        'unit_cost': drink.purchasePrice,
+      });
+    }
+
+    if (missing.isNotEmpty) {
+      Helpers.showToast('${t('purForecastMissing')}: ${missing.join(', ')}',
+          isError: true);
+      return;
+    }
+    if (lines.isEmpty) {
+      Helpers.showToast(t('purForecastNone'), isError: true);
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PurchasingScreen(prefillLines: lines),
+      ),
     );
   }
 
