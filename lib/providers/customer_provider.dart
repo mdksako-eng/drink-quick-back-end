@@ -25,10 +25,17 @@ class CustomerProvider extends ChangeNotifier {
   List<CustomerLedgerEntry> _entries = [];
   bool _loading = false;
 
+  /// True once a load has finished (from the server or the local cache), so a
+  /// screen that needs the list — the till's customer information — can load it
+  /// once instead of on every open.
+  bool _hasLoaded = false;
+
   /// True when the last load had to fall back to the local cache.
   bool _offline = false;
 
   List<Customer> get customers => _customers;
+
+  bool get hasLoaded => _hasLoaded;
 
   /// The whole company ledger, newest first.
   List<CustomerLedgerEntry> get entries =>
@@ -89,6 +96,7 @@ class CustomerProvider extends ChangeNotifier {
     }
 
     _loading = false;
+    _hasLoaded = true;
     notifyListeners();
   }
 

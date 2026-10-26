@@ -1426,7 +1426,17 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         TextEditingController(text: prefillName);
     // Registered, approved customers are offered first; a walk-in just types a
     // name in the field below.
-    final approvedCustomers = context.read<CustomerProvider>().approved;
+    //
+    // ⚠️ The list must be LOADED here: this screen never loaded the customer
+    // accounts before, so `approved` was empty unless the operator had opened
+    // the Customers screen first in the same session — and the registered
+    // customer then never appeared in the customer information at payment time.
+    final customerProvider = context.read<CustomerProvider>();
+    if (!customerProvider.hasLoaded) {
+      await customerProvider.load();
+    }
+    if (!mounted) return null;
+    final approvedCustomers = customerProvider.approved;
 
     return await showDialog<String>(
       context: context,
@@ -1453,11 +1463,16 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     itemCount: approvedCustomers.length,
                     itemBuilder: (context, i) {
                       final c = approvedCustomers[i];
+                      // The number is the account's identity: it is what the
+                      // statement, the ledger and the tab all refer to.
+                      final identity = [c.customerNumber, c.phone]
+                          .where((part) => part.isNotEmpty)
+                          .join(' · ');
                       return ListTile(
                         dense: true,
                         leading: const Icon(Icons.person_outline),
                         title: Text(c.name),
-                        subtitle: c.phone.isNotEmpty ? Text(c.phone) : null,
+                        subtitle: identity.isEmpty ? null : Text(identity),
                         onTap: () => Navigator.pop(context, c.name),
                       );
                     },
