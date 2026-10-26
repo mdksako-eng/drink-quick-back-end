@@ -11,6 +11,8 @@ import 'package:http/http.dart' as http;
 import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/providers/customer_provider.dart';
+import 'package:drinks_calculator_fixed/models/customer_model.dart';
+import 'package:drinks_calculator_fixed/utils/customer_ledger_helper.dart';
 import 'package:drinks_calculator_fixed/providers/order_provider.dart';
 import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/models/drink_model.dart';
@@ -100,6 +102,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   bool _isSelectingDrink = false;
   String? _importedCustomerName;
   String? _customerNameForOrder;
+
+  /// The registered customer account chosen in the customer information, when
+  /// there is one. A tab needs it: the remainder of a part-paid sale is a debt
+  /// that only an account can hold (the credit ledger keeps the balance).
+  Customer? _selectedCustomerAccount;
   String? _originalOrderId;
   String _companyName = 'Drink Quick Cal';
 
@@ -793,6 +800,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       _totalAmount = 0.0;
       _amountPaid = 0.0;
       _balance = 0.0;
+      _selectedCustomerAccount = null;
       _amountPaidController.clear();
       _selectedQuantity = 1;
       _selectedDrinkId = null;
@@ -845,8 +853,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
     if (_selectedPaymentMethod == PaymentMethod.cash) {
       if (_amountPaid < _totalAmount) {
-        Helpers.showToast(t('insufficientPayment'), isError: true);
-        return;
+        // 💳 Part-payment: the rest goes on the customer's tab, so a registered
+        // account must have been chosen — a debt cannot belong to a typed name.
+        if (_selectedCustomerAccount == null) {
+          Helpers.showToast(t('calcNeedCustomerForTab'), isError: true);
+          return;
+        }
       }
     } else if (_selectedPaymentMethod != PaymentMethod.card) {
       if (_customerPhoneController.text.trim().isEmpty) {
@@ -1373,14 +1385,43 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   Future<bool> _processCashPayment(String customerName) async {
     _setCompletionProgress(0.40);
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final customerProvider =
+        Provider.of<CustomerProvider>(context, listen: false);
     final staffName =
         Provider.of<AuthProvider>(context, listen: false).currentUser?.username ??
             '';
+
+    // 💳 Part-payment: whatever was not handed over goes on the customer's tab.
+    // Rounded to the centime exactly like the server's own rule
+    // (backend utils/orderPayment.js), so the order and the ledger cannot
+    // disagree about what is owed.
+    final tab = _amountPaid < _totalAmount
+        ? double.parse((_totalAmount - _amountPaid).toStringAsFixed(2))
+        : 0.0;
+    final account = tab > 0 ? _selectedCustomerAccount : null;
+
+    if (account != null) {
+      // The manager's limit is checked BEFORE anything is written: a refusal
+      // after the sale exists would leave stock off the shelf for a sale that is
+      // not allowed to stand. The server re-checks it either way.
+      final balance = customerProvider.totalsFor(account.id).balance;
+      if (CustomerLedgerHelper.exceedsLimit(
+        balance: balance,
+        amount: tab,
+        creditLimit: account.creditLimit,
+      )) {
+        Helpers.showToast(t('custLimitExceeded'), isError: true);
+        return false;
+      }
+    }
+
     _createdOrder = await orderProvider.createOrderAndGetOrder(
       _selectedDrinks,
       _amountPaid,
       customerName,
       staffName: staffName,
+      customerId: account?.id,
+      tabAmount: tab,
     );
     _setCompletionProgress(0.75);
 
@@ -1399,6 +1440,24 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         _createdOrder = null;
       }
       return false;
+    }
+
+    // The debt must reach the credit ledger — the order alone is not the
+    // account's balance, and a tab that never arrives is money the shop loses.
+    if (account != null && tab > 0) {
+      final written = await customerProvider.addEntry(
+        customerId: account.id,
+        kind: 'charge',
+        amount: tab,
+        reason: t('calcTabChargeReason'),
+        orderId: _createdOrder?.id,
+      );
+      if (!written.ok) {
+        // The sale stands (the stock is out), so say plainly what is missing
+        // instead of reporting a clean success.
+        Helpers.showToast(written.message ?? t('calcTabFailed'), isError: true);
+        return false;
+      }
     }
     return true;
   }
@@ -1473,7 +1532,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                         leading: const Icon(Icons.person_outline),
                         title: Text(c.name),
                         subtitle: identity.isEmpty ? null : Text(identity),
-                        onTap: () => Navigator.pop(context, c.name),
+                        onTap: () {
+                          // Remember the ACCOUNT, not just the name: the customer
+                          // number identifies them and a tab needs this id.
+                          _selectedCustomerAccount = c;
+                          Navigator.pop(context, c.name);
+                        },
                       );
                     },
                   ),
@@ -1500,6 +1564,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 autofocus: approvedCustomers.isEmpty,
                 onSubmitted: (value) {
                   if (value.trim().isNotEmpty) {
+                    // A typed name is a walk-in: no account, so no tab.
+                    _selectedCustomerAccount = null;
                     Navigator.pop(context, value.trim());
                   }
                 },
@@ -1515,6 +1581,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             onPressed: () {
               final name = nameController.text.trim();
               if (name.isNotEmpty) {
+                _selectedCustomerAccount = null;
                 Navigator.pop(context, name);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(

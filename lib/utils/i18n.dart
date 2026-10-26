@@ -292,6 +292,12 @@ const Map<String, String> _en = {
   'contErrOffline': 'No connection: containers need the server',
   'contErrRefused': 'The server refused it — check how many are held',
   'contErrName': 'A container needs a name',
+
+  // 💳 Part-payment at the till: the unpaid rest goes on the customer's tab.
+  'calcNeedCustomerForTab':
+      'Choose a registered customer: the rest goes on their tab',
+  'calcTabChargeReason': 'Unpaid balance of a sale',
+  'calcTabFailed': 'The tab could not be recorded — check the sale',
   'custTitle': 'Customers & credit',
   'custTabCustomers': 'Customers',
   'custTabApprovals': 'Approvals',
@@ -1727,6 +1733,12 @@ const Map<String, String> _fr = {
   'contErrOffline': 'Pas de connexion : les casiers nécessitent le serveur',
   'contErrRefused': 'Refusé par le serveur — vérifiez la quantité détenue',
   'contErrName': 'Un casier doit avoir un nom',
+
+  // 💳 Paiement partiel à la caisse : le reste va sur l’ardoise du client.
+  'calcNeedCustomerForTab':
+      'Choisissez un client enregistré : le reste va sur son ardoise',
+  'calcTabChargeReason': 'Solde impayé d’une vente',
+  'calcTabFailed': 'L’ardoise n’a pas pu être enregistrée — vérifiez la vente',
   'custTitle': 'Clients et crédit',
   'custTabCustomers': 'Clients',
   'custTabApprovals': 'Approbations',

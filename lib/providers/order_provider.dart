@@ -29,6 +29,15 @@ class Order {
   final String customerName;
   final String staffName;
 
+  /// The registered customer account this sale belongs to, when one was chosen.
+  /// A tab (part of the sale left unpaid) is a DEBT, so it needs this account:
+  /// the credit ledger keeps the balance and the statement is sent to it.
+  final int? customerId;
+
+  /// The part of this sale that went on the customer's tab (0 for a normal sale).
+  /// Deliberately NOT [balance]: that is the change handed back on a cash sale.
+  final double tabAmount;
+
   Order({
     required this.id,
     required this.items,
@@ -43,6 +52,8 @@ class Order {
     this.voidedByName = '',
     this.customerName = '',
     this.staffName = '',
+    this.customerId,
+    this.tabAmount = 0,
   });
 
   Map<String, dynamic> toJson() {
@@ -52,6 +63,8 @@ class Order {
       'totalAmount': totalAmount,
       'amountPaid': amountPaid,
       'balance': balance,
+      'tabAmount': tabAmount,
+      'customerId': customerId,
       'receiptNumber': receiptNumber,
       'date': date.toIso8601String(),
       'isActive': isActive,
@@ -107,6 +120,9 @@ class Order {
           (json['totalAmount'] ?? json['total_amount'] ?? 0).toDouble(),
       amountPaid: (json['amountPaid'] ?? json['amount_paid'] ?? 0).toDouble(),
       balance: (json['balance'] ?? 0).toDouble(),
+      tabAmount: (json['tabAmount'] ?? json['tab_amount'] ?? 0).toDouble(),
+      customerId: int.tryParse(
+          '${json['customerId'] ?? json['customer_id'] ?? ''}'),
       receiptNumber: json['receiptNumber']?.toString() ??
           json['receipt_number']?.toString() ??
           '',
@@ -290,7 +306,7 @@ class OrderProvider with ChangeNotifier {
 
   Future<Order> createOrderAndGetOrder(
       List<Drink> items, double amountPaid, String customerName,
-      {String staffName = ''}) async {
+      {String staffName = '', int? customerId, double tabAmount = 0}) async {
     try {
       _isLoading = true;
       notifyListeners();
@@ -318,6 +334,8 @@ class OrderProvider with ChangeNotifier {
         isActive: true,
         customerName: customerName,
         staffName: staffName,
+        customerId: customerId,
+        tabAmount: tabAmount,
       );
 
       print('🔍 Creating order: ${order.id}');
