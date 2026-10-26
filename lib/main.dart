@@ -28,6 +28,7 @@ import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
 import 'package:drinks_calculator_fixed/providers/customer_provider.dart';
 import 'package:drinks_calculator_fixed/providers/shift_provider.dart';
 import 'package:drinks_calculator_fixed/providers/container_provider.dart';
+import 'package:drinks_calculator_fixed/providers/purchasing_provider.dart';
 import 'package:drinks_calculator_fixed/screens/lock_screen.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/voice_service.dart';
@@ -252,6 +253,9 @@ class MyAppState extends State<MyApp> {
         // 🧺 Returnable containers (crates and bottles): who is holding the
         // shop's empties. A crate in a customer's yard is money standing still.
         ChangeNotifierProvider(create: (_) => ContainerProvider()),
+        // 🛒 Buying stock: suppliers and purchase orders (the forecast's
+        // recommendations become an order here).
+        ChangeNotifierProvider(create: (_) => PurchasingProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

@@ -1055,6 +1055,169 @@ class SupabaseService {
     }
   }
 
+  // ============================================================
+  // 🛒 PURCHASING — suppliers, purchase orders and receiving
+  // ============================================================
+  // The forecast recommends what to reorder; this is where that becomes an
+  // order. A manager creates / sends / cancels (the backend refuses anyone
+  // else with 403); any staff member may RECEIVE a delivery, because that is a
+  // physical fact at the door — and the backend puts the stock on the shelf
+  // through the same guarded path a restock uses.
+
+  static Future<List<Map<String, dynamic>>?> getSuppliers() async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.get(
+        Uri.parse(ApiConfig.dataSuppliers),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode != 200) {
+        print('❌ Failed to load suppliers: ${response.statusCode}');
+        return null;
+      }
+      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase getSuppliers error: $e');
+      return null;
+    }
+  }
+
+  /// Adds a supplier, or updates the one with the same name. Managers only.
+  static Future<Map<String, dynamic>?> saveSupplier({
+    required String name,
+    String? phone,
+    String? notes,
+  }) async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataSuppliers),
+        headers: await _authedHeaders(),
+        body: jsonEncode({
+          'name': name,
+          if (phone != null && phone.isNotEmpty) 'phone': phone,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+        }),
+      );
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        print('❌ Failed to save the supplier: ${response.statusCode}');
+        return null;
+      }
+      return Map<String, dynamic>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase saveSupplier error: $e');
+      return null;
+    }
+  }
+
+  /// Orders, newest first, each with its lines.
+  static Future<List<Map<String, dynamic>>?> getPurchaseOrders({
+    String? status,
+  }) async {
+    if (!canUseSupabase) return null;
+    try {
+      final url = (status == null || status.isEmpty)
+          ? ApiConfig.dataPurchaseOrders
+          : '${ApiConfig.dataPurchaseOrders}?status=$status';
+      final response = await http.get(
+        Uri.parse(url),
+        headers: await _authedHeaders(),
+      );
+      if (response.statusCode != 200) {
+        print('❌ Failed to load purchase orders: ${response.statusCode}');
+        return null;
+      }
+      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    } catch (e) {
+      print('❌ Supabase getPurchaseOrders error: $e');
+      return null;
+    }
+  }
+
+  /// Creates a DRAFT order. Lines are [{drink_id, drink_name, quantity,
+  /// unit_cost}]; the backend validates them and generates the reference.
+  static Future<Map<String, dynamic>?> createPurchaseOrder({
+    int? supplierId,
+    required List<Map<String, dynamic>> lines,
+    String? notes,
+  }) async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataPurchaseOrders),
+        headers: await _authedHeaders(),
+        body: jsonEncode({
+          if (supplierId != null) 'supplier_id': supplierId,
+          'lines': lines,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+        }),
+      );
+      final decoded = jsonDecode(response.body);
+      if (response.statusCode != 201) {
+        print('❌ Purchase order refused: ${response.statusCode} $decoded');
+        if (decoded is Map && decoded['message'] != null) {
+          return {'error': decoded['message'].toString()};
+        }
+        return null;
+      }
+      return Map<String, dynamic>.from(decoded);
+    } catch (e) {
+      print('❌ Supabase createPurchaseOrder error: $e');
+      return null;
+    }
+  }
+
+  /// Send or cancel an order (a manager's call). Receiving has its own call.
+  static Future<Map<String, dynamic>?> setPurchaseOrderStatus({
+    required int id,
+    required String status,
+  }) async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.patch(
+        Uri.parse(ApiConfig.dataPurchaseOrder(id)),
+        headers: await _authedHeaders(),
+        body: jsonEncode({'status': status}),
+      );
+      final decoded = jsonDecode(response.body);
+      if (response.statusCode != 200) {
+        print('❌ Purchase order status refused: ${response.statusCode} $decoded');
+        if (decoded is Map && decoded['message'] != null) {
+          return {'error': decoded['message'].toString()};
+        }
+        return null;
+      }
+      return Map<String, dynamic>.from(decoded);
+    } catch (e) {
+      print('❌ Supabase setPurchaseOrderStatus error: $e');
+      return null;
+    }
+  }
+
+  /// Receives a delivery: the backend adds the stock and freezes the order.
+  /// A refusal (409) is a real answer — half a delivery must never land.
+  static Future<Map<String, dynamic>?> receivePurchaseOrder(int id) async {
+    if (!canUseSupabase) return null;
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.dataPurchaseOrderReceive(id)),
+        headers: await _authedHeaders(),
+      );
+      final decoded = jsonDecode(response.body);
+      if (response.statusCode != 200) {
+        print('❌ Receive refused: ${response.statusCode} $decoded');
+        if (decoded is Map && decoded['message'] != null) {
+          return {'error': decoded['message'].toString()};
+        }
+        return null;
+      }
+      return Map<String, dynamic>.from(decoded);
+    } catch (e) {
+      print('❌ Supabase receivePurchaseOrder error: $e');
+      return null;
+    }
+  }
+
   /// Enrols a customer. The backend generates the customer number and decides
   /// the starting status: staff -> 'pending', manager -> 'approved'.
   static Future<Map<String, dynamic>?> enrollCustomer({

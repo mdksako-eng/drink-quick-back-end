@@ -133,6 +133,14 @@ class ApiConfig {
       '$apiBase/data/containers/transactions';
   static const String dataContainersOutstanding =
       '$apiBase/data/containers/outstanding';
+  // 🛒 Buying stock: suppliers, purchase orders and receiving. The forecast
+  // recommends what to reorder; this is where that becomes an order.
+  static const String dataSuppliers = '$apiBase/data/suppliers';
+  static const String dataPurchaseOrders = '$apiBase/data/purchase-orders';
+  static String dataPurchaseOrder(dynamic id) =>
+      '$apiBase/data/purchase-orders/$id';
+  static String dataPurchaseOrderReceive(dynamic id) =>
+      '$apiBase/data/purchase-orders/$id/receive';
   // 🕒 Shifts (cash-up / Z-report). One open shift per person; a staff member
   // closes their own shift, a manager closes anyone's.
   static const String dataShifts = '$apiBase/data/shifts';

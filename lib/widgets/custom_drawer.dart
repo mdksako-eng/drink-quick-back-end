@@ -18,6 +18,7 @@ import 'package:drinks_calculator_fixed/screens/inventory_screen.dart';
 import 'package:drinks_calculator_fixed/screens/profile_screen.dart';
 import 'package:drinks_calculator_fixed/screens/customer_ledger_screen.dart';
 import 'package:drinks_calculator_fixed/screens/containers_screen.dart';
+import 'package:drinks_calculator_fixed/screens/purchasing_screen.dart';
 import 'package:drinks_calculator_fixed/screens/shift_screen.dart';
 import 'package:drinks_calculator_fixed/screens/variance_screen.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
@@ -328,6 +329,18 @@ class CustomDrawer extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                             builder: (context) => const ContainersScreen()));
+                  }, primaryColor: primaryColor),
+
+                // 🛒 Buying stock: suppliers and purchase orders. A manager sends
+                // the order, any staff member receives the delivery.
+                if (!isCustomer)
+                  _buildDrawerItem(
+                      context, Icons.shopping_cart_outlined, t('purMenu'), () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const PurchasingScreen()));
                   }, primaryColor: primaryColor),
 
                 // 🕒 Shift / cash-up: the Z-report of this till.
