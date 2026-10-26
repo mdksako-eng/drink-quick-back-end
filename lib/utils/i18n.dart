@@ -176,6 +176,7 @@ const Map<String, String> _en = {
   'english': 'English',
   'french': 'Français',
   'privacyPolicy': 'Privacy Policy',
+    'dataProcessingAgreement': 'Data Processing',
   'termsOfService': 'Terms',
   // Common actions
   'save': 'Save',
@@ -2124,6 +2125,7 @@ const Map<String, String> _fr = {
   'english': 'English',
   'french': 'Français',
   'privacyPolicy': 'Confidentialité',
+    'dataProcessingAgreement': 'Traitement des données',
   'termsOfService': 'Conditions',
   // Common actions
   'save': 'Enregistrer',
