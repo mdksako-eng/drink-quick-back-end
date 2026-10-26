@@ -464,6 +464,86 @@ pool.on('error', (err) => {
         console.log('⚠️ containers table warning:', containerTableErr.message);
       }
 
+      // 🛒 PURCHASING — suppliers, purchase orders and receiving.
+      // The forecast already recommends what to reorder; this is the document
+      // that turns that into an order and remembers what a supplier charges
+      // ("supplier prices are not stored yet" was an open gap). Receiving puts
+      // the stock on the shelf at the price actually paid, through the same
+      // guarded applyStockDelta the restock uses.
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS suppliers (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            name VARCHAR(120) NOT NULL,
+            phone VARCHAR(40),
+            notes TEXT,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await pool.query(
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(company_id, LOWER(name))`
+        );
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS purchase_orders (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            supplier_id INTEGER,
+            reference VARCHAR(30) NOT NULL DEFAULT '',
+            status VARCHAR(12) NOT NULL DEFAULT 'draft',
+            total_amount NUMERIC(12,2) DEFAULT 0,
+            notes TEXT,
+            created_by INTEGER,
+            created_by_name VARCHAR(120),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            sent_at TIMESTAMP,
+            received_at TIMESTAMP,
+            received_by INTEGER,
+            received_by_name VARCHAR(120)
+          )
+        `);
+        await pool.query(
+          `CREATE INDEX IF NOT EXISTS idx_purchase_orders_company ON purchase_orders(company_id, created_at DESC)`
+        );
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS purchase_order_lines (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            purchase_order_id INTEGER NOT NULL,
+            drink_id TEXT,
+            drink_name VARCHAR(120) NOT NULL,
+            quantity INTEGER NOT NULL,
+            unit_cost NUMERIC(12,2) DEFAULT 0,
+            received_quantity INTEGER DEFAULT 0
+          )
+        `);
+        await pool.query(
+          `CREATE INDEX IF NOT EXISTS idx_purchase_lines_order ON purchase_order_lines(company_id, purchase_order_id)`
+        );
+        // SECURITY: same rule as every other money table — the app only reaches
+        // these through the session-authenticated backend, so RLS with no
+        // policies closes the anon-key hole without affecting the app.
+        await pool.query(`ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY`);
+        await pool.query(`REVOKE ALL ON suppliers FROM anon, authenticated`);
+        await pool.query(
+          `ALTER TABLE purchase_orders ENABLE ROW LEVEL SECURITY`
+        );
+        await pool.query(
+          `REVOKE ALL ON purchase_orders FROM anon, authenticated`
+        );
+        await pool.query(
+          `ALTER TABLE purchase_order_lines ENABLE ROW LEVEL SECURITY`
+        );
+        await pool.query(
+          `REVOKE ALL ON purchase_order_lines FROM anon, authenticated`
+        );
+        console.log('✅ suppliers + purchase orders tables ensured');
+      } catch (purchasingTableErr) {
+        console.log('⚠️ purchasing table warning:', purchasingTableErr.message);
+      }
+
 
 
       // 🧾 ORDER VOID — an order corrected after the fact keeps a trace

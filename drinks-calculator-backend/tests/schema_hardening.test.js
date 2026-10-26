@@ -251,3 +251,34 @@ describe('returnable container hardening', () => {
     expect(routes).toContain("'/containers/transactions'");
   });
 });
+
+describe('purchasing hardening', () => {
+  test('server.js creates the buying tables with RLS on and the roles revoked', () => {
+    const server = read('server.js');
+    for (const table of ['suppliers', 'purchase_orders', 'purchase_order_lines']) {
+      expect(server).toContain(`CREATE TABLE IF NOT EXISTS ${table}`);
+      expect(server).toContain(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+      expect(server).toContain(`REVOKE ALL ON ${table} FROM anon, authenticated`);
+    }
+  });
+
+  test('a runnable RLS script exists for the buying tables', () => {
+    const sql = read('sql/rls_purchasing.sql');
+    for (const table of ['suppliers', 'purchase_orders', 'purchase_order_lines']) {
+      expect(sql).toContain(`ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY`);
+      expect(sql).toContain(`REVOKE ALL ON public.${table} FROM anon, authenticated`);
+    }
+  });
+
+  test('receiving goes through the guarded stock path, never a bare UPDATE', () => {
+    // Stock must move through applyStockDelta (it refuses to drive a shelf
+    // negative and writes the movement); a receive route that updated inventory
+    // directly would bypass both.
+    const routes = read('routes/data.routes.js');
+    expect(routes).toContain("'/purchase-orders/:id/receive'");
+    expect(routes).toContain('purchasing.receivingPlan(');
+    expect(routes).toContain('applyStockDelta({');
+    // …and a manager's money decisions are checked on the writing routes.
+    expect(routes).toContain('purchasing.canWriteOrders(req.user)');
+  });
+});

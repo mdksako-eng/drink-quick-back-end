@@ -44,6 +44,8 @@ const { priceCart, parseCart } = require('../utils/orderPricing');
 const orderQuote = require('../utils/orderQuote');
 // 💳 How a sale's money is split at the counter (full, change, or part on a tab).
 const orderPayment = require('../utils/orderPayment');
+// 🛒 Buying stock: suppliers, purchase orders and receiving.
+const purchasing = require('../utils/purchasing');
 
 const MANAGER_ROLES = ['Manager', 'Administrator', 'Admin'];
 
@@ -1322,6 +1324,290 @@ router.post('/containers/transactions', async (req, res) => {
   } catch (error) {
     console.error('POST /containers/transactions error:', error.message);
     res.status(500).json({ message: 'Failed to record this container movement' });
+  }
+});
+
+// ============================================================
+// 🛒 PURCHASING — suppliers, purchase orders and receiving
+// ============================================================
+// A manager commits the shop's money (create / edit / send / cancel); any staff
+// member may RECEIVE a delivery, because that is a physical fact at the door
+// like a restock — refusing would only stop it being recorded. Rules live in
+// utils/purchasing.js and are unit tested.
+
+router.get('/suppliers', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const result = await req.db.query(
+      'SELECT * FROM suppliers WHERE company_id = $1 ORDER BY name ASC',
+      [companyId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('GET /suppliers error:', error.message);
+    res.status(500).json({ message: 'Failed to load suppliers' });
+  }
+});
+
+// Add a supplier, or update the one with the same name (case-insensitive), so
+// the same merchant cannot end up twice in the list.
+router.post('/suppliers', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const allowed = purchasing.canWriteOrders(req.user);
+    if (!allowed.ok) return res.status(403).json({ message: allowed.reason });
+
+    const name = String(req.body.name || '').trim().slice(0, 120);
+    if (!name) {
+      return res.status(400).json({ message: 'A supplier needs a name' });
+    }
+    const phone = req.body.phone ? String(req.body.phone).slice(0, 40) : null;
+    const notes = req.body.notes ? String(req.body.notes) : null;
+
+    const existing = await req.db.query(
+      'SELECT id FROM suppliers WHERE company_id = $1 AND LOWER(name) = LOWER($2)',
+      [companyId, name]
+    );
+    if (existing.rows[0]) {
+      const updated = await req.db.query(
+        `UPDATE suppliers
+            SET name = $1, phone = $2, notes = $3, is_active = TRUE,
+                updated_at = CURRENT_TIMESTAMP
+          WHERE id = $4 RETURNING *`,
+        [name, phone, notes, existing.rows[0].id]
+      );
+      return res.json(updated.rows[0]);
+    }
+
+    const inserted = await req.db.query(
+      `INSERT INTO suppliers (company_id, name, phone, notes)
+       VALUES ($1,$2,$3,$4) RETURNING *`,
+      [companyId, name, phone, notes]
+    );
+    res.status(201).json(inserted.rows[0]);
+  } catch (error) {
+    console.error('POST /suppliers error:', error.message);
+    res.status(500).json({ message: 'Failed to save this supplier' });
+  }
+});
+
+// Orders, newest first, each with its lines — what the purchasing screen shows.
+router.get('/purchase-orders', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const params = [companyId];
+    let sql = 'SELECT * FROM purchase_orders WHERE company_id = $1';
+    if (req.query.status) {
+      params.push(String(req.query.status).toLowerCase());
+      sql += ` AND status = $${params.length}`;
+    }
+    sql += ' ORDER BY created_at DESC, id DESC LIMIT 200';
+    const orders = await req.db.query(sql, params);
+    const lines = await req.db.query(
+      'SELECT * FROM purchase_order_lines WHERE company_id = $1 ORDER BY id ASC',
+      [companyId]
+    );
+
+    const byOrder = new Map();
+    for (const line of lines.rows) {
+      const key = Number(line.purchase_order_id);
+      if (!byOrder.has(key)) byOrder.set(key, []);
+      byOrder.get(key).push(line);
+    }
+    res.json(
+      orders.rows.map((order) => ({
+        ...order,
+        lines: byOrder.get(Number(order.id)) || [],
+      }))
+    );
+  } catch (error) {
+    console.error('GET /purchase-orders error:', error.message);
+    res.status(500).json({ message: 'Failed to load purchase orders' });
+  }
+});
+
+// Create a DRAFT order. The reference is generated from the row id, so two
+// orders can never share one.
+router.post('/purchase-orders', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const allowed = purchasing.canWriteOrders(req.user);
+    if (!allowed.ok) return res.status(403).json({ message: allowed.reason });
+
+    const checked = purchasing.validateLines(req.body.lines);
+    if (!checked.ok) return res.status(400).json({ message: checked.reason });
+
+    // The supplier must belong to THIS company: never trust the body.
+    let supplierId = null;
+    if (req.body.supplier_id != null && req.body.supplier_id !== '') {
+      const supplier = await req.db.query(
+        'SELECT id FROM suppliers WHERE id = $1 AND company_id = $2',
+        [req.body.supplier_id, companyId]
+      );
+      if (supplier.rowCount === 0) {
+        return res.status(404).json({ message: 'Unknown supplier' });
+      }
+      supplierId = supplier.rows[0].id;
+    }
+
+    const created = await req.db.query(
+      `INSERT INTO purchase_orders
+         (company_id, supplier_id, status, total_amount, notes, created_by, created_by_name)
+       VALUES ($1,$2,'draft',$3,$4,$5,$6) RETURNING *`,
+      [
+        companyId,
+        supplierId,
+        purchasing.orderTotal(checked.value),
+        req.body.notes ? String(req.body.notes) : null,
+        req.user.id,
+        req.user.username || null,
+      ]
+    );
+    const order = created.rows[0];
+    const reference = `PO-${String(order.id).padStart(6, '0')}`;
+    await req.db.query('UPDATE purchase_orders SET reference = $1 WHERE id = $2', [
+      reference,
+      order.id,
+    ]);
+
+    for (const line of checked.value) {
+      await req.db.query(
+        `INSERT INTO purchase_order_lines
+           (company_id, purchase_order_id, drink_id, drink_name, quantity, unit_cost)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [
+          companyId,
+          order.id,
+          line.drinkId,
+          line.drinkName,
+          line.quantity,
+          line.unitCost,
+        ]
+      );
+    }
+
+    res.status(201).json({ ...order, reference, lines: checked.value });
+  } catch (error) {
+    console.error('POST /purchase-orders error:', error.message);
+    res.status(500).json({ message: 'Failed to create the purchase order' });
+  }
+});
+
+// Send or cancel an order — a manager's call. Receiving has its own route below.
+router.patch('/purchase-orders/:id', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const allowed = purchasing.canWriteOrders(req.user);
+    if (!allowed.ok) return res.status(403).json({ message: allowed.reason });
+
+    const next = String(req.body.status || '').toLowerCase();
+    const found = await req.db.query(
+      'SELECT * FROM purchase_orders WHERE id = $1 AND company_id = $2',
+      [req.params.id, companyId]
+    );
+    const order = found.rows[0];
+    if (!order) {
+      return res.status(404).json({ message: 'Unknown purchase order' });
+    }
+
+    const move = purchasing.canMoveStatus(order.status, next);
+    if (!move.ok) return res.status(409).json({ message: move.reason });
+
+    const updated = await req.db.query(
+      `UPDATE purchase_orders
+          SET status = $1,
+              sent_at = CASE WHEN $1 = 'sent' THEN CURRENT_TIMESTAMP ELSE sent_at END
+        WHERE id = $2 RETURNING *`,
+      [next, order.id]
+    );
+    res.json(updated.rows[0]);
+  } catch (error) {
+    console.error('PATCH /purchase-orders/:id error:', error.message);
+    res.status(500).json({ message: 'Failed to update the purchase order' });
+  }
+});
+
+// Receive what arrived: stock in at the cost actually paid, through the same
+// guarded path the restock uses (it refuses to drive stock negative and writes
+// the movement). Any staff member may do this — refusing would only stop the
+// delivery from being recorded at all.
+router.post('/purchase-orders/:id/receive', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const allowed = purchasing.canReceive(req.user);
+    if (!allowed.ok) return res.status(403).json({ message: allowed.reason });
+
+    const found = await req.db.query(
+      'SELECT * FROM purchase_orders WHERE id = $1 AND company_id = $2',
+      [req.params.id, companyId]
+    );
+    const order = found.rows[0];
+    if (!order) {
+      return res.status(404).json({ message: 'Unknown purchase order' });
+    }
+    const move = purchasing.canMoveStatus(order.status, 'received');
+    if (!move.ok) return res.status(409).json({ message: move.reason });
+
+    const lines = await req.db.query(
+      `SELECT * FROM purchase_order_lines
+        WHERE company_id = $1 AND purchase_order_id = $2 ORDER BY id ASC`,
+      [companyId, order.id]
+    );
+    const plan = purchasing.receivingPlan(
+      lines.rows.map((line) => ({
+        drinkId: line.drink_id,
+        drinkName: line.drink_name,
+        quantity: line.quantity,
+        unitCost: line.unit_cost,
+      }))
+    );
+
+    const applied = [];
+    for (const line of plan) {
+      if (!line.drinkId) continue;
+      const outcome = await applyStockDelta({
+        db: req.db,
+        companyId,
+        userId: req.user.id,
+        drinkId: line.drinkId,
+        delta: line.quantity,
+        body: {
+          reason: 'purchase_order',
+          order_id: order.reference || String(order.id),
+        },
+      });
+      if (!outcome.ok) {
+        // One refusal stops the rest, and the order stays 'sent' so the whole
+        // delivery can be received again once the shelf is right — instead of
+        // half of it quietly landing and half vanishing.
+        return res.status(409).json({
+          message: outcome.notStocked
+            ? `${line.drinkName} is not in this company's inventory`
+            : `Could not add ${line.quantity} of ${line.drinkName}`,
+          code: 'RECEIVE_FAILED',
+        });
+      }
+      applied.push({ ...line, remaining: outcome.remaining });
+    }
+
+    const updated = await req.db.query(
+      `UPDATE purchase_orders
+          SET status = 'received', received_at = CURRENT_TIMESTAMP,
+              received_by = $1, received_by_name = $2
+        WHERE id = $3 RETURNING *`,
+      [req.user.id, req.user.username || null, order.id]
+    );
+
+    res.json({ order: updated.rows[0], applied });
+  } catch (error) {
+    console.error('POST /purchase-orders/:id/receive error:', error.message);
+    res.status(500).json({ message: 'Failed to receive this delivery' });
   }
 });
 
