@@ -17,6 +17,8 @@ const campay = require('../utils/campay');
 const campayRefusal = require('../utils/campayRefusal');
 const paymentFees = require('../utils/paymentFees');
 const subscriptionPayment = require('../utils/subscriptionPayment');
+// 📉 What a subscription row becomes when the company's plan runs out.
+const subscriptionExpiry = require('../utils/subscriptionExpiry');
 // Provider callbacks must be reachable from the internet: CamerPay blocks
 // localhost/private URLs, so a localhost fallback silently breaks live payments
 // (see utils/publicUrl.js).
@@ -135,6 +137,22 @@ router.get('/subscriptions/status', async (req, res) => {
       await req.db.query(
         `UPDATE companies SET plan = 'free', subscription_status = 'expired' WHERE id = $1`,
         [user.company_id]
+      );
+      // 📉 The purchase history must agree with the company. It did not: this
+      // path updated only the company row, so its subscriptions kept saying
+      // 'active' for ever (five were still 'active' in production while the
+      // company read 'free'). Only LIVE rows are swept — a 'pending' attempt may
+      // still be confirmed by a late webhook, and expiring it would make that
+      // confirmation a no-op and silently swallow the payment
+      // (utils/subscriptionExpiry.js).
+      await req.db.query(
+        `UPDATE subscriptions SET status = $1
+          WHERE company_id = $2 AND status = ANY($3)`,
+        [
+          subscriptionExpiry.EXPIRED,
+          user.company_id,
+          subscriptionExpiry.LIVE_STATUSES,
+        ]
       );
       expiresAt = null;
     }
