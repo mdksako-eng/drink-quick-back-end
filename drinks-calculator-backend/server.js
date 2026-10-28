@@ -3557,9 +3557,10 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('💳 Subscriptions: LIVE keys — real money WILL be collected');
     console.log(`🪙 Rails: ${paymentRails.PROVIDERS.join(', ')}\n`);
   } else {
-    console.log(`🛑 Subscriptions (Notch Pay, legacy): ${notch.mode.toUpperCase()} KEYS — real money will NOT be collected`);
-    console.log('   A plan upgrade would activate without charging anyone.');
-    console.log('   Set NOTCHPAY_PUBLIC_KEY / NOTCHPAY_PRIVATE_KEY to pk_live_ / sk_live_ keys');
+    console.log(`🛑 Subscriptions (Notch Pay, legacy): ${notch.mode.toUpperCase()} KEYS`);
+    console.log('   The Notch Pay rail is RETIRED — CamerPay is the subscription rail now.');
+    console.log('   Its route answers 503, so no plan can be activated through it.');
+    console.log('   Nothing to do: this line is expected and harmless.');
   }
 
   // CamerPay is the rail we are migrating to (utils/campay.js).
