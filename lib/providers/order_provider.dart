@@ -8,6 +8,7 @@ import 'package:drinks_calculator_fixed/models/drink_model.dart';
 import 'package:drinks_calculator_fixed/utils/helpers.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/notification_service.dart';
+import 'package:drinks_calculator_fixed/utils/json_num.dart';
 import 'package:drinks_calculator_fixed/utils/order_totals.dart';
 
 class Order {
@@ -116,11 +117,14 @@ class Order {
     return Order(
       id: json['id']?.toString() ?? '',
       items: items,
-      totalAmount:
-          (json['totalAmount'] ?? json['total_amount'] ?? 0).toDouble(),
-      amountPaid: (json['amountPaid'] ?? json['amount_paid'] ?? 0).toDouble(),
-      balance: (json['balance'] ?? 0).toDouble(),
-      tabAmount: (json['tabAmount'] ?? json['tab_amount'] ?? 0).toDouble(),
+      // Money fields are read tolerantly on purpose: orders.tab_amount is
+      // NUMERIC(12,2) and Postgres hands NUMERIC back as a string ("0.00"), so
+      // `.toDouble()` here threw and — because this runs per row — every order
+      // was skipped, leaving 0 of 128 loaded.
+      totalAmount: asDouble(json['totalAmount'] ?? json['total_amount']) ?? 0,
+      amountPaid: asDouble(json['amountPaid'] ?? json['amount_paid']) ?? 0,
+      balance: asDouble(json['balance']) ?? 0,
+      tabAmount: asDouble(json['tabAmount'] ?? json['tab_amount']) ?? 0,
       customerId: int.tryParse(
           '${json['customerId'] ?? json['customer_id'] ?? ''}'),
       receiptNumber: json['receiptNumber']?.toString() ??

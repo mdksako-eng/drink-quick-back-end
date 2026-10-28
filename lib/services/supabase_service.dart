@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
+import '../utils/json_num.dart';
 import 'secure_storage_service.dart';
 
 // ✅ Import for Realtime
@@ -662,10 +663,10 @@ class SupabaseService {
         'id': order['id']?.toString() ?? '',
         'company_id': _currentCompanyId,
         'items': itemsJson,
-        'total_amount': (order['totalAmount'] ?? 0).toDouble(),
-        'amount_paid': (order['amountPaid'] ?? 0).toDouble(),
-        'balance': (order['balance'] ?? 0).toDouble(),
-        'tab_amount': (order['tabAmount'] ?? 0).toDouble(),
+        'total_amount': asDouble(order['totalAmount']) ?? 0,
+        'amount_paid': asDouble(order['amountPaid']) ?? 0,
+        'balance': asDouble(order['balance']) ?? 0,
+        'tab_amount': asDouble(order['tabAmount']) ?? 0,
         if (order['customerId'] != null) 'customer_id': order['customerId'],
         'receipt_number': order['receiptNumber'] ?? '',
         'date': order['date'] ?? DateTime.now().toIso8601String(),
