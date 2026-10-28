@@ -69,12 +69,6 @@ class ApiConfig {
 
   static String get termsOfServiceForLanguage =>
       legalPage('terms', french: LanguageService.instance.isFrench);
-
-  /// The Data Processing Agreement (EN/FR) — the processor/controller terms
-  /// behind the Privacy Policy. Linked from the drawer's legal row; a signed
-  /// copy is offered to a Shop on request.
-  static String get dataProcessingAgreementForLanguage =>
-      legalPage('dpa', french: LanguageService.instance.isFrench);
   // ========== SUPABASE ==========
   // Replace these with your Supabase project details
   static const String supabaseUrl = 'https://hcfhnooabhxbdfgvtqhp.supabase.co';

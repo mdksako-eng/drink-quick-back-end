@@ -566,26 +566,18 @@ class CustomDrawer extends StatelessWidget {
                 // the ValueListenableBuilder around MaterialApp.
                 const LanguageToggle(),
                 const SizedBox(height: 8),
-                // Wrap, not Row: three legal links must not overflow the drawer
-                // on a narrow phone (the French labels are the longest).
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 4,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     TextButton(
                       onPressed: () => _openUrl(ApiConfig.privacyPolicyForLanguage),
                       child: Text(t('privacyPolicy'),
                           style: const TextStyle(fontSize: 12)),
                     ),
+                    Text('|', style: TextStyle(color: theme.hintColor)),
                     TextButton(
                       onPressed: () => _openUrl(ApiConfig.termsOfServiceForLanguage),
                       child: Text(t('termsOfService'),
-                          style: const TextStyle(fontSize: 12)),
-                    ),
-                    TextButton(
-                      onPressed: () => _openUrl(
-                          ApiConfig.dataProcessingAgreementForLanguage),
-                      child: Text(t('dataProcessingAgreement'),
                           style: const TextStyle(fontSize: 12)),
                     ),
                   ],
