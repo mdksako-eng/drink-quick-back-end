@@ -991,10 +991,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                       _buildBusinessPaymentSettingsCard(
                           theme, primaryColorValue),
                       const SizedBox(height: 20),
-                      // 🇨🇲 The company's own CamerPay account (managers/owners
-                      // only — staff never see payment credentials).
-                      _buildCampaySettingsCard(theme, primaryColorValue),
-                      const SizedBox(height: 20),
                     ],
                     if (canSeePaymentSettings) ...[
                       _buildStorageStatsCard(theme),
@@ -2734,44 +2730,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         ),
                       ],
                     ),
-                    if (_mtnEnabled) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        t('st_receivePayments'),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: theme.hintColor,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _mtnMerchantPhoneController,
-                        decoration: InputDecoration(
-                          labelText: t('st_mtnPhone'),
-                          hintText: t('st_egPhone'),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.phone_android,
-                            color: const Color(0xFFFFCC00),
-                          ),
-                        ),
-                        keyboardType: TextInputType.phone,
-                        inputFormatters:
-                            PhoneHelper.internationalFormatters(),
-                        onChanged: isManager
-                            ? (value) {
-                                setState(() {
-                                  _mtnMerchantPhone = value;
-                                  _markUnsaved();
-                                });
-                              }
-                            : null,
-                      ),
-                      const SizedBox(height: 8),
-                    ],
                   ],
                 ),
               ),
@@ -2858,47 +2816,13 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         ),
                       ],
                     ),
-                    if (_orangeEnabled) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        t('st_receivePayments'),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: theme.hintColor,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _orangeMerchantPhoneController,
-                        decoration: InputDecoration(
-                          labelText: t('st_orangePhone'),
-                          hintText: t('st_egPhone'),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          prefixIcon: Icon(
-                            Icons.phone_android,
-                            color: const Color(0xFFFF6600),
-                          ),
-                        ),
-                        keyboardType: TextInputType.phone,
-                        inputFormatters:
-                            PhoneHelper.internationalFormatters(),
-                        onChanged: isManager
-                            ? (value) {
-                                setState(() {
-                                  _orangeMerchantPhone = value;
-                                  _markUnsaved();
-                                });
-                              }
-                            : null,
-                      ),
-                      const SizedBox(height: 8),
-                    ],
                   ],
                 ),
               ),
+              const SizedBox(height: 16),
+              // CamerPay carries MTN MoMo, Orange Money and card, so its account
+              // settings belong in this card rather than on their own.
+              _buildCampaySettingsCard(theme, primaryColorValue),
             ],
           ],
         ),
