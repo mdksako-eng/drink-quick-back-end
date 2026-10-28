@@ -2791,8 +2791,41 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         ),
                       ],
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Card Section - its own block. A customer paying by card is not a
+              // mobile-money payment, so it must not sit inside the Orange box.
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: primaryColorValue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: primaryColorValue.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
                       children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: primaryColorValue,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.credit_card,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             t('st_creditCard'),
@@ -2804,7 +2837,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                         ),
                         Switch(
                           value: _cardEnabled,
-                          // CamerPay's connection replaces the removed Notch Pay id.
                           onChanged: (isManager && _campayConnected)
                               ? (value) {
                                   setState(() {
@@ -2813,6 +2845,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                                   });
                                 }
                               : null,
+                          activeThumbColor: primaryColorValue,
                         ),
                       ],
                     ),
