@@ -37,6 +37,7 @@ import 'package:drinks_calculator_fixed/services/payment_service.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
 import 'package:drinks_calculator_fixed/utils/offline_gate.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:drinks_calculator_fixed/utils/whatsapp_link_helper.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:drinks_calculator_fixed/screens/notifications_screen.dart';
 import '../main.dart' show ThemeProvider;
@@ -1202,6 +1203,10 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     }
     final payUrl = paymentUrl ?? '';
     final canPayByLink = payUrl.isNotEmpty;
+    // Typed by the cashier while the dialog is open. A plain String rather than a
+    // TextEditingController: the dialog is transient, and a controller would need
+    // disposing after an un-awaited showDialog.
+    String whatsappNumber = '';
     bool _isDialogActive = true;
     Timer? _pollingTimer;
     int _attempts = 0;
@@ -1278,6 +1283,46 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     Text(
                       t('calcCheckPhonePin'),
                       textAlign: TextAlign.center,
+                    ),
+                  ],
+                  if (canPayByLink) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      decoration: InputDecoration(
+                        labelText: t('payWhatsappNumber'),
+                        prefixIcon: const Icon(Icons.chat, size: 18),
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      keyboardType: TextInputType.phone,
+                      onChanged: (value) =>
+                          setDialogState(() => whatsappNumber = value),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          // Same link the QR carries. Null means the number cannot
+                          // be a WhatsApp number, so say so instead of opening
+                          // WhatsApp on a link that fails silently.
+                          final link = buildWhatsAppPaymentLink(
+                            number: whatsappNumber,
+                            message: '${t('payShareText')} $payUrl',
+                          );
+                          if (link == null) {
+                            Helpers.showToast(t('payWhatsappInvalid'),
+                                isError: true);
+                            return;
+                          }
+                          final uri = Uri.parse(link);
+                          final ok = await launchUrl(uri,
+                              mode: LaunchMode.externalApplication);
+                          if (!ok) await launchUrl(uri);
+                        },
+                        icon: const Icon(Icons.send, size: 18),
+                        label: Text(t('payWhatsappSend')),
+                      ),
                     ),
                   ],
                   const SizedBox(height: 12),
