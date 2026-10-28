@@ -845,6 +845,25 @@ router.post('/payment/initiate', async (req, res) => {
       });
     }
 
+    // Must real money actually move before a payment is started?
+    //
+    // This is the LEGACY Notch Pay rail, and the till retries it whenever a
+    // company has not connected CamerPay (calculator_screen.dart falls back to
+    // initiatePayment). With test keys configured, a sale would be started and
+    // reported as paid while nothing was collected — money the shop never
+    // received, marked as received. Refuse instead, so the cashier takes cash.
+    //
+    // PAYMENTS_REQUIRE_LIVE=true (or the older NOTCHPAY_REQUIRE_LIVE) switches
+    // this on; see utils/paymentGuard.js. Off by default so a demo still works.
+    if (paymentGuard.liveKeyRequired() && !notchpay.isLive()) {
+      return res.status(400).json({
+        success: false,
+        code: 'payment_rail_not_live',
+        error:
+          'Online payment is unavailable: this server cannot collect real money right now. Take the payment in cash.',
+      });
+    }
+
     // ✅ Get company credentials
     const result = await req.db.query(
       `SELECT 
