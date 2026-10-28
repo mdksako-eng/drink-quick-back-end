@@ -651,7 +651,10 @@ class InventoryProvider with ChangeNotifier {
     notifyListeners();
     // Sync to Supabase
     try {
-      await SupabaseService.deleteDrink(drinkId); // Delete from drinks table
+      // The STOCK LINE only. This used to call deleteDrink(), so removing an
+      // item from the inventory screen deleted the drink and left the stock row
+      // behind — an inventory row whose drink no longer exists.
+      await SupabaseService.deleteInventoryItem(drinkId);
     } catch (e) {
       debugPrint('Supabase delete error: $e');
     }

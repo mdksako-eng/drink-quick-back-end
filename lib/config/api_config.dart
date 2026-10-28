@@ -115,6 +115,13 @@ class ApiConfig {
   static const String dataInventoryUpsert = '$apiBase/data/inventory/upsert';
   static const String dataInventorySell = '$apiBase/data/inventory/sell';
   static const String dataInventoryAdjust = '$apiBase/data/inventory/adjust';
+
+  /// Deletes one stock line, leaving the drink in the catalogue. Deleting a drink
+  /// (DELETE /data/drinks/:id) takes its stock line with it; this is the
+  /// opposite operation and used to be done with deleteDrink(), which removed
+  /// the drink and orphaned the stock row.
+  static String dataInventoryDelete(String drinkId) =>
+      '$apiBase/data/inventory/$drinkId';
   static const String dataInventoryTransactions =
       '$apiBase/data/inventory-transactions';
   static const String dataSettings = '$apiBase/data/settings';

@@ -544,6 +544,30 @@ class SupabaseService {
     }
   }
 
+  /// Deletes one stock line, leaving the drink in the catalogue.
+  ///
+  /// This exists because the inventory screen used to call [deleteDrink] for
+  /// "remove this item": that deleted the DRINK and left the stock row behind,
+  /// producing an inventory row whose drink no longer exists. The backend now
+  /// also takes a deleted drink's stock line with it, so the two directions are
+  /// distinct operations rather than one shared call.
+  static Future<bool> deleteInventoryItem(String drinkId) async {
+    if (!canUseSupabase) {
+      print('⚠️ Cannot delete inventory item - Supabase not available');
+      return false;
+    }
+    try {
+      final response = await http.delete(
+        Uri.parse(ApiConfig.dataInventoryDelete(drinkId)),
+        headers: await _authedHeaders(),
+      );
+      return response.statusCode == 204 || response.statusCode == 200;
+    } catch (e) {
+      print('❌ Supabase deleteInventoryItem error: $e');
+      return false;
+    }
+  }
+
   // ============================================================
   // 📋 ORDERS
   // ============================================================

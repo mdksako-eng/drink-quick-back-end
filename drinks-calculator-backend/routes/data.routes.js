@@ -201,6 +201,16 @@ router.delete('/drinks/:id', async (req, res) => {
   try {
     const companyId = resolveCompanyId(req, res);
     if (companyId == null) return;
+    // The stock line is derived data for a drink that no longer exists, so it goes
+    // FIRST. Deleting the drink on its own is what left orphan inventory rows
+    // behind — rows whose drink_id points at nothing (live example: company 42,
+    // drink_id 1792870970398 "music"). This order makes the worst case a drink
+    // with no stock row, which the app already tolerates (it falls back to
+    // drinks.current_stock), never an inventory row whose drink is gone.
+    await req.db.query(
+      'DELETE FROM inventory WHERE drink_id = $1 AND company_id = $2',
+      [req.params.id, companyId]
+    );
     await req.db.query('DELETE FROM drinks WHERE id = $1 AND company_id = $2', [req.params.id, companyId]);
     res.status(204).end();
   } catch (error) {
@@ -1891,6 +1901,28 @@ router.post('/inventory', async (req, res) => {
   } catch (error) {
     console.error('POST /inventory error:', error.message);
     res.status(500).json({ message: 'Failed to save inventory' });
+  }
+});
+
+// Deletes the STOCK LINE only, leaving the drink in the catalogue.
+//
+// The inventory screen used to call DELETE /drinks/:id for this, which deleted
+// the DRINK and left the stock row behind — the same orphan rows that
+// DELETE /drinks/:id above now cleans up. Use this route for "stop tracking
+// stock for this drink"; use DELETE /drinks/:id to remove the drink itself
+// (which takes its stock line with it).
+router.delete('/inventory/:drinkId', async (req, res) => {
+  try {
+    const companyId = resolveCompanyId(req, res);
+    if (companyId == null) return;
+    const result = await req.db.query(
+      'DELETE FROM inventory WHERE drink_id = $1 AND company_id = $2',
+      [req.params.drinkId, companyId]
+    );
+    res.json({ deleted: result.rowCount ?? 0 });
+  } catch (error) {
+    console.error('DELETE /inventory/:drinkId error:', error.message);
+    res.status(500).json({ message: 'Failed to delete inventory item' });
   }
 });
 
