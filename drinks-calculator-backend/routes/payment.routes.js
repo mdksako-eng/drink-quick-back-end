@@ -845,24 +845,22 @@ router.post('/payment/initiate', async (req, res) => {
       });
     }
 
-    // Must real money actually move before a payment is started?
+    // RETIRED (2026-10-28): CamerPay is the B2C rail.
     //
-    // This is the LEGACY Notch Pay rail, and the till retries it whenever a
-    // company has not connected CamerPay (calculator_screen.dart falls back to
-    // initiatePayment). With test keys configured, a sale would be started and
-    // reported as paid while nothing was collected — money the shop never
-    // received, marked as received. Refuse instead, so the cashier takes cash.
+    // This endpoint was the legacy Notch Pay path (MTN / Orange / card configured
+    // per company). The till calls /payment/campay-initiate first and only reaches
+    // here when the company has NOT connected CamerPay — where the old fallback
+    // would start a payment on a rail that collects nothing. The honest answer is
+    // not "start a payment anyway" but "connect CamerPay".
     //
-    // PAYMENTS_REQUIRE_LIVE=true (or the older NOTCHPAY_REQUIRE_LIVE) switches
-    // this on; see utils/paymentGuard.js. Off by default so a demo still works.
-    if (paymentGuard.liveKeyRequired() && !notchpay.isLive()) {
-      return res.status(400).json({
-        success: false,
-        code: 'payment_rail_not_live',
-        error:
-          'Online payment is unavailable: this server cannot collect real money right now. Take the payment in cash.',
-      });
-    }
+    // The legacy body below is therefore unreachable; it stays only until the next
+    // cleanup deletes it. Nothing here should be re-enabled.
+    return res.status(400).json({
+      success: false,
+      code: 'campay_not_connected',
+      error:
+        'Online payment needs this company CamerPay account. Connect it in Settings, then take the payment again.',
+    });
 
     // ✅ Get company credentials
     const result = await req.db.query(

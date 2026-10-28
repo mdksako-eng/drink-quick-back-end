@@ -16,14 +16,14 @@ const root = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
 describe('the legacy payment rail refuses when it cannot collect', () => {
-  test('/payment/initiate guards on liveKeyRequired and notchpay.isLive', () => {
+  test('/payment/initiate refuses and points the company at CamerPay', () => {
     const routes = read('routes/payment.routes.js');
 
-    expect(routes).toContain('paymentGuard.liveKeyRequired()');
-    expect(routes).toContain('notchpay.isLive()');
-    expect(routes).toContain("code: 'payment_rail_not_live'");
+    expect(routes).toContain("code: 'campay_not_connected'");
     // A refusal, not a success: the till must not record a sale as paid.
     expect(routes).toContain('success: false');
+    // The retired rail is no longer started from this route.
+    expect(routes).toContain('CamerPay is the B2C rail');
   });
 
   test('the switch is off unless the operator asks for it', () => {
