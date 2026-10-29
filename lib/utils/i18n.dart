@@ -1466,8 +1466,6 @@ const Map<String, String> _en = {
   // Small gaps found by a sweep for hardcoded English (the app must read French too).
   'st_clear': 'Clear',
   'reasonRestock': 'Restock',
-  'npSyncAccountId': 'Notch Pay Sync Account ID',
-  'npSyncAccountIdHint': 'Set this to enable payment methods (the money goes to the company)',
   'appWindowTitle': 'Drinks ordering and management',
   'mgrApproveAsk': 'Approve',
   'mgrApproveCodeHint': 'Enter the 6-digit code sent to the company owner\'s email:',
@@ -1576,7 +1574,6 @@ const Map<String, String> _en = {
   'payWithMomo': 'Pay with MTN MoMo',
   'payWithOrange': 'Pay with Orange Money',
   'payChannelReady': 'Available now',
-  'payChannelUnavailable': 'Not enabled on the payment account yet',
   'payChannelCardHint': 'Opens the secure payment page (card or another method).',
   'payScanQr': 'Ask the customer to scan this',
   'payScanQrHint': 'They pay on their own phone — card or Mobile Money.',
@@ -3070,8 +3067,6 @@ const Map<String, String> _fr = {
   'calcMomoTransferHint': 'L\'argent sera transféré DE ce numéro VERS votre compte marchand',
   'st_clear': 'Effacer',
   'reasonRestock': 'Réapprovisionnement',
-  'npSyncAccountId': 'Identifiant de compte de synchronisation Notch Pay',
-  'npSyncAccountIdHint': 'Définissez-le pour activer les moyens de paiement (l\'argent va à l\'entreprise)',
   'appWindowTitle': 'Commande et gestion des boissons',
   'mgrApproveAsk': 'Approuver',
   'mgrApproveCodeHint': 'Saisissez le code à 6 chiffres envoyé à l\'e-mail du propriétaire de l\'entreprise :',
@@ -3173,7 +3168,6 @@ const Map<String, String> _fr = {
   'payWithMomo': 'Payer avec MTN MoMo',
   'payWithOrange': 'Payer avec Orange Money',
   'payChannelReady': 'Disponible',
-  'payChannelUnavailable': 'Pas encore activé sur le compte de paiement',
   'payChannelCardHint': 'Ouvre la page de paiement sécurisée (carte ou autre moyen).',
   'payScanQr': 'Demandez au client de scanner ceci',
   'payScanQrHint':

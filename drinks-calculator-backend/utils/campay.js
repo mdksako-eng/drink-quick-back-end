@@ -93,7 +93,7 @@ function status() {
 }
 
 /**
- * CamerPay exposes no key prefix to read the mode from, unlike Notch Pay.
+ * CamerPay exposes no key prefix to read the mode from.
  * @returns {'account'}
  */
 function keyMode() {

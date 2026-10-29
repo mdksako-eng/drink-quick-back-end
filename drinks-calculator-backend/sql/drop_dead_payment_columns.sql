@@ -10,23 +10,24 @@
 --     mtn_api_key / mtn_api_key_encrypted        6 / 6 non-null
 --     mtn_secret_key / mtn_merchant_id           6 / 6
 --     orange_api_key / orange_secret_key         6 / 6
---     notchpay_private_key / notchpay_public_key 0 / 0
---     notchpay_sync_id                           1
 --     campay_token_enc / campay_webhook_token    0 / 0   (kept — see below)
 --   So the MTN/Orange values are real rows, not empty strings: they are dropped
 --   on purpose. The feature they belonged to no longer exists.
 --
+--   The notchpay_* columns used to live here too. They moved to
+--   sql/drop_notchpay_columns.sql, which is ready to run today.
+--
 -- ⚠️  PREREQUISITE — DO NOT RUN THIS YET UNTIL STEP 1 IS DONE
---   `pickWritable()` in routes/data.routes.js builds INSERT/UPDATE from a
---   WHITELIST, and the app still sends these keys on every save:
+--   The app still sends these keys on every save:
 --     lib/screens/storage_settings_screen.dart -> _savePaymentSettings()
 --     sends mtnApiKey, mtnSecretKey, mtnMerchantId, mtnMerchantPhone,
---     mtnSandboxMode and the orange* equivalents, plus notchpaySyncId.
---   If the columns are dropped while those are still in the whitelist, the
---   generated SQL references a missing column and company settings stop saving.
---   Step 1 is therefore: remove those keys from WRITABLE['companies'] and
---   COMPANY_SECRET_COLUMNS in routes/data.routes.js, and stop writing them in the
---   app. Only then run this script.
+--     mtnSandboxMode and the orange* equivalents.
+--   `PATCH /payment/company-settings` (routes/payment.routes.js) writes them
+--   straight into the columns, so dropping the columns now would break every
+--   settings save. Step 1 is therefore: stop sending those keys in the app and
+--   remove them from that route's update map. Only then run this script.
+--   (notchpaySyncId is already gone from both, so the notchpay_* columns are a
+--   separate, ready-to-run script — sql/drop_notchpay_columns.sql.)
 --
 -- KEPT (do not drop): mtn_enabled, orange_enabled, card_enabled,
 --   business_payments_enabled (the three toggles + the master switch), and the
@@ -57,19 +58,10 @@ alter table public.companies
   drop column if exists orange_merchant_phone,
   drop column if exists orange_sandbox_mode;
 
--- Notch Pay — the rail CamerPay replaced. Nothing in the current code reads or
--- writes any of these.
-alter table public.companies
-  drop column if exists notchpay_private_key,
-  drop column if exists notchpay_public_key,
-  drop column if exists notchpay_sync_id,
-  drop column if exists notchpay_webhook_hash;
-
 commit;
 
 -- Verify: expect 0 rows.
 --   select column_name from information_schema.columns
 --    where table_name = 'companies'
 --      and (column_name like 'mtn_%' and column_name not in ('mtn_enabled')
---        or column_name like 'orange_%' and column_name not in ('orange_enabled')
---        or column_name like 'notchpay_%');
+--        or column_name like 'orange_%' and column_name not in ('orange_enabled'));

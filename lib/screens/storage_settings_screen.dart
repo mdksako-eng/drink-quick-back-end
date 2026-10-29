@@ -81,7 +81,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
   String _orangeMerchantPhone = '';
   bool _orangeSandboxMode = true;
   bool _cardEnabled = false;
-  String _notchpaySyncId = '';
 
   // User-specific settings
   bool _autoSync = false;
@@ -112,8 +111,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
   final TextEditingController _orangeMerchantIdController =
       TextEditingController();
   final TextEditingController _orangeMerchantPhoneController =
-      TextEditingController();
-  final TextEditingController _notchpaySyncIdController =
       TextEditingController();
 
   // 🇨🇲 CamerPay — the company's own account. Secrets are WRITE-ONLY: the server
@@ -191,7 +188,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     _orangeSecretKeyController.dispose();
     _orangeMerchantIdController.dispose();
     _orangeMerchantPhoneController.dispose();
-    _notchpaySyncIdController.dispose();
     super.dispose();
   }
 
@@ -253,7 +249,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               _orangeApiKey = paymentSettings['orangeApiKey'] ?? '';
               _orangeSecretKey = paymentSettings['orangeSecretKey'] ?? '';
               _cardEnabled = paymentSettings['cardEnabled'] ?? false;
-              _notchpaySyncId = paymentSettings['notchpaySyncId'] ?? '';
             }
 
             // 🇨🇲 CamerPay connection (masked — the server never returns secrets).
@@ -380,7 +375,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     _orangeSecretKeyController.text = _orangeSecretKey;
     _orangeMerchantIdController.text = _orangeMerchantId;
     _orangeMerchantPhoneController.text = _orangeMerchantPhone;
-    _notchpaySyncIdController.text = _notchpaySyncId;
 
     setState(() {
       _hasUnsavedChanges = false;
@@ -520,7 +514,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             'orangeMerchantId': _orangeMerchantId,
             'orangeSandboxMode': _orangeSandboxMode,
             'cardEnabled': _cardEnabled,
-            'notchpaySyncId': _notchpaySyncId,
           };
           final secretsSaved =
               await PaymentService.updateCompanyPaymentSettings(paymentSecrets);

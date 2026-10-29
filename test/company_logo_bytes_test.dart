@@ -67,24 +67,22 @@ void main() {
 
     test('parses the backend health payload', () {
       final status = PaymentsStatus.fromJson({
-        'mode': 'test',
-        'liveReady': false,
-        'notchpayConfigured': true,
-        'hint': 'add live keys',
+        'configured': true,
+        'accountDeclaredLive': true,
+        'liveReady': true,
+        'hint': 'CamerPay account declared live',
       });
-      expect(status.mode, 'test');
-      expect(status.liveReady, isFalse);
-      // The legacy Notch Pay key is still honoured, but the getter is the
-      // provider-neutral one (the rail is CamerPay now).
+      expect(status.mode, 'live');
+      expect(status.liveReady, isTrue);
       expect(status.providerConfigured, isTrue);
-      expect(status.hint, 'add live keys');
+      expect(status.hint, 'CamerPay account declared live');
     });
 
-    test('falls back to notchpayMode and survives a thin payload', () {
-      expect(PaymentsStatus.fromJson({'notchpayMode': 'live'}).mode, 'live');
-      // A payload with no mode and nothing live reports 'test' — never a blank
-      // label and never 'unknown' (that is only the static default).
+    test('survives a thin payload without claiming to be live', () {
+      // A payload with nothing live reports 'test' — never a blank label and
+      // never 'unknown' (that is only the static default).
       expect(PaymentsStatus.fromJson(const {}).mode, 'test');
+      expect(PaymentsStatus.fromJson(const {}).isLive, isFalse);
     });
   });
 }

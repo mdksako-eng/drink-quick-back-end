@@ -1,7 +1,7 @@
 -- sql/refunds_audit.sql
 -- Two tables that make sensitive actions durable.
 --
--- 1) refunds — the money moves in the provider's dashboard (CamPay/Notch Pay: no
+-- 1) refunds — the money moves in the provider's dashboard (CamerPay: no
 --    refund API is wired into this backend), so this row IS the company's proof:
 --    who refunded, why, how much, and the provider reference that ties it to the
 --    statement. It also closes the "money collected but the sale rolled back" hole.

@@ -50,9 +50,9 @@ class ApiConfig {
 
   /// Live/Test status of the rail that actually charges subscriptions: CamerPay.
   ///
-  /// ⚠️ This pointed at `subscriptions/notchpay/health` — the rail that was removed.
-  /// Its `mode` came from Notch Pay keys nobody sets any more, so the app reported
-  /// TEST mode forever, even while CamerPay was taking real money.
+  /// It must stay on the CamerPay health route: that route reports
+  /// `accountDeclaredLive` / `liveReady`, which is the only truthful signal —
+  /// CamerPay's token cannot reveal sandbox vs live.
   static const String subscriptionPaymentsHealth =
       '$apiBase/subscriptions/campay/health';
 
@@ -171,13 +171,7 @@ class ApiConfig {
       '$apiBase/subscriptions/momo-confirm';
   static const String subscriptionMomoStatus =
       '$apiBase/subscriptions/momo-status';
-  static const String subscriptionNotchpayInitiate =
-      '$apiBase/subscriptions/notchpay-initiate';
-  static const String subscriptionNotchpayStatus =
-      '$apiBase/subscriptions/notchpay-status';
-  static const String subscriptionNotchpayChannels =
-      '$apiBase/subscriptions/notchpay-channels';
-  // ✅ CamerPay is the live subscription rail (Notch Pay is being removed).
+  // ✅ CamerPay is the live subscription rail (Notch Pay is gone).
   static const String subscriptionCampayInitiate =
       '$apiBase/subscriptions/campay-initiate';
   static const String subscriptionCampayStatus =

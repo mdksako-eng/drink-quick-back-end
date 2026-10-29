@@ -1,8 +1,8 @@
 // services/payments_status_service.dart
 // Answers one honest question: are subscription payments LIVE, or still in test
-// mode? The backend already reports it (`mode`, `liveReady` in the Notch Pay
-// health endpoint); this service surfaces it to the UI so a user is never left
-// believing a real payment was taken when the platform is still in test mode.
+// mode? The backend already reports it (`accountDeclaredLive`, `liveReady` in the
+// CamerPay health endpoint); this service surfaces it to the UI so a user is
+// never left believing a real payment was taken while the account is in sandbox.
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -44,18 +44,15 @@ class PaymentsStatus {
 
   factory PaymentsStatus.fromJson(Map<String, dynamic> json) {
     // CamerPay payload: provider/configured/accountDeclaredLive/liveReady/hint.
-    // The Notch Pay shape (mode/notchpayMode) is still parsed so an older backend
-    // cannot crash the screen — it just reports test until it is updated.
+    // There is no `mode` field to read — the token cannot reveal it — so the
+    // operator's declaration (`accountDeclaredLive`) and `liveReady` decide.
     final declaredLive = json['accountDeclaredLive'] == true;
     final liveReady = json['liveReady'] == true;
-    final rawMode = json['mode'] ?? json['notchpayMode'];
     return PaymentsStatus(
-      mode: (rawMode ??
-              (liveReady || declaredLive ? 'live' : 'test'))
-          .toString(),
+      mode: json['mode']?.toString() ??
+          (liveReady || declaredLive ? 'live' : 'test'),
       liveReady: liveReady,
-      providerConfigured: json['configured'] == true ||
-          json['notchpayConfigured'] == true,
+      providerConfigured: json['configured'] == true,
       hint: json['hint']?.toString(),
     );
   }

@@ -79,13 +79,16 @@ console.log('🔌 Connecting to PostgreSQL (Supabase)...');
 // 🏷️ Build identity, reported by GET /health. Bump RELEASE when you want to
 // confirm from the outside that a deploy actually went through; SERVER_STARTED_AT
 // resets on every restart (uptimeSeconds in the health payload).
-const RELEASE = '2026-10-24-rls-lockdown';
+const RELEASE = '2026-10-28-notchpay-removed';
 const SERVER_STARTED_AT = new Date();
-// Used by the startup banner below. CamerPay is the rail being migrated to;
-// Notch Pay is the legacy one still in place (see memory-bank/activeContext.md).
+// Used by the startup banner below. CamerPay is the only payment rail now — the
+// Notch Pay one was removed (see memory-bank/activeContext.md).
 const campayStatus = require('./utils/campay');
 const publicUrlStatus = require('./utils/publicUrl');
 const credentialVaultStatus = require('./utils/credentialVault');
+// Which companies can collect through their own CamerPay account, and the one
+// next thing each of them needs (GET /api/admin/campay-readiness).
+const companyReadiness = require('./utils/companyReadiness');
 
 const databaseUrl = process.env.DATABASE_URL;
 console.log('🔍 DATABASE_URL is set:', databaseUrl ? 'YES' : 'NO');
@@ -207,13 +210,10 @@ pool.on('error', (err) => {
         console.log('⚠️ Second-factor column warning:', tfColErr.message);
       }
 
-      // 🟢 NOTCH PAY — per-company credentials so B2C money goes to the
-      // company's own Notch Pay account (direct keys or Sync account id).
+      // 💳 Company payment columns. The four notchpay_* columns this used to
+      // create are gone (Notch Pay was removed on 2026-10-28); dropping the
+      // columns themselves is the human step in sql/drop_notchpay_columns.sql.
       try {
-        await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS notchpay_public_key TEXT`);
-        await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS notchpay_private_key TEXT`);
-        await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS notchpay_sync_id TEXT`);
-        await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS notchpay_webhook_hash TEXT`);
         await pool.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS card_enabled BOOLEAN DEFAULT false`);
     // CamerPay per-company collection (phase 3). The *_enc columns MUST hold vault
     // ciphertext (utils/companyPaymentCredentials.js → utils/credentialVault.js):
@@ -239,9 +239,9 @@ pool.on('error', (err) => {
       // The table is created lazily elsewhere; never block startup over this.
       console.warn('⚠️ payment_transactions.provider migration skipped:', e.message);
     }
-        console.log('✅ Company payment columns ensured (Notch Pay + CamerPay)');
-      } catch (notchColErr) {
-        console.log('⚠️ Notch Pay columns warning:', notchColErr.message);
+        console.log('✅ Company payment columns ensured (CamerPay)');
+      } catch (paymentColErr) {
+        console.log('⚠️ Company payment columns warning:', paymentColErr.message);
       }
 
       try {
@@ -1007,7 +1007,7 @@ app.use(
     // CamerPay signs its webhook over the RAW form-encoded bytes, exactly like the
     // JSON providers sign over the raw JSON body, so capture them the same way —
     // without this, utils/requestBody.js falls back to a re-serialisation and every
-    // signature check fails (the bug that broke the Notch Pay webhooks).
+    // signature check fails.
     verify: (req, _res, buf) => {
       req.rawBody = buf && buf.length ? buf.toString('utf8') : '';
     },
@@ -2431,6 +2431,36 @@ app.get('/api/admin/stats', verifyAdmin, async (req, res) => {
   }
 });
 
+// Which companies can actually collect electronic payments, and the one next
+// thing each of them needs. Platform-admin only (same gate as the admin panel),
+// and deliberately secret-free: a token or a webhook URL belongs in that
+// company's own Settings card, never in a list. The rule lives in
+// utils/companyReadiness.js so this route stays thin and the logic is testable.
+app.get('/api/admin/campay-readiness', verifyAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT ${companyReadiness.COLUMNS.join(', ')} FROM companies ORDER BY id`
+    );
+    const companies = result.rows.map((row) => companyReadiness.rowFor(row, {
+      baseUrl: publicUrlStatus.publicBaseUrl(),
+      accountDeclaredLive:
+        String(process.env.CAMERPAY_ACCOUNT_LIVE || 'false').toLowerCase() === 'true',
+    }));
+    res.json({
+      success: true,
+      data: {
+        // Platform-wide facts first: a missing storage key is the owner's problem,
+        // not a company's, and it would otherwise repeat on every row.
+        platform: companyReadiness.platformState(),
+        summary: companyReadiness.summarize(companies),
+        companies,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 app.delete('/api/admin/users/:id', verifyAdmin, async (req, res) => {
   try {
     const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING username, email, role', [req.params.id]);
@@ -3537,11 +3567,6 @@ app.use((req, res) => {
 
 // ========== START ==========
 const PORT = process.env.PORT || 3000;
-// Read the payment configuration once, so the log below can say plainly whether
-// a plan upgrade would collect money. `mode` is derived from the key prefix:
-// pk_test_/sk_test_ = sandbox (no real money), pk_live_/sk_live_ = production.
-const notchpayStatus = require('./utils/notchpay');
-const paymentRails = require('./utils/paymentChannels');
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 DRINKQUICK SERVER v3.0 🚀`);
   console.log(`📍 Port: ${PORT}`);
@@ -3550,20 +3575,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('✅ Session Management: Enabled');
   console.log('✅ Staff Approval System: Enabled');
   console.log('✅ Approval Logging: Enabled');
-  const notch = notchpayStatus.status();
-  if (!notchpayStatus.isConfigured()) {
-    console.log('💳 Subscriptions: no payment keys — upgrades cannot be paid for\n');
-  } else if (notch.mode === 'live') {
-    console.log('💳 Subscriptions: LIVE keys — real money WILL be collected');
-    console.log(`🪙 Rails: ${paymentRails.PROVIDERS.join(', ')}\n`);
-  } else {
-    console.log(`🛑 Subscriptions (Notch Pay, legacy): ${notch.mode.toUpperCase()} KEYS`);
-    console.log('   The Notch Pay rail is RETIRED — CamerPay is the subscription rail now.');
-    console.log('   Its route answers 503, so no plan can be activated through it.');
-    console.log('   Nothing to do: this line is expected and harmless.');
-  }
 
-  // CamerPay is the rail we are migrating to (utils/campay.js).
+  // CamerPay is the subscription rail (utils/campay.js) — and the only one.
   if (!campayStatus.isConfigured()) {
     console.log('🇨🇲 CamerPay: no token — subscribers cannot pay by CamerPay yet');
     console.log('   Set CAMERPAY_TOKEN (dashboard > /client/api) and CAMERPAY_WEBHOOK_SECRET.');

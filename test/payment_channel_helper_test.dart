@@ -1,6 +1,7 @@
 // test/payment_channel_helper_test.dart
-// The three subscription rails (card / MTN / Orange): which is offered, what the
-// backend is asked for, and what happens when the server has no opinion.
+// The three subscription rails (card / MTN / Orange): what the sheet offers and
+// what the backend is asked for. There is no availability list to test — CamerPay
+// publishes none, so every rail is always offered.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:drinks_calculator_fixed/utils/payment_channel_helper.dart';
 
@@ -24,107 +25,6 @@ void main() {
 
     test('every rail has an icon', () {
       kPayRails.forEach((rail) => expect(rail.icon, isNotNull));
-    });
-  });
-
-  group('when the server has no opinion', () {
-    test('unknown offers everything', () {
-      kPayRails.forEach((rail) {
-        expect(PayChannelAvailability.unknown.allows(rail), isTrue);
-      });
-    });
-
-    test('a response without a supported map stays unknown', () {
-      final availability = PayChannelAvailability.fromJson(const {});
-      expect(availability.known, isFalse);
-      expect(availability.allows(PayRail.mtn), isTrue);
-    });
-
-    test('known:true but supported:null stays unknown', () {
-      final availability = PayChannelAvailability.fromJson(const {
-        'known': true,
-        'supported': null,
-      });
-      expect(availability.known, isFalse);
-      expect(availability.allows(PayRail.orange), isTrue);
-    });
-  });
-
-  group('when the server reports the account', () {
-    test('Mobile money on the account is offered', () {
-      final availability = PayChannelAvailability.fromJson(const {
-        'known': true,
-        'supported': {'card': false, 'mtn': true, 'orange': true},
-      });
-      expect(availability.known, isTrue);
-      expect(availability.mtn, isTrue);
-      expect(availability.orange, isTrue);
-      expect(availability.hasNotchpayCard, isFalse);
-    });
-
-    test('a Mobile Money rail the account lacks is hidden', () {
-      final availability = PayChannelAvailability.fromJson(const {
-        'known': true,
-        'supported': {'card': false, 'mtn': true, 'orange': false},
-      });
-      expect(availability.allows(PayRail.mtn), isTrue);
-      expect(availability.allows(PayRail.orange), isFalse);
-    });
-
-    test('card stays offered even without a card channel on the account', () {
-      final availability = PayChannelAvailability.fromJson(const {
-        'known': true,
-        'supported': {'card': false, 'mtn': false, 'orange': false},
-      });
-      // Card also runs through the app's card provider, so it is never hidden.
-      expect(availability.allows(PayRail.card), isTrue);
-      expect(availability.hasNotchpayCard, isFalse);
-    });
-
-    test('a card channel on the account is remembered', () {
-      final availability = PayChannelAvailability.fromJson(const {
-        'known': true,
-        'supported': {'card': true, 'mtn': true, 'orange': true},
-      });
-      expect(availability.hasNotchpayCard, isTrue);
-      expect(availability.allows(PayRail.card), isTrue);
-    });
-
-    test('supported without a known flag is still trusted', () {
-      final availability = PayChannelAvailability.fromJson(const {
-        'supported': {'card': false, 'mtn': false, 'orange': true},
-      });
-      expect(availability.known, isTrue);
-      expect(availability.allows(PayRail.orange), isTrue);
-      expect(availability.allows(PayRail.mtn), isFalse);
-    });
-  });
-
-  // The live state: CamerPay publishes no per-rail list, so `notchpayChannels()`
-  // returns null and the app holds `unknown` forever. Both Mobile Money rails must
-  // stay offered — that is what makes MTN *and* Orange show "Available now" under
-  // them in the upgrade sheet. Without this, Orange looked broken next to MTN.
-  group('unknown availability keeps every rail offered', () {
-    test('MTN and Orange are both allowed when the server has no opinion', () {
-      const availability = PayChannelAvailability.unknown;
-      expect(availability.known, isFalse);
-      expect(availability.allows(PayRail.mtn), isTrue);
-      expect(availability.allows(PayRail.orange), isTrue);
-      expect(availability.allows(PayRail.card), isTrue);
-    });
-
-    test('every rail in the sheet is covered by the same rule', () {
-      const availability = PayChannelAvailability.unknown;
-      for (final rail in kPayRails) {
-        expect(availability.allows(rail), isTrue,
-            reason: '$rail must stay offered');
-      }
-    });
-
-    test('a 200 with an unexpected shape cannot disable a Mobile Money rail', () {
-      final availability = PayChannelAvailability.fromJson(const {'known': false});
-      expect(availability.allows(PayRail.mtn), isTrue);
-      expect(availability.allows(PayRail.orange), isTrue);
     });
   });
 }

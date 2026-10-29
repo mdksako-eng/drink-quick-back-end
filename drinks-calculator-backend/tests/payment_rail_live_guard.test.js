@@ -1,11 +1,10 @@
 /**
- * The legacy rail must not take money it cannot collect - no database required.
+ * POST /payment/initiate must never start a payment - no database required.
  *
- * POST /payment/initiate is the Notch Pay path the till falls back to when a
- * company has not connected CamerPay. On test keys it would start a sale that
- * reports as paid while nothing was collected - money the shop never received,
- * recorded as received. The route must therefore refuse when
- * PAYMENTS_REQUIRE_LIVE is on.
+ * It was the legacy Notch Pay path the till fell back to when a company had not
+ * connected CamerPay. On test keys it would start a sale that reports as paid
+ * while nothing was collected - money the shop never received, recorded as
+ * received. The route now refuses unconditionally and the rail is deleted.
  *
  * Run with: npm test
  */
@@ -22,8 +21,13 @@ describe('the legacy payment rail refuses when it cannot collect', () => {
     expect(routes).toContain("code: 'campay_not_connected'");
     // A refusal, not a success: the till must not record a sale as paid.
     expect(routes).toContain('success: false');
-    // The retired rail is no longer started from this route.
+    // The retired rail is gone: nothing can start a Notch Pay payment.
     expect(routes).toContain('CamerPay is the B2C rail');
+    expect(routes).not.toContain('notchpay');
+
+    // The retired subscription routes are deleted, not merely unreachable.
+    const subs = read('routes/subscriptions.js');
+    expect(subs).not.toContain('notchpay');
   });
 
   test('the switch is off unless the operator asks for it', () => {
@@ -48,12 +52,5 @@ describe('the legacy payment rail refuses when it cannot collect', () => {
       if (savedLegacy === undefined) delete process.env.NOTCHPAY_REQUIRE_LIVE;
       else process.env.NOTCHPAY_REQUIRE_LIVE = savedLegacy;
     }
-  });
-
-  test('notchpay.isLive agrees with the reported key mode', () => {
-    const notchpay = require('../utils/notchpay');
-
-    expect(typeof notchpay.isLive()).toBe('boolean');
-    expect(notchpay.isLive()).toBe(notchpay.status().mode === 'live');
   });
 });

@@ -7,10 +7,8 @@ const { getSessionUser } = require('../middleware/sessionAuth');
 const flutterwave = require('../utils/flutterwave');
 const momo = require('../utils/momo');
 const orangeMoney = require('../utils/orange_money');
-const notchpay = require('../utils/notchpay');
-// CamerPay is the replacement rail for both subscription and per-company
-// collection. It is additive here: the Notch Pay path keeps working until every
-// company has moved (see memory-bank/activeContext.md, phase 2).
+// CamerPay is the rail for both subscription and per-company collection, and the
+// only one: the Notch Pay path was removed on 2026-10-28 (see memory-bank/activeContext.md).
 const campay = require('../utils/campay');
 // What CamerPay refused, said in our words: the provider's own sentence belongs in a
 // support ticket, not in front of a customer (see utils/campayRefusal.js).
@@ -23,7 +21,6 @@ const subscriptionExpiry = require('../utils/subscriptionExpiry');
 // localhost/private URLs, so a localhost fallback silently breaks live payments
 // (see utils/publicUrl.js).
 const publicUrl = require('../utils/publicUrl');
-const paymentChannels = require('../utils/paymentChannels');
 const paymentGuard = require('../utils/paymentGuard');
 const { rawBodyOf } = require('../utils/requestBody');
 
@@ -645,49 +642,14 @@ router.post('/subscriptions/orange-webhook', async (req, res) => {
   }
 });
 
-// ============================================================
-// 🟢 NOTCH PAY (subscription — unified MoMo/OM/card via one API)
-// Money is paid to YOU (platform). Configured via NOTCHPAY_* env vars.
-// ============================================================
-
-// Which rails the account can charge changes only when Notch Pay is
-// reconfigured, yet the app asks on every upgrade tap — so cache it briefly.
-const CHANNELS_TTL_MS = 5 * 60 * 1000;
-let channelsCache = { at: 0, channels: [] };
-
-/**
- * The Notch Pay channels this account can charge right now.
- * Never throws: a failed lookup means "we don't know", which callers treat as
- * "leave every rail enabled" rather than hiding a rail that may well work.
- * @returns {Promise<Array>} [] when unknown
- */
-async function loadChannels({ force = false } = {}) {
-  const fresh = channelsCache.channels.length > 0
-    && Date.now() - channelsCache.at < CHANNELS_TTL_MS;
-  if (!force && fresh) return channelsCache.channels;
-  if (!notchpay.isConfigured()) return channelsCache.channels;
-
-  try {
-    const items = await notchpay.listChannels({ country: 'CM' });
-    if (Array.isArray(items)) channelsCache = { at: Date.now(), channels: items };
-  } catch (error) {
-    console.warn('⚠️ Notch Pay channels lookup failed:', error.message);
-  }
-  return channelsCache.channels;
-}
-
-/** The account's card channel slug, or '' when it has none / we cannot tell. */
-async function cardSlugFromAccount() {
-  return paymentChannels.findCardSlug(await loadChannels());
-}
 
 /**
  * Activate the pending subscription behind a reference.
  *
  * `payment` carries what the provider says was paid (from the webhook). It is
  * checked against the amount we asked for before a month is handed over — see
- * utils/paymentGuard.js. The polling path calls Notch Pay's own API with the
- * platform key, so it has no amount to check and passes none.
+ * utils/paymentGuard.js. A caller with no amount to check (the polling path,
+ * which reads the provider's own status endpoint) passes none.
  *
  * @returns {Promise<{activated: boolean, plan?: string, expiresAt?: Date, reason?: string}>}
  */
@@ -711,12 +673,12 @@ async function activatePendingSubscription(db, reference, companyId, payment = {
   if (!guard.ok) {
     if (paymentGuard.shouldEnforce()) {
       console.warn(
-        `⚠️ Notch Pay ${reference}: ${guard.reason} (paid ${guard.paid} / expected ${guard.expected}) — subscription NOT activated`
+        `⚠️ Payment ${reference}: ${guard.reason} (paid ${guard.paid} / expected ${guard.expected}) — subscription NOT activated`
       );
       return { activated: false, reason: guard.reason };
     }
     console.warn(
-      `⚠️ Notch Pay ${reference}: ${guard.reason} (paid ${guard.paid} / expected ${guard.expected}) — allowed because NOTCHPAY_ALLOW_UNDERPAYMENT=true`
+      `⚠️ Payment ${reference}: ${guard.reason} (paid ${guard.paid} / expected ${guard.expected}) — allowed because PAYMENTS_ALLOW_UNDERPAYMENT=true`
     );
   }
 
@@ -733,235 +695,7 @@ async function activatePendingSubscription(db, reference, companyId, payment = {
   return { activated: true, plan: sub.plan, expiresAt: endsAt };
 }
 
-router.post('/subscriptions/notchpay-initiate', async (req, res) => {
-  try {
-    const user = await requireSessionUser(req);
-    if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired session' });
-    if (!user.company_id) return res.status(400).json({ success: false, error: 'No company' });
 
-    // channel: 'card' | 'mtn' | 'orange' (or a raw slug such as 'cm.mtn').
-    // 'card' locks to the account's card channel when it has one, and otherwise
-    // opens the checkout page where card is one of the choices.
-    const { plan, channel } = req.body || {};
-    if (!VALID_PLANS.includes(plan)) return res.status(400).json({ success: false, error: 'Invalid plan' });
-    if (!notchpay.isConfigured()) return res.status(503).json({ success: false, error: 'Notch Pay not configured' });
-    // Opt-in production guard: never start a payment that cannot collect money.
-    // The Notch Pay rail is RETIRED — CamerPay is the subscription rail now. It
-    // stays reachable only so an app build that predates that switch fails loudly
-    // instead of being handed a plan nobody paid for. With test keys this always
-    // answers 503, so no plan can be activated through it, free or otherwise.
-    if (notchpay.status().mode !== 'live') {
-      return res.status(503).json({
-        success: false,
-        error:
-          'This payment rail is retired. Update the app and pay through CamerPay.',
-      });
-    }
-
-    const resolved = paymentChannels.resolveChannel(channel, {
-      cardSlug: await cardSlugFromAccount(),
-    });
-    if (!resolved) {
-      return res.status(400).json({
-        success: false,
-        error: `Unsupported payment channel. Use one of: ${paymentChannels.PROVIDERS.join(', ')}.`,
-      });
-    }
-
-    const price = PLAN_PRICES[plan];
-    const reference = generateReference(user.company_id);
-
-    const data = await notchpay.initiatePayment({
-      amount: price.amount,
-      currency: price.currency,
-      email: user.email || undefined,
-      reference,
-      channel: resolved.slug || undefined,
-      // A locked channel must lock its country too, or Notch Pay rejects it.
-      country: resolved.lockCountry || undefined,
-      description: `Drink Quick Cal ${plan} subscription`,
-      callback: publicUrl.providerCallbackUrl('/api/subscriptions/notchpay-return') || undefined,
-    });
-
-    await req.db.query(
-      `INSERT INTO subscriptions (company_id, plan, status, provider, reference, transaction_id, amount, currency)
-       VALUES ($1, $2, 'pending', 'notchpay', $3, $4, $5, $6)`,
-      [user.company_id, plan, reference, data.transaction || null, price.amount, price.currency]
-    );
-
-    res.json({
-      success: true,
-      data: {
-        reference,
-        transactionId: data.transaction || null,
-        checkoutUrl: data.authorizationUrl || null,
-        auto: Boolean(data.authorizationUrl),
-        amount: price.amount,
-        currency: price.currency,
-        provider: 'notchpay',
-        rail: resolved.provider,
-        channel: resolved.slug || null,
-      },
-    });
-  } catch (error) {
-    console.error('POST /subscriptions/notchpay-initiate error:', error.message);
-    res.status(500).json({ success: false, error: error.message || 'Internal server error' });
-  }
-});
-
-router.get('/subscriptions/notchpay-status', async (req, res) => {
-  try {
-    const user = await requireSessionUser(req);
-    if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired session' });
-    const { reference } = req.query;
-    if (!reference) return res.status(400).json({ success: false, error: 'reference is required' });
-
-    const pending = await req.db.query(
-      `SELECT status FROM subscriptions WHERE reference = $1 AND company_id = $2 AND status = 'pending'`,
-      [reference, user.company_id]
-    );
-    if (pending.rows.length === 0) return res.status(404).json({ success: false, error: 'Pending subscription not found' });
-
-    const status = await notchpay.getPaymentStatus(reference);
-    if (status === 'completed') {
-      const result = await activatePendingSubscription(req.db, reference, user.company_id);
-      if (result.activated) {
-        return res.json({
-          success: true,
-          data: { active: true, plan: result.plan, expiresAt: result.expiresAt },
-        });
-      }
-    }
-    if (status === 'failed' || status === 'expired' || status === 'cancelled') {
-      await req.db.query(
-        `UPDATE subscriptions SET status = 'failed' WHERE reference = $1 AND status = 'pending'`,
-        [reference]
-      );
-      return res.json({ success: true, data: { active: false, status: 'failed' } });
-    }
-    return res.json({ success: true, data: { active: false, status: 'pending' } });
-  } catch (error) {
-    console.error('GET /subscriptions/notchpay-status error:', error.message);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-router.post('/subscriptions/notchpay-webhook', async (req, res) => {
-  try {
-    const signature = req.headers['x-notch-signature'];
-    // The HMAC covers the exact bytes Notch Pay sent, so verify against the raw
-    // body Express captured (falling back to a re-serialisation).
-    const rawBody = rawBodyOf(req);
-    if (!notchpay.verifyWebhookSignature(rawBody, signature)) {
-      console.warn('⚠️ Subscription Notch Pay webhook: invalid signature');
-      return res.status(401).json({ success: false, error: 'Invalid signature' });
-    }
-
-    // Notch Pay payloads wrap the transaction; be defensive about shape.
-    // NOTE: field names should be cross-checked against a live webhook sample.
-    const body = req.body || {};
-    const data = body.data || body.transaction || {};
-    const reference =
-      body.reference ||
-      (data && typeof data === 'object' ? data.reference : null) ||
-      (typeof body.transaction === 'string' ? body.transaction : null);
-    if (!reference) {
-      return res.json({ success: true, ignored: true, reason: 'missing reference' });
-    }
-
-    const status = notchpay.normalizeStatus(
-      body.status || (data && data.status) || (data && data.state) || body.event
-    );
-
-    if (status === 'completed') {
-      const result = await activatePendingSubscription(req.db, reference, null, {
-        amount: body.amount ?? (data && data.amount),
-        currency: body.currency ?? (data && data.currency),
-      });
-      if (result.activated) {
-        console.log(`✅ Notch Pay subscription activated (${result.plan})`);
-        return res.json({ success: true });
-      }
-      return res.json({ success: true, ignored: true, reason: result.reason || 'no pending subscription' });
-    }
-    if (status === 'failed' || status === 'expired' || status === 'cancelled') {
-      await req.db.query(
-        `UPDATE subscriptions SET status = 'failed' WHERE reference = $1 AND status = 'pending'`,
-        [reference]
-      );
-    }
-    return res.json({ success: true, ignored: true });
-  } catch (error) {
-    console.error('POST /subscriptions/notchpay-webhook error:', error.message);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-router.get('/subscriptions/notchpay-return', (req, res) => {
-  res.send('<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Payment Complete</title></head><body style="font-family:system-ui,sans-serif;background:#f7f8fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center;background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,0.08);max-width:420px"><div style="font-size:48px">✅</div><h2 style="margin:16px 0 8px">Payment received</h2><p style="color:#555;margin:0 0 24px">Your subscription is being activated. Return to the app and tap Refresh.</p></div></body></html>');
-});
-
-//  Payment readiness (no secrets) — confirms whether subscriptions can take
-// REAL money: Notch Pay (platform account) in live mode and/or direct operator
-// credentials in live (non-sandbox) mode.
-router.get('/subscriptions/notchpay/health', (req, res) => {
-  const notch = notchpay.status();
-  res.json({
-    success: true,
-    notchpayConfigured: notchpay.isConfigured(),
-    ...notch,
-    //  'live' means real money will be collected from customers.
-    notchpayMode: notch.mode,
-    // The rails the platform sells on: card, MTN MoMo, Orange Money.
-    rails: paymentChannels.PROVIDERS,
-    platformMomo: {
-      mtnConfigured: momo.isConfigured(platformMomo),
-      orangeConfigured: orangeMoney.isConfigured(platformMomo),
-      mtnMode: platformMomo.mtn_sandbox_mode ? 'sandbox' : 'live',
-      mtnMerchantPhoneSet: Boolean(platformMomo.mtn_merchant_phone),
-      orangeMerchantPhoneSet: Boolean(platformMomo.orange_merchant_phone),
-    },
-    // ✅ True when at least one LIVE path is ready for real subscriptions.
-    liveReady: notch.mode === 'live'
-      || (!platformMomo.mtn_sandbox_mode && platformMomo.mtn_merchant_phone),
-    hint: notch.mode === 'live'
-      ? 'Live Notch Pay keys detected — subscription payments are real.'
-      : 'Set NOTCHPAY_PUBLIC_KEY/PRIVATE_KEY to your pk_live_/sk_live_ keys (and PLATFORM_MTN_SANDBOX=false for direct MoMo) to take live payments.',
-  });
-});
-
-// 🔎 Which rails can be charged right now (card / MTN / Orange). The app reads
-// this before showing the upgrade options, so a rail the account cannot charge
-// is never presented as if it works. `known:false` means we could not ask (the
-// app then leaves every rail enabled instead of hiding a working one).
-router.get('/subscriptions/notchpay-channels', async (req, res) => {
-  try {
-    const user = await requireSessionUser(req);
-    if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired session' });
-
-    const channels = await loadChannels({ force: req.query.refresh === '1' });
-    const supported = paymentChannels.summarizeChannels(channels);
-    const known = channels.length > 0;
-
-    res.json({
-      success: true,
-      data: {
-        notchpayConfigured: notchpay.isConfigured(),
-        mode: notchpay.status().mode,
-        known,
-        rails: paymentChannels.PROVIDERS,
-        supported: known
-          ? { card: supported.card, mtn: supported.mtn, orange: supported.orange }
-          : null,
-        channels: known ? supported.slugs : [],
-        cardChannel: paymentChannels.findCardSlug(channels) || null,
-      },
-    });
-  } catch (error) {
-    console.error('GET /subscriptions/notchpay-channels error:', error.message);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
 
 // ============================================================
 // 🇨🇲 CamerPay subscriptions (Mobile Money, card via Stripe, PayPal)
@@ -992,9 +726,9 @@ function campayFeeMode() {
 }
 
 /**
- * The operator asserts the CamerPay account is in live mode. Unlike Notch Pay,
- * no key prefix can tell us, so this is an explicit declaration — and even then
- * activation still requires a non-sandbox transaction.
+ * The operator asserts the CamerPay account is in live mode. No token or key can
+ * tell us (the account decides), so this is an explicit declaration — and even
+ * then activation still requires a non-sandbox transaction.
  */
 function campayAccountDeclaredLive() {
   return String(process.env.CAMERPAY_ACCOUNT_LIVE || 'false').toLowerCase() === 'true';

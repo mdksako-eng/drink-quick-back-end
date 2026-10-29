@@ -687,3 +687,116 @@ routes (five verification sites), plus one missing check:
 - No deposit money flow: charging a deposit would touch the credit ledger and the Z-report, and
   is deliberately not in this phase.
 
+---
+
+## Phase 16 — Buying stock: suppliers, purchase orders and receiving 🟡 (backend shipped 2026-10-24)
+
+### Why
+The forecast already recommends what to reorder, but nothing could turn that into an order and
+nothing remembered what a supplier charges — the project's own notes said it plainly:
+*"supplier prices are not stored yet"*. This is the largest remaining eLeader gap and the one that
+unlocks wholesalers (their DMS does exactly this for distributors).
+
+### Delivered (backend)
+- **Schema** — `suppliers`, `purchase_orders`, `purchase_order_lines`, created at boot with RLS +
+  `REVOKE` on all three (`sql/rls_purchasing.sql` mirrors it for ops), plus 3 guard tests in
+  `tests/schema_hardening.test.js`.
+- **Routes** — `GET/POST /suppliers`, `GET/POST /purchase-orders`, `PATCH /purchase-orders/:id`
+  (send / cancel), `POST /purchase-orders/:id/receive`.
+- **Who decides what** — a manager commits the shop's money (create, send, cancel); **any** staff
+  member may receive a delivery, because that is a physical fact at the door like a restock. The
+  rules are pure and unit tested (`utils/purchasing.js`, 15 tests).
+- **Receiving reuses the guarded path** — `applyStockDelta`, so it can never drive a shelf negative
+  and it writes the movement with `reason: 'purchase_order'` and the PO reference as `order_id`.
+  One refusal stops the whole delivery and leaves the order `sent`, so it can be received again once
+  the shelf is right — instead of half of it landing and half vanishing.
+- **Identity** — the reference is generated from the row id (`PO-000123`), so two orders can never
+  share one, and the supplier is validated against the company rather than trusted from the body.
+
+### Still to build (app side)
+- `ApiConfig` endpoints + a `PurchasingProvider`. ✅ shipped `97b1f88`
+- A suppliers + purchase-orders screen (draft → send → receive). ✅ shipped `97b1f88`
+- **Create an order from the forecast** — the whole point of the loop. ✅ shipped `a0220d1`
+- EN/FR keys. ✅ shipped `97b1f88` (`pur*`, 35 per language) + `purFromForecast`/`purForecast*` in `a0220d1`
+
+### Validation
+- `node --check` on the three touched files -> clean
+- Backend **43 suites / 592 tests** passing (was 42 / 574)
+- App side: `flutter analyze lib` 0 errors, i18n EN=1476 FR=1476, Flutter **426 tests**
+
+---
+
+## Phase 17 — Notch Pay removed: CamerPay is the only payment rail ✅ (2026-10-28)
+
+### Why
+Phase 13 wired subscriptions through Notch Pay; the CamerPay migration replaced it, but the legacy
+rail was kept on purpose — `campay_enabled` defaults to false and no company had connected its own
+account, so deleting the old path would have stopped every shop from taking electronic money. The
+till was moved to refuse the legacy path first (`campay_not_connected`), and once that shipped the
+dead code could go.
+
+### Deleted
+- `utils/notchpay.js`, `utils/paymentChannels.js` (and their two Jest suites).
+- Six `/subscriptions/notchpay-*` routes: initiate, status, webhook, return, health, channels.
+- `POST /payment/notchpay-webhook`, `GET /payment/notchpay-return`, the Notch Pay Sync poll in
+  `GET /payment/status/:id`, and the unreachable legacy body of `POST /payment/initiate`.
+- The four `notchpay_*` columns created at boot, and `notchpay_sync_id` from
+  `GET/PATCH /payment/company-settings` (`sql/drop_notchpay_columns.sql` drops them in the database).
+
+### Changed
+- `GET /payment/health` reports CamerPay readiness (`credentials.isConnected`) instead of
+  "platform Notch Pay keys + a company sync id".
+- The app's `notchpayInitiate` / `notchpayStatus` are now `campayInitiate` / `campayStatus` (they
+  already called CamerPay endpoints); `PayChannelAvailability` is gone — CamerPay publishes no
+  per-rail list, so all three rails are offered and its own page refuses with a reason.
+- `.env.example` documents CamerPay and `PAYMENTS_*`; `scripts/check_payments.js` checks
+  `/subscriptions/campay/health`.
+
+### Deliberately kept
+- The `NOTCHPAY_REQUIRE_LIVE` / `NOTCHPAY_ALLOW_UNDERPAYMENT` env aliases in
+  `utils/paymentGuard.js`: a deployment that set them would otherwise lose the live-money guard
+  silently. `PAYMENTS_*` is the documented name.
+
+### Validation
+- `node --check` clean on every touched backend file
+- Backend **44 suites / 584 tests** (was 46 / 606 — the NotchPay-only suites are gone)
+- `flutter analyze lib`: 0 errors (537-issue baseline); Flutter **428 tests, 0 failures**
+- i18n **EN=1480 FR=1480**
+- Human step left: run `sql/drop_notchpay_columns.sql` in the Supabase SQL editor, and set
+  `PAYMENTS_REQUIRE_LIVE=true` on Render.
+
+---
+
+## Admin — per-company CamerPay readiness ✅ (2026-10-28)
+
+### Why
+B2C collection is per company: each bar connects its OWN CamerPay account, the till charges through
+it, and the fee is the bar's cost (never booked as revenue). What was missing was a way for the
+platform owner to answer "which of my companies can actually collect?" — and 0 of 6 are connected,
+so every till refuses electronic payment with `campay_not_connected` and the sale must be cash.
+
+### Delivered
+- `utils/companyReadiness.js` — one admin row per company (booleans + blockers + a single
+  `nextStep`), built on `credentials.healthFor` so the Settings card and this list cannot disagree.
+  The order puts a server-side blocker (`set_vault_key`) before a company-side one, so nobody is
+  asked to connect an account the server cannot store.
+- `GET /api/admin/campay-readiness` — platform-admin gated, secret-free: it never reads
+  `campay_webhook_token` and returns no token, masked token or webhook URL (that URL's path is the
+  company's opaque webhook token).
+- `scripts/campay_readiness.js` (`npm run campay:readiness`) — password from the environment, exit 1
+  while any company is blocked, so it doubles as a post-deploy ops check.
+- `.env.example` — removed the duplicate `ADMIN_PASSWORD` and the false "falls back to admin123"
+  claim (the override is disabled below 12 characters).
+
+### Still human
+Each company creates its own CamerPay token and completes its own KYC, then pastes the token and
+webhook secret in Settings → Business Payment Settings. **`PAYMENT_CREDENTIALS_KEY` is already set
+on Render (confirmed by the owner, 2026-10-28)**, so nothing platform-side blocks a company from
+connecting — and the ops script now prints that key's state on its first line, so the claim stays
+checkable instead of assumed.
+
+### Validation
+- Backend **45 suites / 595 tests** (+1 suite / +11 tests); `node --check` clean on all four files
+- Script behaviour verified: missing password → clear message + exit 1; wrong password → HTTP 404
+  (the route is not deployed yet)
+

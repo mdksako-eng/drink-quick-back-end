@@ -63,7 +63,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     setState(() => _busy = true);
     try {
       // No phone number needed for card: CamerPay collects the card details on its page.
-      final data = await provider.notchpayInitiate(plan: plan, channel: 'card');
+      final data = await provider.campayInitiate(plan: plan, channel: 'card');
       if (!mounted) return;
 
       final checkoutUrl = data?['checkoutUrl']?.toString() ?? '';
@@ -79,7 +79,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
       // Verify against CamerPay (authoritative), not just our own database.
       if (reference.isNotEmpty) {
-        await _autoVerifyNotchpay(provider, reference);
+        await _autoVerifyCampay(provider, reference);
       } else {
         await _autoVerifyPlan(provider);
       }
@@ -103,8 +103,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final planProvider = context.read<PlanProvider>();
     setState(() => _busy = true);
     try {
-      // ✅ Primary: Notch Pay (single API). The chosen option is the phone
-      // type — Notch Pay's checkout is locked to that channel and collects
+      // ✅ Primary: CamerPay (single API). The chosen option is the phone
+      // type — CamerPay's checkout is locked to that channel and collects
       // the customer's number.
       final channel = provider == 'mtn' ? 'cm.mtn' : 'cm.orange';
 
@@ -116,10 +116,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       final payerPhone = await _promptPhone(provider);
       if (payerPhone == null || payerPhone.isEmpty) return;
 
-      Map<String, dynamic>? notch;
+      Map<String, dynamic>? initiated;
       String? camerpayError;
       try {
-        notch = await planProvider.notchpayInitiate(
+        initiated = await planProvider.campayInitiate(
           plan: plan,
           channel: channel,
           customerPhone: payerPhone,
@@ -132,21 +132,21 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       }
 
       if (!mounted) return;
-      final checkoutUrl = notch?['checkoutUrl']?.toString() ?? '';
+      final checkoutUrl = initiated?['checkoutUrl']?.toString() ?? '';
       if (checkoutUrl.isNotEmpty) {
-        final reference = notch!['reference']?.toString() ?? '';
+        final reference = initiated!['reference']?.toString() ?? '';
         final uri = Uri.parse(checkoutUrl);
         final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
         if (!ok) await launchUrl(uri);
         if (reference.isNotEmpty) {
-          await _autoVerifyNotchpay(planProvider, reference);
+          await _autoVerifyCampay(planProvider, reference);
         } else {
           await _autoVerifyPlan(planProvider);
         }
         return;
       }
 
-      // ⬇️ Fallback: direct operator integration (used only when Notch Pay is
+      // ⬇️ Fallback: direct operator integration (used only when CamerPay is
       // not configured on the server).
       final phone = payerPhone; // already collected above — never prompt twice
       if (phone == null || phone.isEmpty) return;
@@ -261,7 +261,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     if (mounted) _showSnack(t('payThenRefresh'));
   }
 
-  Future<void> _autoVerifyNotchpay(
+  Future<void> _autoVerifyCampay(
       PlanProvider planProvider, String reference) async {
     showDialog(
       context: context,
@@ -279,7 +279,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       await Future.delayed(const Duration(seconds: 5));
       if (!mounted) return;
 
-      final status = await planProvider.notchpayStatus(reference: reference);
+      final status = await planProvider.campayStatus(reference: reference);
       if (status == null) continue;
 
       if (status['active'] == true) {
@@ -715,11 +715,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   /// Charge a subscription on one rail.
   ///
-  /// Mobile Money keeps its existing flow (Notch Pay first, direct operator as
-  /// fallback). Card is not a lockable Notch Pay channel, so the backend opens
-  /// the checkout page for it — where card is one of the choices; if Notch Pay
-  /// cannot take it at all, the app's card provider is used instead. The fallback
-  /// only runs when no checkout was opened, so a customer is never charged twice.
+  /// Mobile Money keeps its existing flow (CamerPay first, direct operator as
+  /// fallback). Card is not a lockable rail on the CamerPay account, so the
+  /// backend opens the checkout page for it — where card is one of the choices;
+  /// if CamerPay cannot take it at all, the app's card provider is used instead.
+  /// The fallback only runs when no checkout was opened, so a customer is never
+  /// charged twice.
   Future<void> _railPay(String plan, PayRail rail) async {
     switch (rail) {
       case PayRail.mtn:
@@ -729,57 +730,49 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         await _momoPay(plan, 'orange');
         break;
       case PayRail.card:
-        final opened = await _notchpayPay(plan, rail);
+        final opened = await _campayPay(plan, rail);
         if (!opened) await _upgrade(plan);
         break;
     }
   }
 
-  /// Open the Notch Pay checkout for [rail]. Returns true when the checkout page
+  /// Open the CamerPay checkout for [rail]. Returns true when the checkout page
   /// was opened, so the caller knows not to start a second payment.
-  Future<bool> _notchpayPay(String plan, PayRail rail) async {
+  Future<bool> _campayPay(String plan, PayRail rail) async {
     final provider = context.read<PlanProvider>();
     setState(() => _busy = true);
     try {
-      final notch =
-          await provider.notchpayInitiate(plan: plan, channel: rail.channel);
+      final initiated =
+          await provider.campayInitiate(plan: plan, channel: rail.channel);
       if (!mounted) return false;
 
-      final checkoutUrl = notch?['checkoutUrl']?.toString() ?? '';
+      final checkoutUrl = initiated?['checkoutUrl']?.toString() ?? '';
       if (checkoutUrl.isEmpty) return false;
 
-      final reference = notch?['reference']?.toString() ?? '';
+      final reference = initiated?['reference']?.toString() ?? '';
       final uri = Uri.parse(checkoutUrl);
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok) await launchUrl(uri);
 
       if (!mounted) return true;
       if (reference.isNotEmpty) {
-        await _autoVerifyNotchpay(provider, reference);
+        await _autoVerifyCampay(provider, reference);
       } else {
         await _autoVerifyPlan(provider);
       }
       return true;
     } catch (e) {
-      debugPrint('Notch Pay ${rail.channel} failed: $e');
+      debugPrint('CamerPay ${rail.channel} failed: $e');
       return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  /// Ask the server which rails the platform can actually charge, then offer
-  /// them. A rail the payment account cannot charge is shown disabled with the
-  /// reason — instead of failing after the customer has typed their number.
+  /// Offer the three rails. CamerPay publishes no per-rail availability list, so
+  /// every rail is offered and CamerPay's own page is the authority — it refuses
+  /// with a reason if the account cannot charge that method.
   Future<void> _showUpgradeSheet(String plan, String title) async {
-    final provider = context.read<PlanProvider>();
-    var availability = PayChannelAvailability.unknown;
-    try {
-      final data = await provider.notchpayChannels();
-      if (data != null) availability = PayChannelAvailability.fromJson(data);
-    } catch (_) {
-      // No opinion from the server: every rail stays offered.
-    }
     if (!mounted) return;
 
     showModalBottomSheet(
@@ -799,11 +792,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               const SizedBox(height: 8),
               for (final rail in kPayRails)
                 ListTile(
-                  enabled: !_busy && availability.allows(rail),
+                  enabled: !_busy,
                   leading: Icon(rail.icon),
                   title: Text(t(rail.labelKey)),
-                  subtitle: _railSubtitle(rail, availability),
-                  onTap: !_busy && availability.allows(rail)
+                  subtitle: _railSubtitle(rail),
+                  onTap: !_busy
                       ? () {
                           Navigator.pop(ctx);
                           _railPay(plan, rail);
@@ -817,15 +810,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  /// One short line under a payment option: why it is disabled, or what tapping
-  /// it will do. An enabled rail ALWAYS gets a line — MTN and Orange used to come
-  /// out blank because the old code only spoke when the server had an opinion, and
-  /// CamerPay publishes no per-rail availability list.
-  Widget? _railSubtitle(PayRail rail, PayChannelAvailability availability) {
-    if (!availability.allows(rail)) {
-      return Text(t('payChannelUnavailable'),
-          style: TextStyle(fontSize: 12, color: Colors.orange[800]));
-    }
+  /// One short line under a payment option. Every rail gets a line: CamerPay
+  /// publishes no per-rail availability list, so the honest subtitle is "ready",
+  /// and CamerPay's own page refuses with a reason if it cannot charge the rail.
+  Widget? _railSubtitle(PayRail rail) {
     if (rail == PayRail.card) {
       return Text(t('payChannelCardHint'),
           style: TextStyle(fontSize: 12, color: Colors.grey[600]));

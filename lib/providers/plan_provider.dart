@@ -154,24 +154,19 @@ class PlanProvider extends ChangeNotifier {
     return ok;
   }
 
-  /// Begin a Notch Pay payment (unified MoMo/OM/card); returns initiate data.
-  Future<Map<String, dynamic>?> notchpayInitiate({
+  /// Begin a CamerPay payment (unified MoMo/OM/card); returns initiate data.
+  Future<Map<String, dynamic>?> campayInitiate({
     required String plan,
     String? channel,
     String? customerPhone,
   }) {
-    return SubscriptionService.notchpayInitiate(
+    return SubscriptionService.campayInitiate(
         plan: plan, channel: channel, customerPhone: customerPhone);
   }
 
-  /// Which rails can be charged right now (card / MTN / Orange), as reported by
-  /// the server from the payment provider's own channel list.
-  Future<Map<String, dynamic>?> notchpayChannels() =>
-      SubscriptionService.notchpayChannels();
-
-  /// Poll Notch Pay payment status; refreshes state when it becomes active.
-  Future<Map<String, dynamic>?> notchpayStatus({required String reference}) async {
-    final result = await SubscriptionService.notchpayStatus(reference: reference);
+  /// Poll CamerPay payment status; refreshes state when it becomes active.
+  Future<Map<String, dynamic>?> campayStatus({required String reference}) async {
+    final result = await SubscriptionService.campayStatus(reference: reference);
     if (result?['active'] == true) {
       await refresh();
     }

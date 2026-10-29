@@ -1,6 +1,6 @@
 // utils/refundRecord.js
 // Refunds are RECORDED here; the money itself moves in the provider's dashboard
-// (CamPay/Notch Pay), because no refund API is wired into this backend.
+// (CamerPay), because no refund API is wired into this backend.
 //
 // That makes the record the only proof the company has: who refunded what, why,
 // and against which provider reference. So the rules are strict:

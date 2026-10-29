@@ -7,6 +7,7 @@
     "test": "jest --runInBand",
     "start": "node server.js",
     "migrate:passwords": "node scripts/migrate_passwords.js",
+    "campay:readiness": "node scripts/campay_readiness.js",
     "rls:apply": "node sql/apply_rls.js",
     "rls:check": "node sql/apply_rls.js --check-only",
     "rls:revert": "node sql/revert_rls.js"

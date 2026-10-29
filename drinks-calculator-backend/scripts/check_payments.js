@@ -25,7 +25,7 @@ async function get(url) {
 
   let data = null;
   try {
-    const { status, body } = await get(`${BASE}/api/subscriptions/notchpay/health`);
+    const { status, body } = await get(`${BASE}/api/subscriptions/campay/health`);
     if (status !== 200) {
       console.error(`❌ Health check returned HTTP ${status}`);
       console.error(typeof body === 'string' ? body.slice(0, 300) : body);
@@ -38,13 +38,10 @@ async function get(url) {
   }
 
   const rows = [
-    ['Notch Pay keys configured', data.notchpayConfigured === true],
-    ['Notch Pay public key', data.publicKeySet === true],
-    ['Notch Pay private key', data.privateKeySet === true],
+    ['CamerPay token configured', data.configured === true],
     ['Webhook secret', data.webhookSecretSet === true],
-    ['Notch Pay LIVE mode', String(data.mode || data.notchpayMode) === 'live'],
-    ['MTN direct creds', data.platformMomo ? data.platformMomo.mtnConfigured === true : false],
-    ['Orange direct creds', data.platformMomo ? data.platformMomo.orangeConfigured === true : false],
+    ['Account declared live (CAMERPAY_ACCOUNT_LIVE)', data.accountDeclaredLive === true],
+    ['Fee rates configured', data.feeRatesConfigured === true],
     ['Everything ready for real money', data.liveReady === true],
   ];
 
@@ -52,7 +49,7 @@ async function get(url) {
     console.log(`${ok ? '✅' : '⚠️ '} ${label}`);
   }
 
-  console.log(`\nmode: ${data.mode || data.notchpayMode || 'unknown'}`);
+  console.log(`\naccount declared live: ${data.accountDeclaredLive === true ? 'yes' : 'no'}`);
   if (data.hint) console.log(`hint: ${data.hint}`);
 
   if (data.liveReady === true) {
@@ -63,13 +60,12 @@ async function get(url) {
     return;
   }
 
-  console.log('\n🧪 TEST MODE: no real money will be collected.');
+  console.log('\n🧪 NOT LIVE YET: no real money will be collected.');
   console.log('To go live (Render → your service → Environment):');
-  console.log('  NOTCHPAY_PUBLIC_KEY=pk_live_…   NOTCHPAY_PRIVATE_KEY=sk_live_…');
-  console.log('  NOTCHPAY_WEBHOOK_SECRET=<live webhook secret>');
-  console.log(`  webhook URL: ${BASE}/api/subscriptions/notchpay-webhook`);
-  console.log('  optional card rail: FLUTTERWAVE_PUBLIC_KEY / FLUTTERWAVE_SECRET_KEY');
-  console.log('  optional direct MoMo: PLATFORM_MTN_SANDBOX=false + merchant credentials');
+  console.log('  CAMERPAY_TOKEN=<token from the CamerPay dashboard>');
+  console.log('  CAMERPAY_WEBHOOK_SECRET=<webhook secret>');
+  console.log('  CAMERPAY_ACCOUNT_LIVE=true   (only once KYC is approved)');
+  console.log(`  webhook URL: ${BASE}/api/subscriptions/campay-webhook`);
   console.log('Then redeploy and run this script again.');
   process.exitCode = 1;
 })();

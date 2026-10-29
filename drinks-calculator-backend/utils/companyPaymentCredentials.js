@@ -181,6 +181,16 @@ function healthFor(row, { baseUrl = '', accountDeclaredLive = false } = {}) {
   };
 }
 
+/**
+ * True when the platform can store per-company credentials at all. This is the
+ * one readiness blocker that is NOT a company's fault — without the key nothing
+ * can be stored, so every company reports `set_vault_key` and the fix is on the
+ * server (PAYMENT_CREDENTIALS_KEY).
+ */
+function vaultReady() {
+  return vault.isVaultConfigured();
+}
+
 module.exports = {
   COLUMNS,
   MIN_TOKEN_LENGTH,
@@ -195,5 +205,6 @@ module.exports = {
   webhookPath,
   maskedView,
   healthFor,
+  vaultReady,
 };
 

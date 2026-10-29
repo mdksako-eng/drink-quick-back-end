@@ -2214,7 +2214,7 @@ router.post('/inventory-transactions', async (req, res) => {
 /**
  * 💸 Record a refund that was already issued in the provider's dashboard.
  *
- * There is NO refund API wired here: the money moves at CamPay/Notch Pay. What this
+ * There is NO refund API wired here: the money moves at CamerPay. What this
  * endpoint stores is the company's proof — who refunded, why, how much, and the
  * provider reference that ties the row to the statement. That is also what closes
  * the "money collected but the sale rolled back" hole: the manager records it and it

@@ -169,15 +169,13 @@ class SubscriptionService {
   }
 
   /// Start a subscription payment through **CamerPay** (Mobile Money, card,
-  /// PayPal). The method names are kept for now so the screen needs no change;
-  /// they are renamed when the Notch Pay code is deleted.
+  /// PayPal).
   ///
-  /// CamerPay replaces the old Notch Pay checkout: one hosted page per rail, and
-  /// the plan activates only when the server confirms a REAL (non-sandbox)
-  /// transaction — a sandbox payment can never hand out a paid plan.
-  /// [channel] keeps the caller's rail slug ('cm.mtn' / 'cm.orange'); anything
-  /// else means "let the customer choose on CamerPay's page".
-  static Future<Map<String, dynamic>?> notchpayInitiate({
+  /// One hosted page per rail, and the plan activates only when the server
+  /// confirms a REAL (non-sandbox) transaction — a sandbox payment can never hand
+  /// out a paid plan. [channel] is the rail the payer picked ('mtn' / 'orange' /
+  /// 'card'); anything else means "let the customer choose on CamerPay's page".
+  static Future<Map<String, dynamic>?> campayInitiate({
     required String plan,
     String? channel,
     String? customerPhone,
@@ -253,9 +251,10 @@ class SubscriptionService {
   /// Rail the caller picked → CamerPay's rail name, so tapping MTN lands on MTN,
   /// Orange on Orange and Card on card instead of CamerPay's menu.
   ///
-  /// Accepts both the raw enum values ('mtn' / 'orange' / 'card') and the older
-  /// Notch Pay slugs ('cm.mtn' / 'cm.orange'). Anything unknown returns null, which
-  /// means "do not lock" and the payer chooses on CamerPay's own page.
+  /// Accepts the app's rail values ('mtn' / 'orange' / 'card') and tolerates the
+  /// raw slugs an older build sent ('cm.mtn' / 'cm.orange'). Anything unknown
+  /// returns null, which means "do not lock" and the payer chooses on CamerPay's
+  /// own page.
   static String? _campayRailFor(String? channel) {
     switch (channel) {
       case 'cm.mtn':
@@ -274,13 +273,8 @@ class SubscriptionService {
     }
   }
 
-  /// CamerPay publishes no per-rail availability list — every method the account
-  /// can charge is offered on its own page — so this returns null, which the
-  /// screen already treats as "unknown: keep every rail enabled".
-  static Future<Map<String, dynamic>?> notchpayChannels() async => null;
-
   /// Poll a CamerPay subscription payment. Returns { active, status, reason, ... }.
-  static Future<Map<String, dynamic>?> notchpayStatus({
+  static Future<Map<String, dynamic>?> campayStatus({
     required String reference,
   }) async {
     try {

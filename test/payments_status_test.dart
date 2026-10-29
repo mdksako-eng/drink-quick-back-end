@@ -1,9 +1,8 @@
 // test/payments_status_test.dart
 // The subscription screen warns "test mode" while real money cannot move. That
-// warning used to come from the Notch Pay health payload — a rail that was removed —
-// so it showed TEST forever, even while CamerPay was charging real cards. These
-// tests pin the CamerPay shape and, most importantly, that a missing `mode` field
-// no longer forces TEST.
+// warning comes from the CamerPay health payload, whose token cannot reveal the
+// mode — the account's own declaration does. These tests pin that shape and, most
+// importantly, that a missing `mode` field never forces TEST.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:drinks_calculator_fixed/services/payments_status_service.dart';
 
@@ -53,26 +52,6 @@ void main() {
       final status = PaymentsStatus.fromJson(const {'liveReady': false});
       expect(status.mode, 'test');
       expect(status.shortLabel, 'TEST');
-    });
-  });
-
-  group('the old Notch Pay shape still parses', () {
-    test('a legacy live payload keeps working', () {
-      final status = PaymentsStatus.fromJson(const {
-        'mode': 'live',
-        'liveReady': true,
-        'notchpayConfigured': true,
-      });
-      expect(status.isLive, isTrue);
-      expect(status.providerConfigured, isTrue);
-    });
-
-    test('a legacy test payload stays test', () {
-      final status = PaymentsStatus.fromJson(const {
-        'mode': 'test',
-        'liveReady': false,
-      });
-      expect(status.isLive, isFalse);
     });
   });
 
