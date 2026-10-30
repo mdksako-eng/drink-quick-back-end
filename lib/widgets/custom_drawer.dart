@@ -5,64 +5,46 @@ import 'package:provider/provider.dart';
 import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/screens/calculator_screen.dart';
 import 'package:drinks_calculator_fixed/screens/drink_management_screen.dart';
-import 'package:drinks_calculator_fixed/screens/storage_settings_screen.dart';
-import 'package:drinks_calculator_fixed/screens/admin_panel.dart';
-import 'package:drinks_calculator_fixed/screens/manager_panel.dart';
-import 'package:drinks_calculator_fixed/screens/manager_dashboard.dart';
-import 'package:drinks_calculator_fixed/screens/forecast_screen.dart';
-import 'package:drinks_calculator_fixed/screens/scanner_screen.dart';
-import 'package:drinks_calculator_fixed/screens/ai_assistant_screen.dart';
-import 'package:drinks_calculator_fixed/screens/subscription_screen.dart';
 import 'package:drinks_calculator_fixed/screens/auth_screen.dart';
-import 'package:drinks_calculator_fixed/screens/inventory_screen.dart';
-import 'package:drinks_calculator_fixed/screens/profile_screen.dart';
-import 'package:drinks_calculator_fixed/screens/customer_ledger_screen.dart';
-import 'package:drinks_calculator_fixed/screens/containers_screen.dart';
-import 'package:drinks_calculator_fixed/screens/purchasing_screen.dart';
-import 'package:drinks_calculator_fixed/screens/shift_screen.dart';
-import 'package:drinks_calculator_fixed/screens/variance_screen.dart';
 import 'package:drinks_calculator_fixed/providers/sync_provider.dart';
-import 'package:drinks_calculator_fixed/providers/plan_provider.dart';
-import 'package:drinks_calculator_fixed/screens/manager_approval_screen.dart';
 import 'package:drinks_calculator_fixed/services/supabase_service.dart';
 import 'package:drinks_calculator_fixed/services/company_branding_service.dart';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:drinks_calculator_fixed/screens/support_report_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../utils/i18n.dart';
 import '../utils/constants.dart';
 import 'language_toggle.dart';
-import '../widgets/badge_icon.dart';
+import '../utils/drawer_navigation.dart';
+import '../utils/staff_permissions.dart';
+import 'drawer_menu.dart';
 
 class CustomDrawer extends StatelessWidget {
   final VoidCallback? onInvoiceHistoryTap;
   final VoidCallback? onCloseDrawer;
 
+  /// Which screen the drawer is open on top of. The menu derives its highlight
+  /// from this instead of hardcoding one entry.
+  final DrawerScreen currentScreen;
+
   const CustomDrawer({
     super.key,
     this.onInvoiceHistoryTap,
     this.onCloseDrawer,
+    this.currentScreen = DrawerScreen.dashboard,
   });
 
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.currentUser;
-    final isAdmin = authProvider.isAdmin;
-    final role = user?.role?.toLowerCase() ?? '';
-    final isManager = role == 'manager';
-    final isStaff = role == 'staff';
-    final isCustomer = role == 'customer';
-
-    // Admin, Manager, Customer can manage drinks
-    final canManageDrinks = isAdmin || isManager || isCustomer;
-
-    // Everyone can manage settings
-    final canManageSettings = isAdmin || isManager || isStaff || isCustomer;
-
+    // Roles are normalised in ONE place (utils/staff_permissions.dart). The database
+    // stores 'Manager', several screens lower-case it, and mixing the two conventions
+    // is how a badge or an entry silently disappears.
+    final isAdmin = StaffPermissions.isAdminRole(user?.role);
+    final isManager = StaffPermissions.isManagerRole(user?.role);
+    final isStaff = StaffPermissions.isStaffRole(user?.role);
     final theme = Theme.of(context);
     final primaryColor = theme.primaryColor;
 
@@ -280,276 +262,26 @@ class CustomDrawer extends StatelessWidget {
             ),
           ), // ✅ This closes the Container
 
-          // Menu Items
+          // Menu Items — grouped, searchable and honest about where you are.
+          // The grouping rule and the filter live in utils/drawer_navigation.dart.
           Expanded(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                const SizedBox(height: 8),
-
-                // ========== MAIN SECTION ==========
-                _buildDrawerSectionTitle(context, t('menuMain')),
-
-                _buildDrawerItem(context, Icons.dashboard, t('dashboard'), () {
-                  Navigator.pop(context);
-                  Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const CalculatorScreen()));
-                }, isActive: true, primaryColor: primaryColor),
-
-                _buildDrawerItem(context, Icons.person_outline, t('profile'), () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const ProfileScreen()));
-                }, primaryColor: primaryColor),
-
-                // 👥 Customer accounts ("customer numbers") — every staff member
-                // enrols, the manager approves on the Approvals tab.
-                if (!isCustomer)
-                  _buildDrawerItem(context, Icons.people_outline, t('custMenu'),
-                      () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) =>
-                                const CustomerLedgerScreen()));
-                  }, primaryColor: primaryColor),
-
-                // 🧺 Returnable containers: who is holding the shop's crates and
-                // bottles. Staff record them at the counter, a manager writes off.
-                if (!isCustomer)
-                  _buildDrawerItem(
-                      context, Icons.inventory_2_outlined, t('contMenu'), () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const ContainersScreen()));
-                  }, primaryColor: primaryColor),
-
-                // 🛒 Buying stock: suppliers and purchase orders. A manager sends
-                // the order, any staff member receives the delivery.
-                if (!isCustomer)
-                  _buildDrawerItem(
-                      context, Icons.shopping_cart_outlined, t('purMenu'), () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const PurchasingScreen()));
-                  }, primaryColor: primaryColor),
-
-                // 🕒 Shift / cash-up: the Z-report of this till.
-                if (!isCustomer)
-                  _buildDrawerItem(context, Icons.schedule, t('shiftMenu'), () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const ShiftScreen()));
-                  }, primaryColor: primaryColor),
-
-                _buildDrawerItem(context, Icons.history, t('invoiceHistoryDrawer'), () {
-                  Navigator.pop(context);
-                  if (onInvoiceHistoryTap != null) onInvoiceHistoryTap!();
-                }, primaryColor: primaryColor),
-
-                _buildDrawerItem(context, Icons.assistant, t('aiAssistantMenu'), () {
-                  Navigator.pop(context);
-                  _requireFeature(context, 'ai', () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const AIAssistantScreen()));
-                  });
-                }, primaryColor: primaryColor),
-
-                if (isManager || isAdmin)
-                  _buildDrawerItem(context, Icons.insert_chart_outlined,
-                      t('analyticsMenu'), () {
-                    Navigator.pop(context);
-                    _requireFeature(context, 'analytics', () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const ManagerDashboard()));
-                    });
-                  }, primaryColor: primaryColor),
-
-                if (isManager || isAdmin)
-                  _buildDrawerItem(context, Icons.auto_graph, t('forecastMenu'),
-                      () {
-                    Navigator.pop(context);
-                    _requireFeature(context, 'forecast', () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const ForecastScreen()));
-                    });
-                  }, primaryColor: primaryColor),
-
-                if (isManager || isAdmin)
-                  _buildDrawerItem(context, Icons.trending_down, t('varMenu'),
-                      () {
-                    Navigator.pop(context);
-                    _requireFeature(context, 'reports', () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const VarianceScreen()));
-                    });
-                  }, primaryColor: primaryColor),
-
-                if (isManager || isAdmin)
-                  _buildDrawerItem(context, Icons.workspace_premium,
-                      t('subscription'), () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const SubscriptionScreen()));
-                  }, primaryColor: primaryColor),
-
-                // ========== MANAGEMENT SECTION ==========
-                Divider(
-                    height: 16,
-                    thickness: 1,
-                    indent: 16,
-                    endIndent: 16,
-                    color: theme.dividerColor),
-                _buildDrawerSectionTitle(context, 'MANAGEMENT'),
-
-                // Manage Drinks (Admin, Manager, Customer)
-                if (canManageDrinks)
-                  _buildDrawerItem(context, Icons.local_drink, t('drinkManagement'),
-                      () {
-                    Navigator.pop(context);
-                    _showPasswordDialog(context);
-                  }, primaryColor: primaryColor),
-                // Inventory (Admin, Manager, Customer)
-                if (canManageDrinks)
-                  _buildDrawerItem(context, Icons.inventory, t('inventory'), () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const InventoryScreen()));
-                  }, primaryColor: primaryColor),
-                // Scan barcode/QR — Pro feature for the shop staff only.
-                // Managers/admins use it to look up and manage stock; Staff use
-                // it to send a scanned item straight to the calculator as an
-                // order. Customers never see it.
-                if (isAdmin || isManager || isStaff)
-                  _buildDrawerItem(context, Icons.qr_code_scanner, t('scanMenu'),
-                      () {
-                    Navigator.pop(context);
-                    _requireFeature(context, 'scanner', () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const ScannerScreen()));
-                    });
-                  }, primaryColor: primaryColor),
-                // Settings (Everyone)
-                if (canManageSettings)
-                  _buildDrawerItem(context, Icons.settings, t('settings'), () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) =>
-                                const StorageSettingsScreen()));
-                  }, primaryColor: primaryColor),
-
-                // ========== MANAGER SECTION ==========
-                if (isManager) ...[
-                  Divider(
-                      height: 16,
-                      thickness: 1,
-                      indent: 16,
-                      endIndent: 16,
-                      color: theme.dividerColor),
-                  _buildDrawerSectionTitle(context, t('menuManager'),
-                      color: Colors.orange),
-                  _buildDrawerItem(context, Icons.business, t('staffManagement'),
-                      () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const ManagerPanel()));
-                  }, iconColor: Colors.orange, primaryColor: primaryColor),
-                  if (isManager || isAdmin)
-                    _buildDrawerItem(
-                      context,
-                      Icons.verified,
-                      t('loginApprovalsMenu'),
-                      () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ManagerApprovalScreen(),
-                          ),
-                        );
-                      },
-                      iconColor: Colors.orange,
-                      primaryColor: primaryColor,
-                      badgeCount: Provider.of<AuthProvider>(context)
-                          .pendingApprovalsCount,
-                    ),
-                ],
-
-                // ========== ADMIN SECTION ==========
-                if (isAdmin) ...[
-                  Divider(
-                      height: 16,
-                      thickness: 1,
-                      indent: 16,
-                      endIndent: 16,
-                      color: theme.dividerColor),
-                  _buildDrawerSectionTitle(context, t('menuAdmin'),
-                      color: Colors.purple),
-                  _buildDrawerItem(
-                      context, Icons.admin_panel_settings, t('adminPanel'), () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const AdminPanel()));
-                  }, iconColor: Colors.purple, primaryColor: primaryColor),
-                ],
-
-                Divider(
-                    height: 16,
-                    thickness: 1,
-                    indent: 16,
-                    endIndent: 16,
-                    color: theme.dividerColor),
-
-                // ========== SUPPORT SECTION ==========
-                _buildDrawerSectionTitle(context, 'SUPPORT'),
-
-                _buildDrawerItem(context, Icons.info_outline, t('aboutMenu'), () {
-                  _showAboutDialog(context);
-                }, primaryColor: primaryColor),
-                _buildDrawerItem(context, Icons.help_outline, t('helpSupportMenu'),
-                    () {
-                  _showHelpDialog(context);
-                }, primaryColor: primaryColor),
-                // Anyone signed in can file a bug report or complaint — staff on the
-                // bar floor included, which is where most complaints start.
-                _buildDrawerItem(
-                    context, Icons.bug_report_outlined, t('reportProblem'), () {
-                  Navigator.of(context).pop(); // close the drawer first
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const SupportReportScreen()));
-                }, primaryColor: primaryColor),
-              ],
+            child: DrawerMenu(
+              currentScreen: currentScreen,
+              primaryColor: primaryColor,
+              onDashboardTap: () {
+                Navigator.pop(context);
+                Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const CalculatorScreen()));
+              },
+              onDrinkManagementTap: () {
+                Navigator.pop(context);
+                _showPasswordDialog(context);
+              },
+              onInvoiceHistoryTap: onInvoiceHistoryTap,
+              onAboutTap: () => _showAboutDialog(context),
+              onHelpTap: () => _showHelpDialog(context),
             ),
           ),
 
@@ -594,137 +326,6 @@ class CustomDrawer extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildDrawerSectionTitle(BuildContext context, String title,
-      {Color? color}) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 16, 8),
-      child: Text(title,
-          style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.8,
-              color: color ?? theme.hintColor)),
-    );
-  }
-
-  /// Gate a premium feature behind the company's plan. Grants access when
-  /// allowed, otherwise shows an upgrade prompt.
-  void _requireFeature(
-      BuildContext context, String feature, VoidCallback onGranted) {
-    final plan = context.read<PlanProvider>();
-    if (plan.canAccess(feature)) {
-      onGranted();
-    } else {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Row(children: [
-            const Icon(Icons.workspace_premium, color: Colors.orange),
-            const SizedBox(width: 8),
-            Expanded(child: Text(t('upgradeRequired'))),
-          ]),
-          content: Text('${t('upgradeTo')} ${t('pro')}?'),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx), child: Text(t('cancel'))),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                Navigator.push(
-                    ctx,
-                    MaterialPageRoute(
-                        builder: (_) => const SubscriptionScreen()));
-              },
-              child: Text(t('upgrade')),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  Widget _buildDrawerItem(
-    BuildContext context,
-    IconData icon,
-    String title,
-    VoidCallback onTap, {
-    bool isActive = false,
-    Color? iconColor,
-    required Color primaryColor,
-    int badgeCount = 0,
-  }) {
-    final theme = Theme.of(context);
-    final isSelected = isActive;
-    final iconColorFinal =
-        isSelected ? primaryColor : iconColor ?? theme.hintColor;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: isSelected ? primaryColor.withValues(alpha: 0.1) : null,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: ListTile(
-        leading: BadgeIcon(
-          icon: icon,
-          count: badgeCount,
-          iconColor: iconColorFinal,
-          iconSize: 22,
-          badgeColor: Colors.red,
-          textColor: Colors.white,
-        ),
-        title: Row(
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                color: isSelected
-                    ? primaryColor
-                    : theme.textTheme.bodyLarge?.color,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                fontSize: 14,
-              ),
-            ),
-            if (badgeCount > 0)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    badgeCount > 99 ? '99+' : badgeCount.toString(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        trailing: isSelected
-            ? Container(
-                width: 4,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: primaryColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              )
-            : null,
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }

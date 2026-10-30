@@ -860,3 +860,36 @@ session left open on an unlocked till was enough to do it.
 - `tests/payment_credential_change.test.js` pins the three controls, the bcrypt-only rule and the
   machine codes the app translates
 
+---
+
+## App — drawer navigation: truthful highlight, grouping and search ✅ (2026-10-29)
+
+### Why
+The drawer was a 20-entry list. Its highlight was hardcoded to Dashboard; `menuManagement` and
+`menuSupport` existed but were used zero times (the grouping was started and never finished); there was
+no search; and one file compared roles two ways (`role == 'manager'` and `user.role == 'Manager'`).
+
+### Delivered
+- **The highlight is derived from the screen** the drawer is open on, so it cannot claim you are
+  somewhere you are not. Tapping the entry you are already on closes the drawer instead of stacking a
+  second copy of the same screen.
+- **Grouping** in `utils/drawer_navigation.dart` (pure, unit tested): Daily → Reports → Setup → Manager
+  → Admin → Support, daily work first. The two dead keys became the Reports and Support headers, and a
+  section with nothing visible is not rendered at all.
+- **Search** at the top of the menu: filters by translated label, case- and accent-insensitive, with a
+  "nothing matches" line.
+- **One role rule**: `StaffPermissions` normalises and answers every role question; `'Owner'` counts as a
+  manager, which is how the backend already treats it.
+- Two hardcoded English headers (`MANAGEMENT`, `SUPPORT`) the i18n sweeps had missed are translated now.
+- The drawer shell is 902 lines (was 1301); the menu is `widgets/drawer_menu.dart`.
+
+### Known limitation (not done)
+The drawer is mounted only on the calculator, so moving between two other screens always goes back
+through it. Mounting it on the top-level screens — and a `NavigationRail` for tablet widths — is the
+next step.
+
+### Validation
+- `flutter analyze lib` **535 issues** (was 537), 0 errors; Flutter **443 tests** (15 new: grouping,
+  search, role helpers, and a widget test proving the highlight follows the screen)
+- i18n **EN=1477 FR=1477**
+

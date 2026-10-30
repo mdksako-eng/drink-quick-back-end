@@ -26,6 +26,7 @@ import 'auth_screen.dart';
 import 'admin_panel.dart';
 import 'side_slider.dart';
 import '../widgets/custom_drawer.dart';
+import '../utils/drawer_navigation.dart';
 import 'package:drinks_calculator_fixed/utils/payment_helper.dart';
 import 'package:drinks_calculator_fixed/providers/inventory_provider.dart';
 import 'package:drinks_calculator_fixed/services/notification_service.dart';
@@ -2078,7 +2079,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         children: [
           Scaffold(
             key: _scaffoldKey,
-            drawer: CustomDrawer(onInvoiceHistoryTap: _openInvoiceHistory),
+            drawer: CustomDrawer(
+        // The calculator IS the dashboard: telling the drawer which screen it is open
+        // on is what keeps the highlight honest (it used to be hardcoded).
+        currentScreen: DrawerScreen.dashboard,
+        onInvoiceHistoryTap: _openInvoiceHistory,
+      ),
             body: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
