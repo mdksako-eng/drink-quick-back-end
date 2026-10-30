@@ -3,8 +3,6 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { getSessionUser } = require('../middleware/sessionAuth');
-const momo = require('../utils/momo');
-const orangeMoney = require('../utils/orange_money');
 // CamerPay per-company collection (phase 3): each bar's own token and webhook
 // secret, stored encrypted and returned only masked.
 const credentials = require('../utils/companyPaymentCredentials');
@@ -24,13 +22,19 @@ const { rawBodyOf } = require('../utils/requestBody');
 // Shared secret for verifying /api/payment/webhook calls (set in env).
 const PAYMENT_WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || '';
 
-// Masked value returned for secret keys — real secrets never leave the server.
-const MASKED = '••••••••••';
-
+/**
+ * True for a value the app was shown instead of a real secret, or for nothing at
+ * all. The client round-trips what it received, so a mask must never be written
+ * back as a secret. Both mask forms count: the bullets the legacy provider fields
+ * used, and the '****' this API returns for a stored CamerPay token.
+ */
 function isMaskedOrEmpty(value) {
-  return !value || value === MASKED || /^•+$/.test(String(value));
+  if (!value) return true;
+  return /^[•*]+$/.test(String(value));
 }
 
+// HMAC check for the generic /payment/webhook: the signature covers the raw bytes
+// (utils/requestBody.js supplies them — a re-serialisation would break it).
 function verifyWebhookSignature(rawBody, signature) {
   if (!PAYMENT_WEBHOOK_SECRET || !signature) return false;
   const expected = crypto
@@ -95,6 +99,9 @@ router.get('/company-settings', async (req, res) => {
     }
 
     // ✅ Get company settings
+    // Only the four switches live here now: the per-provider credentials this
+    // route used to read were dropped from the database (see
+    // sql/drop_dead_payment_columns.sql) because CamerPay is the only rail left.
     const result = await req.db.query(
       `SELECT 
         id,
@@ -102,17 +109,7 @@ router.get('/company-settings', async (req, res) => {
         business_payments_enabled,
         mtn_enabled,
         orange_enabled,
-        card_enabled,
-        mtn_merchant_phone,
-        orange_merchant_phone,
-        mtn_api_key,
-        mtn_secret_key,
-        mtn_merchant_id,
-        mtn_sandbox_mode,
-        orange_api_key,
-        orange_secret_key,
-        orange_merchant_id,
-        orange_sandbox_mode
+        card_enabled
       FROM companies WHERE id = $1`,
       [companyId]
     );
@@ -124,7 +121,7 @@ router.get('/company-settings', async (req, res) => {
     const company = result.rows[0];
     const isManager = ['Manager', 'Administrator', 'Admin'].includes(role);
 
-    // ✅ Build response
+    // ✅ Build response — switches only. There is no provider secret left to mask.
     const response = {
       id: company.id,
       name: company.name,
@@ -132,34 +129,8 @@ router.get('/company-settings', async (req, res) => {
       mtnEnabled: company.mtn_enabled || false,
       orangeEnabled: company.orange_enabled || false,
       cardEnabled: company.card_enabled || false,
+      isManager,
     };
-
-    // ✅ Only Managers get sensitive data
-    if (isManager) {
-      response.mtnMerchantPhone = company.mtn_merchant_phone || '';
-      response.orangeMerchantPhone = company.orange_merchant_phone || '';
-      response.mtnApiKey = company.mtn_api_key ? MASKED : '';
-      response.mtnSecretKey = company.mtn_secret_key ? MASKED : '';
-      response.mtnMerchantId = company.mtn_merchant_id || '';
-      response.mtnSandboxMode = company.mtn_sandbox_mode || true;
-      response.mtnConfigured = Boolean(company.mtn_api_key && company.mtn_secret_key && company.mtn_merchant_id);
-      response.orangeApiKey = company.orange_api_key ? MASKED : '';
-      response.orangeSecretKey = company.orange_secret_key ? MASKED : '';
-      response.orangeMerchantId = company.orange_merchant_id || '';
-      response.orangeSandboxMode = company.orange_sandbox_mode || true;
-      response.orangeConfigured = Boolean(company.orange_api_key && company.orange_secret_key && company.orange_merchant_id);
-      response.isManager = true;
-    } else {
-      response.isManager = false;
-      response.mtnMerchantPhone = '••••••••••';
-      response.orangeMerchantPhone = '••••••••••';
-      response.mtnApiKey = '••••••••••';
-      response.mtnSecretKey = '••••••••••';
-      response.mtnMerchantId = '••••••••••';
-      response.orangeApiKey = '••••••••••';
-      response.orangeSecretKey = '••••••••••';
-      response.orangeMerchantId = '••••••••••';
-    }
 
     res.json({
       success: true,
@@ -198,20 +169,11 @@ router.patch('/company-settings', async (req, res) => {
       businessPaymentsEnabled,
       mtnEnabled,
       orangeEnabled,
-      mtnMerchantPhone,
-      orangeMerchantPhone,
-      mtnApiKey,
-      mtnSecretKey,
-      mtnMerchantId,
-      mtnSandboxMode,
-      orangeApiKey,
-      orangeSecretKey,
-      orangeMerchantId,
-      orangeSandboxMode,
       cardEnabled,
     } = req.body;
 
-    // ✅ Build update query
+    // ✅ Build update query — the four switches and nothing else. The per-provider
+    // credential fields went with their columns (sql/drop_dead_payment_columns.sql).
     const updates = {};
     const values = [];
     let paramIndex = 1;
@@ -224,36 +186,6 @@ router.patch('/company-settings', async (req, res) => {
     }
     if (orangeEnabled !== undefined) {
       updates.orange_enabled = orangeEnabled;
-    }
-    if (mtnMerchantPhone !== undefined) {
-      updates.mtn_merchant_phone = mtnMerchantPhone;
-    }
-    if (orangeMerchantPhone !== undefined) {
-      updates.orange_merchant_phone = orangeMerchantPhone;
-    }
-    if (mtnApiKey !== undefined && !isMaskedOrEmpty(mtnApiKey)) {
-      updates.mtn_api_key = mtnApiKey;
-    }
-    if (mtnSecretKey !== undefined && !isMaskedOrEmpty(mtnSecretKey)) {
-      updates.mtn_secret_key = mtnSecretKey;
-    }
-    if (mtnMerchantId !== undefined) {
-      updates.mtn_merchant_id = mtnMerchantId;
-    }
-    if (mtnSandboxMode !== undefined) {
-      updates.mtn_sandbox_mode = mtnSandboxMode;
-    }
-    if (orangeApiKey !== undefined && !isMaskedOrEmpty(orangeApiKey)) {
-      updates.orange_api_key = orangeApiKey;
-    }
-    if (orangeSecretKey !== undefined && !isMaskedOrEmpty(orangeSecretKey)) {
-      updates.orange_secret_key = orangeSecretKey;
-    }
-    if (orangeMerchantId !== undefined) {
-      updates.orange_merchant_id = orangeMerchantId;
-    }
-    if (orangeSandboxMode !== undefined) {
-      updates.orange_sandbox_mode = orangeSandboxMode;
     }
     if (cardEnabled !== undefined) {
       updates.card_enabled = cardEnabled;
@@ -898,46 +830,10 @@ router.get('/payment/status/:transactionId', async (req, res) => {
 
     const transaction = result.rows[0];
 
-    // ✅ Real MTN MoMo auto-verification
-    if (transaction.status === 'pending' && transaction.payment_method === 'mtn') {
-      const credsResult = await req.db.query(
-        `SELECT mtn_merchant_id, mtn_api_key, mtn_secret_key, mtn_sandbox_mode
-         FROM companies WHERE id = $1`,
-        [companyId]
-      );
-      const creds = credsResult.rows[0];
-      if (creds && momo.isConfigured(creds)) {
-        try {
-          const tx = await momo.getTransactionStatus({
-            apiUser: creds.mtn_merchant_id,
-            apiKey: creds.mtn_api_key,
-            subscriptionKey: creds.mtn_secret_key,
-            sandbox: !!creds.mtn_sandbox_mode,
-            referenceId: transactionId,
-          });
-          const mtnStatus = String(tx.status || 'PENDING').toUpperCase();
-          if (mtnStatus === 'SUCCESSFUL') {
-            await req.db.query(
-              `UPDATE payment_transactions SET status = 'completed', confirmed_at = NOW() WHERE transaction_id = $1`,
-              [transactionId]
-            );
-            return res.json({ success: true, status: 'completed', confirmedAt: new Date().toISOString() });
-          }
-          if (mtnStatus === 'FAILED') {
-            await req.db.query(
-              `UPDATE payment_transactions SET status = 'failed', error_message = 'Payment failed' WHERE transaction_id = $1`,
-              [transactionId]
-            );
-            return res.json({ success: true, status: 'failed', errorMessage: 'Payment failed' });
-          }
-          // Still pending — the customer hasn't approved yet.
-          return res.json({ success: true, status: 'pending' });
-        } catch (e) {
-          console.error('⚠️ MTN status poll error:', e.message);
-          // Fall through to the manual/test flow below.
-        }
-      }
-    }
+    // The legacy MTN auto-verification was removed with the direct-operator rail: it
+    // read the company's own MTN credentials, which no longer exist. A CamerPay row
+    // is confirmed by its verified webhook — the SELECT above reports such a row as
+    // its own gateway precisely so it can never reach a legacy branch.
 
 
 
@@ -1240,7 +1136,6 @@ router.get('/payment/health', async (req, res) => {
     // this business now, so that is what readiness is measured on.
     const result = await req.db.query(
       `SELECT business_payments_enabled, mtn_enabled, orange_enabled, card_enabled,
-              mtn_sandbox_mode, orange_sandbox_mode,
               ${credentials.COLUMNS.enabled}, ${credentials.COLUMNS.token}
        FROM companies WHERE id = $1`,
       [companyId]
@@ -1266,8 +1161,8 @@ router.get('/payment/health', async (req, res) => {
         companyId,
         businessPaymentsEnabled: Boolean(c.business_payments_enabled),
         methods: {
-          mtn: { enabled: Boolean(c.mtn_enabled), mode: c.mtn_sandbox_mode ? 'sandbox' : 'live' },
-          orange: { enabled: Boolean(c.orange_enabled), mode: c.orange_sandbox_mode ? 'sandbox' : 'live' },
+          mtn: { enabled: Boolean(c.mtn_enabled) },
+          orange: { enabled: Boolean(c.orange_enabled) },
           card: { enabled: Boolean(c.card_enabled) },
         },
         campay: { connected: campayConnected },
@@ -1282,56 +1177,13 @@ router.get('/payment/health', async (req, res) => {
 });
 
 // ============================================================
-// 🍊 Orange Money web payment: return + notif endpoints
+// 🍊 Orange Money: the direct-operator rail is RETIRED
 // ============================================================
-router.get('/payment/orange-return', (req, res) => {
-  res.send(`<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Payment Complete</title></head>
-<body style="font-family:system-ui,sans-serif;background:#f7f8fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
-  <div style="text-align:center;background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,0.08);max-width:420px;">
-    <div style="font-size:48px;">✅</div>
-    <h2 style="margin:16px 0 8px;">Payment received</h2>
-    <p style="color:#555;margin:0 0 24px;">Return to the app to complete your order.</p>
-  </div>
-</body>
-</html>`);
-});
-
-router.post('/payment/orange-webhook', async (req, res) => {
-  try {
-    const { order_id, orderId, reference, status } = req.body || {};
-    const txId = order_id || orderId || reference;
-    if (!txId) {
-      return res.json({ success: false, error: 'Missing order_id' });
-    }
-
-    const st = String(status || '').toUpperCase();
-    const result = await req.db.query(
-      `SELECT id FROM payment_transactions WHERE transaction_id = $1`,
-      [txId]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Transaction not found' });
-    }
-
-    if (st === 'SUCCESS' || st === 'SUCCESSFUL' || st === 'COMPLETED') {
-      await req.db.query(
-        `UPDATE payment_transactions SET status = 'completed', confirmed_at = NOW() WHERE transaction_id = $1`,
-        [txId]
-      );
-    } else if (st === 'FAILED' || st === 'CANCELLED' || st === 'EXPIRED') {
-      await req.db.query(
-        `UPDATE payment_transactions SET status = 'failed', error_message = 'Payment failed' WHERE transaction_id = $1`,
-        [txId]
-      );
-    }
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Orange webhook error:', error.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+// Its return/notif pair was removed on 2026-10-29, together with the per-company
+// MTN/Orange credential columns it belonged to. The webhook was unauthenticated —
+// it marked a transaction completed from the request body alone, with no
+// signature check — so deleting it also removes an anonymous way to change a
+// payment's status. CamerPay (verified per-company HMAC) is the only collection
+// rail now.
 
 module.exports = router;

@@ -800,3 +800,36 @@ checkable instead of assumed.
 - Script behaviour verified: missing password → clear message + exit 1; wrong password → HTTP 404
   (the route is not deployed yet)
 
+---
+
+## Security — the plaintext payment credentials are gone ✅ (2026-10-29)
+
+### Why
+`companies` still carried 6/6 non-null plaintext `mtn_api_key` / `mtn_secret_key` / `orange_*` rows for
+a rail that no longer exists, and the drop script could not run because the app wrote those keys and
+the backend read them. That was the last known liability in the payment area — and the repo is public,
+so the schema was documented for anyone.
+
+### Delivered
+- **Every read and write removed:** `GET/PATCH /payment/company-settings` handle the four switches
+  only, the legacy MTN auto-verification in `GET /payment/status/:id` is gone, `/payment/health` no
+  longer reports a per-rail sandbox mode, `/api/data/company` and the public company profile stop
+  selecting the six columns, and `/company/payment-credentials` is deleted with its columns.
+- **The app plumbing is gone:** the credential fields, controllers, prefs cache and load/save maps in
+  `storage_settings_screen.dart` + `payment_helper.dart`, plus 13 dead `st_*` i18n keys (EN and FR).
+  The toggles stay; the purge of old pref values stays, because an upgraded device may still hold a
+  plaintext provider key.
+- **`COMPANY_SECRET_COLUMNS` now strips the CamerPay secrets**, so the route that returns `SELECT *`
+  for a company can no longer hand out ciphertext or the webhook path token.
+- **Two legacy endpoints deleted, one a security fix:** `POST /payment/orange-webhook` was
+  unauthenticated and could mark a transaction completed from the request body alone.
+- **`isMaskedOrEmpty` now recognises `****`**, the mask this API itself emits, so a round-tripped
+  mask can never be stored as a token.
+- `sql/drop_dead_payment_columns.sql` is ready — run it only **after** this deploys.
+
+### Validation
+- Backend **46 suites / 603 tests** (+1 suite / +7 tests); `node --check` clean
+- `flutter analyze lib` 0 errors (537-issue baseline); Flutter **428 tests**; i18n **EN=1466 FR=1466**
+- `tests/payment_credentials_removed.test.js` fails if any dropped column name reappears in the
+  backend, or if the app starts sending the camelCase fields again
+

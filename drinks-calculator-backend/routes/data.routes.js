@@ -49,11 +49,12 @@ const purchasing = require('../utils/purchasing');
 
 const MANAGER_ROLES = ['Manager', 'Administrator', 'Admin'];
 
-// Secrets that must never leave the server for non-managers.
+// Secrets that must never leave the server. These are the CamerPay columns — the
+// MTN/Orange ones were dropped (sql/drop_dead_payment_columns.sql). The two *_enc
+// columns hold vault ciphertext and campay_webhook_token is the opaque path token,
+// so a `SELECT *` company row must never carry any of them.
 const COMPANY_SECRET_COLUMNS = [
-  'mtn_api_key', 'mtn_secret_key', 'orange_api_key', 'orange_secret_key',
-  'mtn_api_key_encrypted', 'mtn_secret_key_encrypted',
-  'orange_api_key_encrypted', 'orange_secret_key_encrypted',
+  'campay_token_enc', 'campay_webhook_secret_enc', 'campay_webhook_token',
 ];
 
 // Return a company row with secret columns removed.
@@ -87,10 +88,7 @@ const WRITABLE = {
     // Company branding: the shop logo the app uploads (public Storage URL).
     'logo_url',
     'currency_position', 'decimal_separator', 'thousands_separator', 'decimal_places',
-    'business_payments_enabled', 'mtn_enabled', 'orange_enabled', 'mtn_merchant_phone',
-    'orange_merchant_phone', 'mtn_merchant_id', 'orange_merchant_id', 'mtn_sandbox_mode',
-    'orange_sandbox_mode', 'mtn_api_key_encrypted', 'mtn_secret_key_encrypted',
-    'orange_api_key_encrypted', 'orange_secret_key_encrypted', 'updated_at'],
+    'business_payments_enabled', 'mtn_enabled', 'orange_enabled', 'updated_at'],
 };
 
 // ---------- auth + company scoping ----------
@@ -2380,9 +2378,7 @@ router.get('/company', async (req, res) => {
     const result = await req.db.query(
       `SELECT id, name, email, phone, address, currency_symbol, currency_position,
               decimal_separator, thousands_separator, decimal_places,
-              business_payments_enabled, mtn_enabled, orange_enabled,
-              mtn_merchant_phone, orange_merchant_phone, mtn_merchant_id,
-              orange_merchant_id, mtn_sandbox_mode, orange_sandbox_mode
+              business_payments_enabled, mtn_enabled, orange_enabled
        FROM companies WHERE id = $1`,
       [companyId]
     );
@@ -2533,10 +2529,6 @@ router.patch('/company', async (req, res) => {
     // 🔒 Secrets (incl. *_encrypted credential columns) can only be written
     // through the dedicated /company/payment-credentials endpoint below.
     const updates = pickWritable('company_payment_settings', req.body);
-    for (const k of ['mtn_api_key_encrypted', 'mtn_secret_key_encrypted',
-      'orange_api_key_encrypted', 'orange_secret_key_encrypted']) {
-      delete updates[k];
-    }
     const cols = Object.keys(updates);
     if (cols.length === 0) {
       return res.status(400).json({ message: 'No valid fields to update' });
@@ -2552,32 +2544,10 @@ router.patch('/company', async (req, res) => {
   }
 });
 
-// 💳 Dedicated endpoint for payment credentials (manager-only, secrets stripped from response)
-router.patch('/company/payment-credentials', async (req, res) => {
-  try {
-    const companyId = resolveCompanyId(req, res);
-    if (companyId == null) return;
-    if (!['Manager', 'Administrator', 'Admin'].includes(req.user.role)) {
-      return res.status(403).json({ message: 'Only managers can update payment credentials' });
-    }
-    const credKeys = ['mtn_api_key_encrypted', 'mtn_secret_key_encrypted',
-      'orange_api_key_encrypted', 'orange_secret_key_encrypted'];
-    const body = {};
-    for (const key of credKeys) {
-      if (req.body[key] !== undefined) body[key] = req.body[key];
-    }
-    const cols = Object.keys(body);
-    if (cols.length === 0) {
-      return res.status(400).json({ message: 'No credential fields provided' });
-    }
-    const sql = `UPDATE companies SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')}, updated_at = NOW() WHERE id = $${cols.length + 1}`;
-    await req.db.query(sql, [...Object.values(body), companyId]);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('PATCH /company/payment-credentials error:', error.message);
-    res.status(500).json({ message: 'Failed to update payment credentials' });
-  }
-});
+// 💳 The dedicated /company/payment-credentials endpoint was removed on
+// 2026-10-29: it wrote the per-provider *_encrypted columns, which no longer
+// exist. A company's payment credential is its CamerPay token, and that has its
+// own write-only endpoint (PATCH /api/payment/campay-settings).
 
 // ============================================================
 // 🏢 COMPANY PROFILE (secret-stripped — anon keys can no longer read this table)

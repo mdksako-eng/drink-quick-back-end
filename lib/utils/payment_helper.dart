@@ -17,10 +17,6 @@ class PaymentHelper extends ChangeNotifier {
   bool _mtnEnabled = false;
   bool _orangeEnabled = false;
   bool _cardEnabled = false;
-  String _mtnMerchantPhone = '';
-  String _orangeMerchantPhone = '';
-  bool _mtnSandboxMode = true;
-  bool _orangeSandboxMode = true;
   
   // ✅ Track if settings are from company
   bool _isCompanySettings = false;
@@ -36,10 +32,6 @@ class PaymentHelper extends ChangeNotifier {
   bool get mtnEnabled => _mtnEnabled;
   bool get orangeEnabled => _orangeEnabled;
   bool get cardEnabled => _cardEnabled;
-  String get mtnMerchantPhone => _mtnMerchantPhone;
-  String get orangeMerchantPhone => _orangeMerchantPhone;
-  bool get mtnSandboxMode => _mtnSandboxMode;
-  bool get orangeSandboxMode => _orangeSandboxMode;
   bool get isCompanySettings => _isCompanySettings;
   String? get companyName => _companyName;
   bool get isLoading => _isLoading;
@@ -76,10 +68,6 @@ class PaymentHelper extends ChangeNotifier {
         _mtnEnabled = company['mtnEnabled'] ?? true;
         _orangeEnabled = company['orangeEnabled'] ?? true;
         _cardEnabled = company['cardEnabled'] ?? false;
-        _mtnMerchantPhone = company['mtnMerchantPhone'] ?? '';
-        _orangeMerchantPhone = company['orangeMerchantPhone'] ?? '';
-        _mtnSandboxMode = company['mtnSandboxMode'] ?? true;
-        _orangeSandboxMode = company['orangeSandboxMode'] ?? true;
         // 🔐 API keys / secret keys are never returned by the backend and never held in the app.
 
         // ✅ Save non-secret values to local cache
@@ -113,11 +101,6 @@ class PaymentHelper extends ChangeNotifier {
     _businessPaymentsEnabled = prefs.getBool('business_payments_enabled') ?? false;
     _mtnEnabled = prefs.getBool('mtn_enabled') ?? true;
     _orangeEnabled = prefs.getBool('orange_enabled') ?? true;
-    _mtnMerchantPhone = prefs.getString('mtn_merchant_phone') ?? '';
-    _orangeMerchantPhone = prefs.getString('orange_merchant_phone') ?? '';
-    // ✅ Secrets are never cached locally — always loaded from the backend
-    _mtnSandboxMode = prefs.getBool('mtn_sandbox_mode') ?? true;
-    _orangeSandboxMode = prefs.getBool('orange_sandbox_mode') ?? true;
     debugPrint('📂 Loaded local payment settings');
   }
 
@@ -126,18 +109,17 @@ class PaymentHelper extends ChangeNotifier {
     await prefs.setBool('business_payments_enabled', _businessPaymentsEnabled);
     await prefs.setBool('mtn_enabled', _mtnEnabled);
     await prefs.setBool('orange_enabled', _orangeEnabled);
-    await prefs.setString('mtn_merchant_phone', _mtnMerchantPhone);
-    await prefs.setString('orange_merchant_phone', _orangeMerchantPhone);
-    // ✅ Secrets are NOT persisted locally
-    // 🔐 Purge any previously cached secrets/ids; keep only non-sensitive flags
+    // ✅ Secrets are NOT persisted locally. The purge below is deliberate: a device
+    // that ran an older build may still hold a plaintext provider key in prefs, and
+    // that value has to go even though the feature it belonged to is gone.
     await prefs.remove('mtn_api_key');
     await prefs.remove('mtn_secret_key');
     await prefs.remove('mtn_merchant_id');
-    await prefs.setBool('mtn_sandbox_mode', _mtnSandboxMode);
+    await prefs.remove('mtn_sandbox_mode');
     await prefs.remove('orange_api_key');
     await prefs.remove('orange_secret_key');
     await prefs.remove('orange_merchant_id');
-    await prefs.setBool('orange_sandbox_mode', _orangeSandboxMode);
+    await prefs.remove('orange_sandbox_mode');
   }
 
   // ============================================================
@@ -148,16 +130,6 @@ class PaymentHelper extends ChangeNotifier {
     required bool businessPaymentsEnabled,
     required bool mtnEnabled,
     required bool orangeEnabled,
-    required String mtnMerchantPhone,
-    required String orangeMerchantPhone,
-    required String mtnApiKey,
-    required String mtnSecretKey,
-    required String mtnMerchantId,
-    required bool mtnSandboxMode,
-    required String orangeApiKey,
-    required String orangeSecretKey,
-    required String orangeMerchantId,
-    required bool orangeSandboxMode,
   }) async {
     _isLoading = true;
     _error = null;
@@ -168,16 +140,6 @@ class PaymentHelper extends ChangeNotifier {
         'businessPaymentsEnabled': businessPaymentsEnabled,
         'mtnEnabled': mtnEnabled,
         'orangeEnabled': orangeEnabled,
-        'mtnMerchantPhone': mtnMerchantPhone,
-        'orangeMerchantPhone': orangeMerchantPhone,
-        'mtnApiKey': mtnApiKey,
-        'mtnSecretKey': mtnSecretKey,
-        'mtnMerchantId': mtnMerchantId,
-        'mtnSandboxMode': mtnSandboxMode,
-        'orangeApiKey': orangeApiKey,
-        'orangeSecretKey': orangeSecretKey,
-        'orangeMerchantId': orangeMerchantId,
-        'orangeSandboxMode': orangeSandboxMode,
       };
 
       // ✅ Save to the backend (secrets stay server-side, manager-verified)
@@ -188,10 +150,6 @@ class PaymentHelper extends ChangeNotifier {
         _businessPaymentsEnabled = businessPaymentsEnabled;
         _mtnEnabled = mtnEnabled;
         _orangeEnabled = orangeEnabled;
-        _mtnMerchantPhone = mtnMerchantPhone;
-        _orangeMerchantPhone = orangeMerchantPhone;
-        _mtnSandboxMode = mtnSandboxMode;
-        _orangeSandboxMode = orangeSandboxMode;
         // 🔐 API keys / secret keys are forwarded to the backend, never stored in the app.
         _isCompanySettings = true;
         

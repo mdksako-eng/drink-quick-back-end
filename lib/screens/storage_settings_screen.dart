@@ -65,21 +65,13 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
   // Business Payment Settings
   bool _businessPaymentsEnabled = false;
 
-  // MTN Mobile Money settings
+  // MTN Mobile Money settings — the switch only. The per-provider credentials
+  // (api key / secret / merchant id / phone / sandbox) were removed: CamerPay is
+  // the only rail, and those columns no longer exist in the database.
   bool _mtnEnabled = true;
-  String _mtnApiKey = '';
-  String _mtnSecretKey = '';
-  String _mtnMerchantId = '';
-  String _mtnMerchantPhone = '';
-  bool _mtnSandboxMode = true;
 
-  // Orange Money settings
+  // Orange Money settings — switch only, for the same reason.
   bool _orangeEnabled = true;
-  String _orangeApiKey = '';
-  String _orangeSecretKey = '';
-  String _orangeMerchantId = '';
-  String _orangeMerchantPhone = '';
-  bool _orangeSandboxMode = true;
   bool _cardEnabled = false;
 
   // User-specific settings
@@ -98,19 +90,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
   final TextEditingController _companyEmailController = TextEditingController();
   final TextEditingController _companyPhoneController = TextEditingController();
   final TextEditingController _companyAddressController =
-      TextEditingController();
-  final TextEditingController _mtnApiKeyController = TextEditingController();
-  final TextEditingController _mtnSecretKeyController = TextEditingController();
-  final TextEditingController _mtnMerchantIdController =
-      TextEditingController();
-  final TextEditingController _mtnMerchantPhoneController =
-      TextEditingController();
-  final TextEditingController _orangeApiKeyController = TextEditingController();
-  final TextEditingController _orangeSecretKeyController =
-      TextEditingController();
-  final TextEditingController _orangeMerchantIdController =
-      TextEditingController();
-  final TextEditingController _orangeMerchantPhoneController =
       TextEditingController();
 
   // 🇨🇲 CamerPay — the company's own account. Secrets are WRITE-ONLY: the server
@@ -180,14 +159,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     _companyEmailController.dispose();
     _companyPhoneController.dispose();
     _companyAddressController.dispose();
-    _mtnApiKeyController.dispose();
-    _mtnSecretKeyController.dispose();
-    _mtnMerchantIdController.dispose();
-    _mtnMerchantPhoneController.dispose();
-    _orangeApiKeyController.dispose();
-    _orangeSecretKeyController.dispose();
-    _orangeMerchantIdController.dispose();
-    _orangeMerchantPhoneController.dispose();
     super.dispose();
   }
 
@@ -238,16 +209,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
                   paymentSettings['businessPaymentsEnabled'] ?? false;
               _mtnEnabled = paymentSettings['mtnEnabled'] ?? true;
               _orangeEnabled = paymentSettings['orangeEnabled'] ?? true;
-              _mtnMerchantPhone = paymentSettings['mtnMerchantPhone'] ?? '';
-              _orangeMerchantPhone = paymentSettings['orangeMerchantPhone'] ?? '';
-              _mtnMerchantId = paymentSettings['mtnMerchantId'] ?? '';
-              _orangeMerchantId = paymentSettings['orangeMerchantId'] ?? '';
-              _mtnSandboxMode = paymentSettings['mtnSandboxMode'] ?? true;
-              _orangeSandboxMode = paymentSettings['orangeSandboxMode'] ?? true;
-              _mtnApiKey = paymentSettings['mtnApiKey'] ?? '';
-              _mtnSecretKey = paymentSettings['mtnSecretKey'] ?? '';
-              _orangeApiKey = paymentSettings['orangeApiKey'] ?? '';
-              _orangeSecretKey = paymentSettings['orangeSecretKey'] ?? '';
               _cardEnabled = paymentSettings['cardEnabled'] ?? false;
             }
 
@@ -286,12 +247,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
               'business_payments_enabled', _businessPaymentsEnabled);
           await prefs.setBool('mtn_enabled', _mtnEnabled);
           await prefs.setBool('orange_enabled', _orangeEnabled);
-          await prefs.setString('mtn_merchant_phone', _mtnMerchantPhone);
-          await prefs.setString('orange_merchant_phone', _orangeMerchantPhone);
-          await prefs.setString('mtn_merchant_id', _mtnMerchantId);
-          await prefs.setString('orange_merchant_id', _orangeMerchantId);
-          await prefs.setBool('mtn_sandbox_mode', _mtnSandboxMode);
-          await prefs.setBool('orange_sandbox_mode', _orangeSandboxMode);
 
           debugPrint(
               '✅ Company-wide settings loaded: Currency=$_currencySymbol');
@@ -366,16 +321,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     _companyEmailController.text = _companyEmail;
     _companyAddressController.text = _companyAddress;
 
-    // ✅ Set MTN/Orange controller values
-    _mtnApiKeyController.text = _mtnApiKey;
-    _mtnSecretKeyController.text = _mtnSecretKey;
-    _mtnMerchantIdController.text = _mtnMerchantId;
-    _mtnMerchantPhoneController.text = _mtnMerchantPhone;
-    _orangeApiKeyController.text = _orangeApiKey;
-    _orangeSecretKeyController.text = _orangeSecretKey;
-    _orangeMerchantIdController.text = _orangeMerchantId;
-    _orangeMerchantPhoneController.text = _orangeMerchantPhone;
-
     setState(() {
       _hasUnsavedChanges = false;
     });
@@ -418,16 +363,8 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         prefs.getBool('business_payments_enabled') ?? false;
     _mtnEnabled = prefs.getBool('mtn_enabled') ?? true;
     _orangeEnabled = prefs.getBool('orange_enabled') ?? true;
-    _mtnMerchantPhone = prefs.getString('mtn_merchant_phone') ?? '';
-    _orangeMerchantPhone = prefs.getString('orange_merchant_phone') ?? '';
-    _mtnMerchantId = prefs.getString('mtn_merchant_id') ?? '';
-    _orangeMerchantId = prefs.getString('orange_merchant_id') ?? '';
-    _mtnSandboxMode = prefs.getBool('mtn_sandbox_mode') ?? true;
-    _orangeSandboxMode = prefs.getBool('orange_sandbox_mode') ?? true;
-    _mtnApiKey = prefs.getString('mtn_api_key') ?? '';
-    _mtnSecretKey = prefs.getString('mtn_secret_key') ?? '';
-    _orangeApiKey = prefs.getString('orange_api_key') ?? '';
-    _orangeSecretKey = prefs.getString('orange_secret_key') ?? '';
+    // The per-provider credential fields are gone: no provider key is read from
+    // (or written to) local storage any more.
   }
 
   void _markUnsaved() {
@@ -479,12 +416,6 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
           'business_payments_enabled': _businessPaymentsEnabled,
           'mtn_enabled': _mtnEnabled,
           'orange_enabled': _orangeEnabled,
-          'mtn_merchant_phone': _mtnMerchantPhone,
-          'orange_merchant_phone': _orangeMerchantPhone,
-          'mtn_merchant_id': _mtnMerchantId,
-          'orange_merchant_id': _orangeMerchantId,
-          'mtn_sandbox_mode': _mtnSandboxMode,
-          'orange_sandbox_mode': _orangeSandboxMode,
 
           'updated_at': DateTime.now().toIso8601String(),
         };
@@ -497,22 +428,13 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
           debugPrint('❌❌❌ Failed to save company settings');
         }
 
-        // ✅ Send payment secrets (api/secret keys) ONLY to the backend
+        // ✅ Send the payment switches to the backend (manager-verified). The
+        // per-provider credential fields are gone with their database columns.
         try {
           final paymentSecrets = {
             'businessPaymentsEnabled': _businessPaymentsEnabled,
             'mtnEnabled': _mtnEnabled,
             'orangeEnabled': _orangeEnabled,
-            'mtnMerchantPhone': _mtnMerchantPhone,
-            'orangeMerchantPhone': _orangeMerchantPhone,
-            'mtnApiKey': _mtnApiKey,
-            'mtnSecretKey': _mtnSecretKey,
-            'mtnMerchantId': _mtnMerchantId,
-            'mtnSandboxMode': _mtnSandboxMode,
-            'orangeApiKey': _orangeApiKey,
-            'orangeSecretKey': _orangeSecretKey,
-            'orangeMerchantId': _orangeMerchantId,
-            'orangeSandboxMode': _orangeSandboxMode,
             'cardEnabled': _cardEnabled,
           };
           final secretsSaved =
@@ -612,16 +534,10 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     await prefs.setString('thousands_separator', _thousandsSeparator);
     await prefs.setInt('decimal_places', _decimalPlaces);
 
-    // Payment settings (company-wide)
+    // Payment settings (company-wide) — the switches only.
     await prefs.setBool('business_payments_enabled', _businessPaymentsEnabled);
     await prefs.setBool('mtn_enabled', _mtnEnabled);
     await prefs.setBool('orange_enabled', _orangeEnabled);
-    await prefs.setString('mtn_merchant_phone', _mtnMerchantPhone);
-    await prefs.setString('orange_merchant_phone', _orangeMerchantPhone);
-    await prefs.setString('mtn_merchant_id', _mtnMerchantId);
-    await prefs.setString('orange_merchant_id', _orangeMerchantId);
-    await prefs.setBool('mtn_sandbox_mode', _mtnSandboxMode);
-    await prefs.setBool('orange_sandbox_mode', _orangeSandboxMode);
 
     // 🔐 Secrets (api/secret keys) are NOT stored locally — backend only.
     // Remove any previously cached values.

@@ -3286,8 +3286,7 @@ app.get('/api/data/company/:id/public', async (req, res) => {
     const result = await pool.query(
       `SELECT id, name, email, phone, address, currency_symbol, currency_position,
               decimal_separator, thousands_separator, decimal_places,
-              business_payments_enabled, mtn_enabled, orange_enabled,
-              mtn_merchant_phone, orange_merchant_phone
+              business_payments_enabled, mtn_enabled, orange_enabled
        FROM companies WHERE id = $1`,
       [req.params.id]
     );

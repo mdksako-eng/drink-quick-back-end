@@ -17,17 +17,19 @@
 --   The notchpay_* columns used to live here too. They moved to
 --   sql/drop_notchpay_columns.sql, which is ready to run today.
 --
--- ⚠️  PREREQUISITE — DO NOT RUN THIS YET UNTIL STEP 1 IS DONE
---   The app still sends these keys on every save:
---     lib/screens/storage_settings_screen.dart -> _savePaymentSettings()
---     sends mtnApiKey, mtnSecretKey, mtnMerchantId, mtnMerchantPhone,
---     mtnSandboxMode and the orange* equivalents.
---   `PATCH /payment/company-settings` (routes/payment.routes.js) writes them
---   straight into the columns, so dropping the columns now would break every
---   settings save. Step 1 is therefore: stop sending those keys in the app and
---   remove them from that route's update map. Only then run this script.
---   (notchpaySyncId is already gone from both, so the notchpay_* columns are a
---   separate, ready-to-run script — sql/drop_notchpay_columns.sql.)
+-- ✅ READY — but run it only AFTER this code is deployed.
+--   The backend must stop reading these columns first: until the deploy lands,
+--   `GET /payment/company-settings` still SELECTs them and the drop would make it
+--   fail. Once the new build is live (verify `GET /health` reports the new
+--   RELEASE), the columns are unreferenced and this script is safe.
+--
+--   Step 1 is done in code: the app no longer sends any of these keys
+--   (lib/screens/storage_settings_screen.dart, lib/utils/payment_helper.dart),
+--   `PATCH /payment/company-settings` accepts only the four switches, and every
+--   backend read is gone (payment.routes.js, data.routes.js, server.js). The old
+--   `/company/payment-credentials` endpoint is deleted with them.
+--   Locked by tests/payment_credentials_removed.test.js: it fails if one of these
+--   column names reappears anywhere in the backend code.
 --
 -- KEPT (do not drop): mtn_enabled, orange_enabled, card_enabled,
 --   business_payments_enabled (the three toggles + the master switch), and the
