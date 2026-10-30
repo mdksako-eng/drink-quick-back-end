@@ -316,6 +316,12 @@ class MyAppState extends State<MyApp> {
       colorScheme: ColorScheme.light(
         primary: primaryColor,
         secondary: primaryColor,
+        // The M3 "selected container" role, set explicitly: ColorScheme.light()
+        // would otherwise supply its own default palette, so a selected drawer row
+        // would read lavender instead of the brand colour. Light = a pale brand tint
+        // with dark brand text.
+        secondaryContainer: Color.lerp(primaryColor, Colors.white, 0.86)!,
+        onSecondaryContainer: Color.lerp(primaryColor, Colors.black, 0.35)!,
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: primaryColor,
@@ -390,6 +396,11 @@ class MyAppState extends State<MyApp> {
       colorScheme: ColorScheme.dark(
         primary: primaryColor,
         secondary: primaryColor,
+        // Same reasoning as the light theme, mirrored: a deep brand tint with a light
+        // foreground, because a 10 % tint of the primary colour is invisible on a dark
+        // surface.
+        secondaryContainer: Color.lerp(primaryColor, Colors.black, 0.62)!,
+        onSecondaryContainer: Color.lerp(primaryColor, Colors.white, 0.74)!,
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: primaryColor,

@@ -103,4 +103,43 @@ void main() {
     expect(find.text(t('drawerNoResults')), findsOneWidget);
     expect(find.text(t('menuMain')), findsNothing);
   });
+
+  testWidgets('the highlight is theme-aware, so it survives dark mode',
+      (tester) async {
+    // The old highlight was a 10 % tint of the primary colour, which all but
+    // disappears on a dark surface. The M3 "selected container" role has to hold in
+    // BOTH themes, so this pins the dark one.
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+          ChangeNotifierProvider(create: (_) => PlanProvider()),
+        ],
+        child: MaterialApp(
+          theme: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              secondaryContainer: Color(0xFF1E3A2A),
+              onSecondaryContainer: Color(0xFFB7E4C7),
+            ),
+          ),
+          home: Scaffold(
+            body: DrawerMenu(
+              currentScreen: DrawerScreen.dashboard,
+              primaryColor: Colors.green,
+              onDashboardTap: () {},
+              onDrinkManagementTap: () {},
+              onAboutTap: () {},
+              onHelpTap: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final selected = styleOf(tester, t('dashboard'));
+    expect(selected.fontWeight, FontWeight.w600);
+    expect(selected.color, const Color(0xFFB7E4C7));
+    expect(styleOf(tester, t('shiftMenu')).fontWeight, FontWeight.normal);
+  });
 }

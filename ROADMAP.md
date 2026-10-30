@@ -893,3 +893,34 @@ next step.
   search, role helpers, and a widget test proving the highlight follows the screen)
 - i18n **EN=1477 FR=1477**
 
+---
+
+## App — design tokens, piloted on the drawer ✅ (2026-10-29)
+
+### Why
+27 gradients, 33 one-off box shadows and 194 hand-picked `withValues(alpha:)` values meant the drawer, the
+cards, the dialogs and the till each expressed "a surface" slightly differently. The defect was
+inconsistency, not the style.
+
+### Decision (recorded so it is not relitigated)
+**Material 3 + restrained soft depth. Not glassmorphism, not neumorphism, not claymorphism.** This is a
+till used in daylight on low-end Android (`minSdk = flutter.minSdkVersion`) with money figures a cashier
+must read unambiguously: `BackdropFilter` (0 uses today) re-blurs every frame over a scrolling list,
+neumorphism encodes state with shadow alone and loses contrast, claymorphism fights a data-dense UI.
+Glass remains an option for 2–3 *static* surfaces (drawer header, a floating bar, dialogs) — never a list.
+
+### Delivered
+- `lib/theme/app_theme.dart`: radius (8/12/16/pill), spacing, alpha steps, two theme-aware shadow levels,
+  the single `AppBrand` gradient + on-surface colours, `AppText`, and `AppRoleBadge` (pure + tested).
+- The drawer is the pilot: one brand surface in the header, tokens for the role chip and sync pill, and a
+  selected entry using M3's `secondaryContainer` / `onSecondaryContainer` instead of a 10 % primary tint
+  that vanished in dark mode. Selection stays signalled three ways (bold + accent bar + tinted panel).
+- Both themes in `main.dart` now derive `secondaryContainer` from the brand colour — previously
+  `ColorScheme.light/dark` set only `primary`/`secondary`, so that role was Flutter's default lavender.
+
+### Validation
+- `flutter analyze lib` **535 issues**, 0 errors (unchanged); Flutter **455 tests** (+12)
+- `test/app_theme_test.dart` pins the scales, the gradient, the badge colours, and guards the drawer
+  against drifting back to hand-picked values; the drawer test file gained a dark-mode case
+- i18n unchanged (no new keys)
+

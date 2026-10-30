@@ -18,6 +18,7 @@ import '../utils/constants.dart';
 import 'language_toggle.dart';
 import '../utils/drawer_navigation.dart';
 import '../utils/staff_permissions.dart';
+import '../theme/app_theme.dart';
 import 'drawer_menu.dart';
 
 class CustomDrawer extends StatelessWidget {
@@ -42,7 +43,6 @@ class CustomDrawer extends StatelessWidget {
     // Roles are normalised in ONE place (utils/staff_permissions.dart). The database
     // stores 'Manager', several screens lower-case it, and mixing the two conventions
     // is how a badge or an entry silently disappears.
-    final isAdmin = StaffPermissions.isAdminRole(user?.role);
     final isManager = StaffPermissions.isManagerRole(user?.role);
     final isStaff = StaffPermissions.isStaffRole(user?.role);
     final theme = Theme.of(context);
@@ -60,14 +60,15 @@ class CustomDrawer extends StatelessWidget {
           // Header
           Container(
             width: double.infinity,
-            padding:
-                const EdgeInsets.only(top: 48, bottom: 24, left: 20, right: 20),
+            padding: const EdgeInsets.only(
+                top: 48,
+                bottom: AppSpace.xl,
+                left: AppSpace.xl,
+                right: AppSpace.xl),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [primaryColor, primaryColor.withValues(alpha: 0.7)],
-              ),
+              // The ONE brand surface (theme/app_theme.dart), shared with the auth
+              // hero — instead of a gradient invented per screen.
+              gradient: AppBrand.surface(primaryColor),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -77,12 +78,7 @@ class CustomDrawer extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2))
-                    ],
+                    boxShadow: AppShadow.soft(context),
                   ),
                   child: CircleAvatar(
                     radius: 32,
@@ -121,7 +117,7 @@ class CustomDrawer extends StatelessWidget {
                     style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white),
+                        color: AppBrand.onSurface),
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
                 // Role and email row
@@ -130,20 +126,14 @@ class CustomDrawer extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: isAdmin
-                          ? Colors.amber
-                          : isManager
-                              ? Colors.orange
-                              : isStaff
-                                  ? Colors.blue
-                                  : Colors.white24,
-                      borderRadius: BorderRadius.circular(12),
+                      color: AppRoleBadge.background(user?.role),
+                      borderRadius: AppRadius.pillAll,
                     ),
                     child: Text(user?.role ?? 'Customer',
                         style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: isAdmin ? Colors.black87 : Colors.white)),
+                            color: AppRoleBadge.foreground(user?.role))),
                   ),
                   // 👑 Owner badge — distinguishes the company founder from
                   // managers who joined later via the invite code
@@ -154,7 +144,7 @@ class CustomDrawer extends StatelessWidget {
                           horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.yellow.shade700,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppRadius.pillAll,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -173,13 +163,12 @@ class CustomDrawer extends StatelessWidget {
                   ],
                   const SizedBox(width: 8),
                   const Icon(Icons.email_outlined,
-                      size: 12, color: Colors.white70),
+                      size: 12, color: AppBrand.onSurfaceMuted),
                   const SizedBox(width: 4),
                   Expanded(
                       child: Text(user?.email ?? t('noEmail'),
                           style: const TextStyle(
-                              fontSize: 11,
-                              color: Color.fromRGBO(255, 255, 255, 0.702)),
+                              fontSize: 11, color: AppBrand.onSurfaceMuted),
                           overflow: TextOverflow.ellipsis)),
                 ]),
                 // ✅ ADD COMPANY NAME (for Managers and Staff)
@@ -197,8 +186,9 @@ class CustomDrawer extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(30),
+                          color: AppBrand.onSurface
+                              .withValues(alpha: AppAlpha.medium),
+                          borderRadius: AppRadius.pillAll,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,

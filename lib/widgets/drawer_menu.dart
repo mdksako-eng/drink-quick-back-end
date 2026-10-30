@@ -27,6 +27,7 @@ import '../screens/storage_settings_screen.dart';
 import '../screens/subscription_screen.dart';
 import '../screens/support_report_screen.dart';
 import '../screens/variance_screen.dart';
+import '../theme/app_theme.dart';
 import '../utils/drawer_navigation.dart';
 import '../utils/i18n.dart';
 import '../utils/staff_permissions.dart';
@@ -135,7 +136,8 @@ class _DrawerMenuState extends State<DrawerMenu> {
   /// On a 20-entry drawer, scrolling to "Variance" is the slowest part of using it.
   Widget _buildSearchField(ThemeData theme) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpace.lg, AppSpace.md, AppSpace.lg, 2),
       child: TextField(
         controller: _searchController,
         onChanged: (value) => setState(() => _query = value),
@@ -386,15 +388,10 @@ class _DrawerMenuState extends State<DrawerMenu> {
       ];
 
   Widget _buildSectionTitle(BuildContext context, String title) {
-    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 16, 8),
-      child: Text(title,
-          style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.8,
-              color: theme.hintColor)),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpace.xl, AppSpace.md, AppSpace.lg, AppSpace.sm),
+      child: Text(title, style: AppText.sectionLabel(context)),
     );
   }
 
@@ -449,15 +446,19 @@ class _DrawerMenuState extends State<DrawerMenu> {
     int badgeCount = 0,
   }) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final isSelected = screen == widget.currentScreen;
+    // M3's own "selected container" role instead of a hand-picked alpha: it is the
+    // colour designed for a selected list row, and it adapts to dark mode — a 10 %
+    // tint of the primary colour all but disappears on a dark drawer.
     final iconColorFinal =
-        isSelected ? widget.primaryColor : iconColor ?? theme.hintColor;
+        isSelected ? scheme.onSecondaryContainer : iconColor ?? theme.hintColor;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      margin: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: 2),
       decoration: BoxDecoration(
-        color: isSelected ? widget.primaryColor.withValues(alpha: 0.1) : null,
-        borderRadius: BorderRadius.circular(10),
+        color: isSelected ? scheme.secondaryContainer : null,
+        borderRadius: AppRadius.mediumAll,
       ),
       child: ListTile(
         leading: BadgeIcon(
@@ -470,16 +471,7 @@ class _DrawerMenuState extends State<DrawerMenu> {
         ),
         title: Row(
           children: [
-            Text(
-              title,
-              style: TextStyle(
-                color: isSelected
-                    ? widget.primaryColor
-                    : theme.textTheme.bodyLarge?.color,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                fontSize: 14,
-              ),
-            ),
+            Text(title, style: AppText.itemLabel(context, selected: isSelected)),
             if (badgeCount > 0)
               Padding(
                 padding: const EdgeInsets.only(left: 8),
@@ -506,7 +498,7 @@ class _DrawerMenuState extends State<DrawerMenu> {
                 width: 4,
                 height: 20,
                 decoration: BoxDecoration(
-                  color: widget.primaryColor,
+                  color: scheme.primary,
                   borderRadius: BorderRadius.circular(2),
                 ),
               )
@@ -520,8 +512,9 @@ class _DrawerMenuState extends State<DrawerMenu> {
           }
           onTap();
         },
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: 4),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.mediumAll),
       ),
     );
   }
