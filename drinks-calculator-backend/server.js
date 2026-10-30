@@ -79,7 +79,7 @@ console.log('🔌 Connecting to PostgreSQL (Supabase)...');
 // 🏷️ Build identity, reported by GET /health. Bump RELEASE when you want to
 // confirm from the outside that a deploy actually went through; SERVER_STARTED_AT
 // resets on every restart (uptimeSeconds in the health payload).
-const RELEASE = '2026-10-28-notchpay-removed';
+const RELEASE = '2026-10-29-credential-hardening';
 const SERVER_STARTED_AT = new Date();
 // Used by the startup banner below. CamerPay is the only payment rail now — the
 // Notch Pay one was removed (see memory-bank/activeContext.md).
