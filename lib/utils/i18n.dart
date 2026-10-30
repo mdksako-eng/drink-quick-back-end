@@ -101,6 +101,15 @@ const Map<String, String> _en = {
       'Add your CamerPay API token to start accepting payments.',
   'campayBlockerSecret':
       'Add your CamerPay webhook secret, or payments arrive but are never confirmed.',
+  'campayPwdTitle': 'Confirm your password',
+  'campayPwdHint':
+      'The CamerPay token decides where this company\'s money goes, so we ask for your password again.',
+  'campayPwdLabel': 'Your password',
+  'campayPwdRequired': 'Confirm your password to change the CamerPay token',
+  'campayPwdWrong': 'That password is not correct',
+  'campayPwdTooMany': 'Too many attempts - try again later',
+  'campayPwdOwnerNotified':
+      'The company owner will be emailed about this change.',
   // Auth
   'appName': 'Drink Quick Cal',
   'signIn': 'Sign In',
@@ -1676,6 +1685,15 @@ const Map<String, String> _fr = {
       'Ajoutez votre jeton API CamerPay pour commencer à accepter des paiements.',
   'campayBlockerSecret':
       'Ajoutez votre secret de webhook CamerPay, sinon les paiements seront reçus mais jamais confirmés.',
+  'campayPwdTitle': 'Confirmez votre mot de passe',
+  'campayPwdHint':
+      'Le jeton CamerPay détermine où va l\'argent de cette entreprise, nous demandons donc votre mot de passe à nouveau.',
+  'campayPwdLabel': 'Votre mot de passe',
+  'campayPwdRequired': 'Confirmez votre mot de passe pour changer le jeton CamerPay',
+  'campayPwdWrong': 'Ce mot de passe est incorrect',
+  'campayPwdTooMany': 'Trop de tentatives - réessayez plus tard',
+  'campayPwdOwnerNotified':
+      'Le propriétaire de l\'entreprise sera averti par e-mail de ce changement.',
   // Auth
   'appName': 'Drink Quick Cal',
   'signIn': 'Se connecter',

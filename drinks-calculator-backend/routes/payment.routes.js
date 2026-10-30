@@ -2,7 +2,16 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const bcrypt = require('bcrypt');
 const { getSessionUser } = require('../middleware/sessionAuth');
+const auditLog = require('../utils/auditLog');
+// What a credential change means, and who has to hear about it (pure + tested).
+const credentialChange = require('../utils/credentialChange');
+// The owner is emailed when their company's money destination changes.
+const { sendPaymentCredentialChangedEmail, isEmailConfigured } = require('../utils/email.service');
+const { createQueue } = require('../utils/authQueue');
+const { createRateLimiter } = require('../utils/rateLimiter');
+const { safeEqual } = require('../utils/safeCompare');
 // CamerPay per-company collection (phase 3): each bar's own token and webhook
 // secret, stored encrypted and returned only masked.
 const credentials = require('../utils/companyPaymentCredentials');
@@ -243,6 +252,83 @@ function canManagePaymentSettings(role) {
   return ['Manager', 'Administrator', 'Admin', 'Owner'].includes(role);
 }
 
+// Re-authentication is bcrypt work, so it is bounded like the login path: a burst of
+// attempts must not starve the thread pool the way unbounded hashing would.
+const reauthQueue = createQueue(2);
+// A session found on an unlocked till is exactly what re-authentication defends
+// against, so guessing the password behind it is rate-limited per user.
+const reauthLimiter = createRateLimiter({ max: 5, windowMs: 15 * 60 * 1000 });
+
+const isBcryptHash = (stored) => typeof stored === 'string' && stored.startsWith('$2');
+
+/**
+ * Confirm the signed-in user's own password before a money-moving change.
+ *
+ * Mirrors the login rule exactly — bcrypt, with the legacy plaintext fallback that
+ * upgrades the stored hash on success — so there is still only ONE way a password is
+ * ever checked in this codebase.
+ *
+ * @returns {Promise<{ok: boolean, status?: number, code?: string, actorName?: string}>}
+ */
+async function verifyActorPassword(req, user, password) {
+  if (!password || typeof password !== 'string') {
+    return { ok: false, status: 400, code: 'password_required' };
+  }
+  if (!reauthLimiter.check(`reauth:${user.id}`)) {
+    return { ok: false, status: 429, code: 'too_many_attempts' };
+  }
+
+  const found = await req.db.query(
+    'SELECT username, email, password FROM users WHERE id = $1',
+    [user.id]
+  );
+  const actor = found.rows[0];
+  if (!actor || !actor.password) {
+    return { ok: false, status: 401, code: 'password_required' };
+  }
+
+  let valid = false;
+  if (isBcryptHash(actor.password)) {
+    valid = await reauthQueue.run(() => bcrypt.compare(password, actor.password));
+  } else {
+    valid = safeEqual(password, actor.password);
+    if (valid) {
+      const hashed = await reauthQueue.run(() => bcrypt.hash(password, 10));
+      await req.db.query('UPDATE users SET password = $1 WHERE id = $2', [hashed, user.id]);
+    }
+  }
+  if (!valid) return { ok: false, status: 401, code: 'invalid_password' };
+
+  // A correct password clears the counter, so a manager who mistypes twice is not
+  // locked out of their own settings for a quarter of an hour.
+  reauthLimiter.reset(`reauth:${user.id}`);
+  return { ok: true, actorName: actor.username || actor.email || '' };
+}
+
+/**
+ * Tell the company owner that the CamerPay credential changed. Best effort: a dead
+ * mailer must never block a legitimate fix, but a failure is logged.
+ */
+async function notifyOwnerOfCredentialChange(req, user, changes, actorName) {
+  if (!isEmailConfigured()) return;
+  const found = await req.db.query(
+    `SELECT c.name AS company_name, u.email AS owner_email, u.username AS owner_name
+       FROM companies c LEFT JOIN users u ON u.id = c.owner_id
+      WHERE c.id = $1`,
+    [user.company_id]
+  );
+  const row = found.rows[0];
+  if (!row || !row.owner_email) return;
+  await sendPaymentCredentialChangedEmail({
+    to: row.owner_email,
+    ownerName: row.owner_name,
+    companyName: row.company_name,
+    actorName: actorName || user.username || '',
+    changes,
+    when: new Date(),
+  });
+}
+
 router.get('/payment/campay-settings', async (req, res) => {
   try {
     const user = await requireSessionUser(req);
@@ -295,7 +381,7 @@ router.patch('/payment/campay-settings', async (req, res) => {
       return res.status(403).json({ error: 'Only managers can change payment settings' });
     }
 
-    const { campayEnabled, token, webhookSecret, rotateWebhookToken } = req.body || {};
+    const { campayEnabled, token, webhookSecret, rotateWebhookToken, currentPassword } = req.body || {};
 
     const current = await req.db.query(
       `SELECT ${CAMPAY_SELECT} FROM companies WHERE id = $1`,
@@ -325,6 +411,26 @@ router.patch('/payment/campay-settings', async (req, res) => {
         error: 'Invalid CamerPay webhook secret',
         code: 'webhook_secret_too_short',
       });
+    }
+
+    // 🔐 RE-AUTHENTICATION. Storing or replacing the token is the one settings action
+    // that can silently redirect this company's money to another CamerPay account, so
+    // the caller proves who they are again. A manager who finds an unlocked till with
+    // a live session must not be able to move the money in one tap.
+    let actorName = '';
+    if (credentialChange.redirectsMoney({ tokenReplaced: Boolean(newToken) })) {
+      const reauth = await verifyActorPassword(req, user, currentPassword);
+      if (!reauth.ok) {
+        return res.status(reauth.status).json({
+          error: reauth.code === 'invalid_password'
+            ? 'That password is not correct'
+            : (reauth.code === 'too_many_attempts'
+              ? 'Too many attempts - try again later'
+              : 'Confirm your password to change the CamerPay token'),
+          code: reauth.code,
+        });
+      }
+      actorName = reauth.actorName || '';
     }
 
     const willHaveToken = Boolean(newToken) || Boolean(company[credentials.COLUMNS.token]);
@@ -387,6 +493,36 @@ router.patch('/payment/campay-settings', async (req, res) => {
       `UPDATE companies SET ${setClauses.join(', ')} WHERE id = $${paramIndex}`,
       values
     );
+
+    // 🧾 Who changed where this company's money goes, and what they changed. The
+    // values are never written: the audit log is read by people, so it must not
+    // become a place a token can leak from.
+    const changes = credentialChange.describeChange({
+      tokenReplaced: Boolean(newToken),
+      secretReplaced: Boolean(newSecret),
+      webhookRotated: Boolean(updates[credentials.COLUMNS.webhookToken]),
+      enabled: campayEnabled !== undefined ? Boolean(campayEnabled) : undefined,
+    });
+    await auditLog.record(req.db, {
+      companyId: user.company_id,
+      actorId: user.id,
+      actorName: actorName || user.username || '',
+      action: credentialChange.ACTIONS.CREDENTIAL_CHANGED,
+      target: `company:${user.company_id}`,
+      detail: changes,
+    });
+
+    // 📧 The owner's money is what moved, and the owner may not be the actor — so
+    // they are told, and told who did it. Fire and forget: a dead mailer must not
+    // block a legitimate fix (the audit row above is the durable record).
+    if (credentialChange.needsOwnerNotice({
+      tokenReplaced: Boolean(newToken),
+      secretReplaced: Boolean(newSecret),
+    })) {
+      notifyOwnerOfCredentialChange(req, user, changes, actorName).catch((error) => {
+        console.warn('⚠️ Credential-change notice not sent:', error.message);
+      });
+    }
 
     const after = await req.db.query(
       `SELECT ${CAMPAY_SELECT} FROM companies WHERE id = $1`,

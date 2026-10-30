@@ -833,3 +833,30 @@ so the schema was documented for anyone.
 - `tests/payment_credentials_removed.test.js` fails if any dropped column name reappears in the
   backend, or if the app starts sending the camelCase fields again
 
+---
+
+## Security — a CamerPay credential change is re-authenticated, audited and reported ✅ (2026-10-29)
+
+### Why
+`PATCH /payment/campay-settings` was the one money-moving settings action with no audit row and no second
+check. Replacing a company's CamerPay token silently redirects where that company's money lands, so a
+session left open on an unlocked till was enough to do it.
+
+### Delivered
+- **Re-authentication for the token.** Storing or replacing it requires the actor's own password,
+  verified with bcrypt exactly like login (including the legacy plaintext fallback that upgrades the
+  hash), bounded by a small auth queue and rate-limited to 5 tries / 15 minutes per user. Rotating the
+  webhook token or flipping the switch needs nothing extra — those move no money.
+- **Audit trail.** Every change writes `company.payment_credential` to `audit_log` with the actor and a
+  description (booleans only, never the values).
+- **Owner notice.** A token or webhook-secret change emails the company owner with who did it, when, and
+  what to do if it was not them. Best effort — the audit row is the durable record.
+- **App.** Both save paths prompt for the password when a token is typed; cancelling sends nothing, and
+  the three refusal codes are shown as translated sentences (EN + FR).
+
+### Validation
+- Backend **47 suites / 615 tests** (+1 suite / +12 tests); `node --check` clean
+- `flutter analyze lib` 0 errors (537-issue baseline); Flutter **428 tests**; i18n **EN=1473 FR=1473**
+- `tests/payment_credential_change.test.js` pins the three controls, the bcrypt-only rule and the
+  machine codes the app translates
+

@@ -119,14 +119,22 @@ class PaymentService {
   /// rotate them, or omit them to leave what the server already holds untouched —
   /// so a masked value shown in the UI can never overwrite a live secret.
   ///
+  /// [currentPassword] is required by the server whenever a token is being stored or
+  /// replaced: the token decides where this company's money lands, so the actor
+  /// confirms who they are. Rotating the webhook token or flipping the switch does
+  /// not need it.
+  ///
   /// Returns the server's answer so the screen can explain a refusal instead of
   /// silently doing nothing: `vault_key_missing` means the server has no storage
-  /// key, `token_required` means CamerPay cannot be enabled without a token, etc.
+  /// key, `token_required` means CamerPay cannot be enabled without a token,
+  /// `password_required` / `invalid_password` / `too_many_attempts` are the
+  /// re-authentication refusals.
   static Future<Map<String, dynamic>> updateCampaySettings({
     bool? campayEnabled,
     String? token,
     String? webhookSecret,
     bool? rotateWebhookToken,
+    String? currentPassword,
   }) async {
     try {
       final sessionToken = await SecureStorageService.getSessionToken();
@@ -140,6 +148,9 @@ class PaymentService {
       if (webhookSecret != null) body['webhookSecret'] = webhookSecret;
       if (rotateWebhookToken != null) {
         body['rotateWebhookToken'] = rotateWebhookToken;
+      }
+      if (currentPassword != null && currentPassword.isNotEmpty) {
+        body['currentPassword'] = currentPassword;
       }
 
       final response = await http.patch(

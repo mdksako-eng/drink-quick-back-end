@@ -450,10 +450,18 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
         try {
           final campayTokenTyped = _campayTokenController.text.trim();
           final campaySecretTyped = _campaySecretController.text.trim();
+          // A token decides where this company's money lands, so the server asks for
+          // the password again. Cancelling the prompt cancels the save: nothing sent.
+          String? campayPassword;
+          if (campayTokenTyped.isNotEmpty) {
+            campayPassword = await _promptCampayPassword();
+            if (campayPassword == null) return;
+          }
           final campayResult = await PaymentService.updateCampaySettings(
             campayEnabled: _campayEnabled,
             token: campayTokenTyped.isEmpty ? null : campayTokenTyped,
             webhookSecret: campaySecretTyped.isEmpty ? null : campaySecretTyped,
+            currentPassword: campayPassword,
           );
           if (campayResult['success'] == true) {
             _campayTokenController.clear();
@@ -475,7 +483,7 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
             debugPrint('❌ CamerPay settings refused: $reason');
             if (mounted) {
               Helpers.showToast(
-                reason.isEmpty ? t('error') : reason,
+                _campayRefusalMessage(reason),
                 isError: true,
               );
             }
@@ -2397,21 +2405,83 @@ class _StorageSettingsScreenState extends State<StorageSettingsScreen> {
     }
   }
 
+  /// The CamerPay token decides where this company's money goes, so the server asks
+  /// for the actor's own password before storing or replacing it. Returns null when
+  /// the manager cancels — the caller then sends nothing at all.
+  Future<String?> _promptCampayPassword() async {
+    final controller = TextEditingController();
+    final typed = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t('campayPwdTitle')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(t('campayPwdHint'), style: const TextStyle(fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              obscureText: true,
+              autofocus: true,
+              decoration: InputDecoration(labelText: t('campayPwdLabel')),
+            ),
+            const SizedBox(height: 8),
+            Text(t('campayPwdOwnerNotified'),
+                style: const TextStyle(fontSize: 12)),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: Text(t('cancel'))),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: Text(t('confirm')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    final value = (typed ?? '').trim();
+    return value.isEmpty ? null : value;
+  }
+
+  /// A re-authentication refusal arrives as a machine code; show our own sentence.
+  String _campayRefusalMessage(String code) {
+    switch (code) {
+      case 'password_required':
+        return t('campayPwdRequired');
+      case 'invalid_password':
+        return t('campayPwdWrong');
+      case 'too_many_attempts':
+        return t('campayPwdTooMany');
+      default:
+        return code.isEmpty ? t('error') : code;
+    }
+  }
+
   /// Save the CamerPay part on its own (the main Save button sends it too).
   Future<void> _saveCampaySettings() async {
     setState(() => _campaySaving = true);
     try {
       final tokenTyped = _campayTokenController.text.trim();
       final secretTyped = _campaySecretController.text.trim();
+      // Same rule as the main Save button: replacing the token is re-authenticated.
+      String? password;
+      if (tokenTyped.isNotEmpty) {
+        password = await _promptCampayPassword();
+        if (password == null || !mounted) return;
+      }
       final result = await PaymentService.updateCampaySettings(
         campayEnabled: _campayEnabled,
         token: tokenTyped.isEmpty ? null : tokenTyped,
         webhookSecret: secretTyped.isEmpty ? null : secretTyped,
+        currentPassword: password,
       );
       if (!mounted) return;
       if (result['success'] != true) {
         final reason = (result['error'] ?? '').toString();
-        Helpers.showToast(reason.isEmpty ? t('error') : reason, isError: true);
+        Helpers.showToast(_campayRefusalMessage(reason), isError: true);
         return;
       }
       _campayTokenController.clear();

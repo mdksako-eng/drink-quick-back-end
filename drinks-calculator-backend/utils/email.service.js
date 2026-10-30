@@ -192,6 +192,48 @@ const sendLoginOtpEmail = async (userEmail, code, username) => {
 };
 
 // ============================================================
+// PAYMENT CREDENTIAL CHANGED (money-movement alert)
+// ============================================================
+// 🔐 Sent to a company owner when the company's CamerPay API token or webhook
+// secret is replaced. This is the one settings change that can redirect where that
+// company's money lands, and the owner may not be the person who made it — so the
+// owner is told, with who did it and when. It is a notice, not a confirmation step:
+// the change has already happened by the time this is sent.
+const sendPaymentCredentialChangedEmail = async ({
+  to,
+  ownerName = '',
+  companyName = '',
+  actorName = '',
+  changes = '',
+  when = new Date(),
+} = {}) => {
+  const at = (when instanceof Date ? when : new Date(when)).toISOString();
+  const html = `
+    <div style="font-family:Arial;max-width:500px;margin:0 auto;background:white;border-radius:15px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,0.1);">
+      <div style="background:linear-gradient(135deg,#d90429,#ef233c);padding:30px;text-align:center;">
+        <h1 style="color:white;margin:0;">🍹 Drink Quick Cal</h1>
+        <p style="color:rgba(255,255,255,0.85);">Payment account changed</p>
+      </div>
+      <div style="padding:30px;">
+        <h2>Hello ${ownerName || 'there'},</h2>
+        <p>The CamerPay connection for <b>${companyName || 'your company'}</b> was just changed:</p>
+        <div style="padding:14px;background:#fff5f5;border-radius:12px;border:1px solid #ffd6d6;">
+          <b>${changes || 'payment credentials updated'}</b><br>
+          <span style="color:#666;font-size:13px;">by ${actorName || 'a manager'} on ${at}</span>
+        </div>
+        <p><b>If this was you or your team:</b> nothing to do. Money from new sales will reach the account you connected.</p>
+        <p><b>If it was not:</b> open Settings → Business Payment Settings, replace the CamerPay token with your own, and change the password of the account that made the change. Until then, payments taken at the till may be settling into the wrong account.</p>
+        <p style="color:#666;font-size:13px;">You receive this because you own this company's account.</p>
+      </div>
+    </div>`;
+  return await sendEmail(
+    to,
+    `CamerPay payment account changed for ${companyName || 'your company'}`,
+    html
+  );
+};
+
+// ============================================================
 // USERNAME TAKEN (anti-enumeration)
 // ============================================================
 // 📧 The register endpoint answers a taken username exactly like a fresh signup, so
@@ -218,4 +260,4 @@ const sendUsernameTakenEmail = async (userEmail, username) => {
   );
 };
 
-module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendExistingAccountEmail, sendLoginOtpEmail, sendUsernameTakenEmail, sendJoinRequestEmail, sendSupportReportEmail, sendEmail, buildEmailPayload, isEmailConfigured };
+module.exports = { sendResetCodeEmail, sendWelcomeEmail, sendVerificationEmail, sendExistingAccountEmail, sendLoginOtpEmail, sendUsernameTakenEmail, sendJoinRequestEmail, sendSupportReportEmail, sendPaymentCredentialChangedEmail, sendEmail, buildEmailPayload, isEmailConfigured };
