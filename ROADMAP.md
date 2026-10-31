@@ -955,3 +955,29 @@ hub: getting from Inventory to Shift meant going back to the till first. Reporte
 - Gates: `flutter analyze lib` **535 issues**, no `error -` (unchanged); Flutter **456 tests** (+1);
   i18n unchanged (no new keys, reuses `menu`). Backend untouched.
 
+## 2026-10-31 — Reports: the margin is real now, and the two "general" prices exist
+The report screen priced a historical sale with **today's** numbers: revenue from `drink.price` (the
+current catalogue) and cost from `item.purchasePrice` (the current stock row). Three consequences, all of
+them money the owner reads as fact:
+- editing a price this afternoon silently rewrote last month's report;
+- a drink that had left the catalogue (or had no stock row) fell back to a zero object, so the sale
+  contributed 0 revenue **and** 0 cost — which the margin reported as **100 %**;
+- the ledger already stored the correct basis (`sellingPriceAtSale` / `purchasePriceAtSale` on every sale
+  movement) and the screen ignored it.
+- **`lib/utils/report_profit_helper.dart`** (new, pure): `ProfitLine` → `ProfitSummary`. Prices from the
+  ledger first, the catalogue only for legacy movements, and never invents a cost of 0 (a cost of 0 is read
+  as "not on record"). It counts `unitsWithoutCost` / `unitsUnvalued` so the screen can caveat a figure
+  instead of flattering it.
+- **The Profit tab now shows** revenue, cost, profit, margin **plus the two "general" prices asked for** —
+  average selling price and average purchase price per unit sold in the period — with an amber caveat when
+  some units had no cost on record or could not be valued at all. Keys: `rpt_avgSellingPrice`,
+  `rpt_avgPurchasePrice`, `rpt_perUnitSold`, `rpt_caveatNoCost`, `rpt_caveatUnvalued` (EN+FR).
+- **Two bugs found on the way**: `test/screens_layout_test.dart` had never actually laid this screen out —
+  the harness injects a free plan, so the screen rendered its upgrade view and neither tab was ever
+  measured. Fixing that immediately exposed a real **100 px RenderFlex overflow** in the date-range card (an
+  unbounded `Column` inside a `Row`) on a phone; it is an `Expanded` now and wraps.
+- Gates: Flutter **468 tests** (+12), `flutter analyze lib` **534 issues** / 0 errors (one fewer than before
+  — the dead calculation code is gone), i18n **EN=1482 FR=1482**. Backend untouched.
+- **Still open**: the downloadable report (`ExportHelper.exportInventoryReport`) carries no money figures at
+  all — the totals, margin and averages exist only on screen.
+

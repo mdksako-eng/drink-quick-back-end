@@ -12,6 +12,7 @@ import 'package:drinks_calculator_fixed/providers/drink_provider.dart';
 import 'package:drinks_calculator_fixed/models/drink_model.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import '../utils/i18n.dart';
+import '../utils/report_profit_helper.dart';
 
 class InventoryReportScreen extends StatefulWidget {
   const InventoryReportScreen({Key? key}) : super(key: key);
@@ -95,111 +96,44 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
   }
 
   // ========== PROFIT CALCULATIONS ==========
+  //
+  // Priced by utils/report_profit_helper.dart: it reads the ledger's at-sale prices
+  // rather than today's catalogue prices, so editing a price no longer rewrites an
+  // older report, and a missing price is reported instead of counted as 0.
 
-  double _getTotalRevenue() {
-    if (_report == null) return 0;
+  ProfitSummary _profitSummary() {
+    if (_report == null) return ProfitSummary.empty;
+
     final drinkProvider = Provider.of<DrinkProvider>(context, listen: false);
+    final Map<String, Drink> drinks = {
+      for (final Drink d in drinkProvider.customDrinks) d.id: d,
+    };
+    final Map<String, InventoryItem> stock = {
+      for (final InventoryItem i in _report!.currentStock) i.drinkId: i,
+    };
 
-    return _report!.transactions
-        .where((t) => t.isOutgoing && t.reason == 'sale')
-        .fold(0.0, (sum, t) {
-      // Get actual selling price from drinks
-      final drink = drinkProvider.customDrinks.firstWhere(
-        (d) => d.id == t.drinkId,
-        orElse: () => Drink(id: '', name: '', price: 0, imageUrl: ''),
-      );
-      return sum + (drink.price * t.quantity);
-    });
-  }
-
-  double _getTotalCost() {
-    if (_report == null) return 0;
-    return _report!.transactions
-        .where((t) => t.isOutgoing && t.reason == 'sale')
-        .fold(0.0, (sum, t) {
-      final item = _report!.currentStock.firstWhere(
-        (i) => i.drinkId == t.drinkId,
-        orElse: () => InventoryItem(
-          id: '',
-          drinkId: '',
-          drinkName: '',
-          quantity: 0,
-          lastRestocked: DateTime.now(),
-        ),
-      );
-      return sum + (item.purchasePrice * t.quantity);
-    });
-  }
-
-  double _getTotalProfit() {
-    final revenue = _getTotalRevenue();
-    final cost = _getTotalCost();
-    return revenue - cost;
-  }
-
-  double _getProfitMargin() {
-    final revenue = _getTotalRevenue();
-    if (revenue == 0) return 0;
-    final cost = _getTotalCost();
-    return ((revenue - cost) / revenue) * 100;
-  }
-
-  Map<String, double> _getProfitByCategory() {
-    final map = <String, double>{};
-    if (_report == null) return map;
-    final drinkProvider = Provider.of<DrinkProvider>(context, listen: false);
-    for (final t in _report!.transactions
-        .where((t) => t.isOutgoing && t.reason == 'sale')) {
-      final drink = drinkProvider.customDrinks.firstWhere(
-        (d) => d.id == t.drinkId,
-        orElse: () => Drink(id: '', name: '', price: 0, imageUrl: ''),
-      );
-      final item = _report!.currentStock.firstWhere(
-        (i) => i.drinkId == t.drinkId,
-        orElse: () => InventoryItem(
-          id: '',
-          drinkId: '',
-          drinkName: '',
-          quantity: 0,
-          lastRestocked: DateTime.now(),
-          category: 'Other',
-        ),
-      );
-      final cat = item.category;
-      final profit = (drink.price - item.purchasePrice) * t.quantity;
-      map[cat] = (map[cat] ?? 0) + profit;
-    }
-    return map;
-  }
-
-  List<MapEntry<String, double>> _getTopProfitableDrinks() {
-    final map = <String, double>{};
-    if (_report == null) return [];
-    final drinkProvider = Provider.of<DrinkProvider>(context, listen: false);
-
-    for (final t in _report!.transactions
-        .where((t) => t.isOutgoing && t.reason == 'sale')) {
-      final drink = drinkProvider.customDrinks.firstWhere(
-        (d) => d.id == t.drinkId,
-        orElse: () => Drink(id: '', name: '', price: 0, imageUrl: ''),
-      );
-      final item = _report!.currentStock.firstWhere(
-        (i) => i.drinkId == t.drinkId,
-        orElse: () => InventoryItem(
-          id: '',
-          drinkId: '',
+    return summariseProfit(
+      _report!.transactions
+          .where((t) => t.isOutgoing && t.reason == 'sale')
+          .map((t) {
+        final drink = drinks[t.drinkId];
+        final item = stock[t.drinkId];
+        return ProfitLine(
+          drinkId: t.drinkId,
           drinkName: t.drinkName,
-          quantity: 0,
-          lastRestocked: DateTime.now(),
-        ),
-      );
-      final profit = (drink.price - item.purchasePrice) * t.quantity;
-      map[t.drinkName] = (map[t.drinkName] ?? 0) + profit;
-    }
-
-    final sorted = map.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    return sorted.take(5).toList();
+          quantity: t.quantity,
+          category: item?.category,
+          // What the ledger recorded when the unit was sold — the one basis that
+          // cannot move under the report's feet.
+          sellingPriceAtSale: t.sellingPriceAtSale,
+          purchasePriceAtSale: t.purchasePriceAtSale,
+          // Legacy movements predate those columns, so the catalogue is all that is
+          // left for them; the helper reads a cost of 0 as "not on record".
+          catalogueSellingPrice: drink?.price,
+          cataloguePurchasePrice: item?.purchasePrice,
+        );
+      }),
+    );
   }
 
   @override
@@ -367,13 +301,53 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
 
   // ==================== PROFIT TAB ====================
 
+  /// The caveat shown under the figures whenever some units had no cost on record or
+  /// could not be valued at all. A margin computed on incomplete data has to say so —
+  /// silently showing 100 % is what the old calculation did.
+  Widget _buildCaveatNote(ThemeData theme, ProfitSummary summary) {
+    final lines = <String>[
+      if (summary.unitsWithoutCost > 0) t('rpt_caveatNoCost'),
+      if (summary.unitsUnvalued > 0) t('rpt_caveatUnvalued'),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.amber.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, size: 16, color: Colors.amber),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final line in lines)
+                  Text(
+                    line,
+                    style: TextStyle(fontSize: 11, color: theme.hintColor),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProfitTab(ThemeData theme) {
-    final totalRevenue = _getTotalRevenue();
-    final totalCost = _getTotalCost();
-    final totalProfit = totalRevenue - totalCost;
-    final profitMargin = _getProfitMargin();
-    final profitByCategory = _getProfitByCategory();
-    final topDrinks = _getTopProfitableDrinks();
+    final summary = _profitSummary();
+    final totalRevenue = summary.revenue;
+    final totalCost = summary.cost;
+    final totalProfit = summary.profit;
+    final profitMargin = summary.marginPercent;
+    final profitByCategory = summary.profitByCategory;
+    final topDrinks = summary.topProfitableDrinks;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -420,6 +394,37 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
                       Colors.purple)),
             ],
           ),
+          const SizedBox(height: 8),
+          // 🏷️ The two "general" prices: what the shop actually charged and paid per
+          // unit sold in this period (utils/report_profit_helper.dart).
+          Row(
+            children: [
+              Expanded(
+                  child: _buildProfitCard(
+                      t('rpt_avgSellingPrice'),
+                      CurrencyHelper.format(summary.averageSellingPrice),
+                      Icons.sell_outlined,
+                      Colors.teal)),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: _buildProfitCard(
+                      t('rpt_avgPurchasePrice'),
+                      CurrencyHelper.format(summary.averagePurchasePrice),
+                      Icons.shopping_bag_outlined,
+                      Colors.orange)),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 4),
+            child: Text(
+              '${t('rpt_perUnitSold')} · ${summary.unitsSold}',
+              style: TextStyle(fontSize: 11, color: theme.hintColor),
+            ),
+          ),
+          if (summary.hasCaveat) ...[
+            const SizedBox(height: 12),
+            _buildCaveatNote(theme, summary),
+          ],
           const SizedBox(height: 24),
 
           // Profit by Category
@@ -530,23 +535,27 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
             children: [
               const Icon(Icons.date_range, color: Colors.blue),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(t('rpt_reportPeriod'),
+              // Expanded, not a bare Column + Spacer: the label and the two formatted
+              // dates are unbounded text, and a longer translation (or a locale that
+              // spells its months out) used to push this Row past the card edge.
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(t('rpt_reportPeriod'),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: theme.textTheme.bodyLarge?.color)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${DateFormat('MMM dd, yyyy').format(_startDate)} - ${DateFormat('MMM dd, yyyy').format(_endDate)}',
                       style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                          color: theme.textTheme.bodyLarge?.color)),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${DateFormat('MMM dd, yyyy').format(_startDate)} - ${DateFormat('MMM dd, yyyy').format(_endDate)}',
-                    style: TextStyle(
-                        color: theme.textTheme.bodyMedium?.color, fontSize: 13),
-                  ),
-                ],
+                          color: theme.textTheme.bodyMedium?.color, fontSize: 13),
+                    ),
+                  ],
+                ),
               ),
-              const Spacer(),
               Icon(Icons.edit, color: theme.hintColor),
             ],
           ),

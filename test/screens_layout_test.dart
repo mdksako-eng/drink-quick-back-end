@@ -79,6 +79,7 @@ void main() {
     WidgetTester tester,
     Widget screen, {
     Size size = const Size(390, 844),
+    PlanProvider? plan,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
@@ -87,7 +88,10 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
-          ChangeNotifierProvider(create: (_) => PlanProvider()),
+          // A plan-gated screen (the reports, for one) renders its upgrade view with
+          // the default free plan, so a caller that wants the real screen lays out
+          // passes a provider that has been let through.
+          ChangeNotifierProvider(create: (_) => plan ?? PlanProvider()),
           ChangeNotifierProvider(create: (_) => AuthProvider()),
           ChangeNotifierProvider(create: (_) => DrinkProvider()),
           ChangeNotifierProvider(create: (_) => InventoryProvider()),
@@ -169,9 +173,25 @@ void main() {
 
   testWidgets('InventoryReportScreen lays out on phone and tablet',
       (tester) async {
-    await pumpScreen(tester, const InventoryReportScreen(), size: phone);
+    // The screen is plan-gated: with the default free plan this test would only ever
+    // lay out the upgrade view, and the tabs — where the money cards live — would
+    // never be measured. An admin is let through by the same rule the backend uses.
+    final plan = PlanProvider()..setIsAdmin(true);
+
+    await pumpScreen(tester, const InventoryReportScreen(),
+        size: phone, plan: plan);
     expectNoLayoutError();
-    await pumpScreen(tester, const InventoryReportScreen(), size: tablet);
+
+    // The Profit tab: revenue, cost, profit, margin and the two per-unit averages.
+    await tester.tap(find.byIcon(Icons.analytics).first);
+    await tester.pumpAndSettle();
+    expectNoLayoutError();
+
+    await pumpScreen(tester, const InventoryReportScreen(),
+        size: tablet, plan: plan);
+    expectNoLayoutError();
+    await tester.tap(find.byIcon(Icons.analytics).first);
+    await tester.pumpAndSettle();
     expectNoLayoutError();
   });
 

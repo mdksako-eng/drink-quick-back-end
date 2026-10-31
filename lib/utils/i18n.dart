@@ -1012,6 +1012,15 @@ const Map<String, String> _en = {
   'rpt_cost': 'Cost',
   'rpt_profit': 'Profit',
   'rpt_margin': 'Margin',
+  // The two "general" prices: averages per unit SOLD in the period. The caveats are
+  // shown when some units have no cost price on record or could not be valued at all.
+  'rpt_avgSellingPrice': 'Avg selling price',
+  'rpt_avgPurchasePrice': 'Avg purchase price',
+  'rpt_perUnitSold': 'per unit sold',
+  'rpt_caveatNoCost':
+      'Some units have no cost price on record, so the margin above is an upper bound.',
+  'rpt_caveatUnvalued':
+      'Some units could not be valued (their drink is no longer in the catalogue).',
   'rpt_profitByCategory': 'Profit by Category',
   'rpt_top5': 'Top 5 Most Profitable Drinks',
   'rpt_reportPeriod': 'Report Period',
@@ -2616,6 +2625,13 @@ const Map<String, String> _fr = {
   'rpt_cost': 'Coût',
   'rpt_profit': 'Profit',
   'rpt_margin': 'Marge',
+  'rpt_avgSellingPrice': 'Prix de vente moyen',
+  'rpt_avgPurchasePrice': 'Prix d\'achat moyen',
+  'rpt_perUnitSold': 'par unité vendue',
+  'rpt_caveatNoCost':
+      'Certaines unités n\'ont pas de prix d\'achat enregistré, la marge ci-dessus est donc un plafond.',
+  'rpt_caveatUnvalued':
+      'Certaines unités n\'ont pas pu être valorisées (boisson retirée du catalogue).',
   'rpt_profitByCategory': 'Profit par catégorie',
   'rpt_top5': 'Top 5 des boissons les plus rentables',
   'rpt_reportPeriod': 'Période du rapport',
