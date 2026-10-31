@@ -178,6 +178,10 @@ class _InventoryReportScreenState extends State<InventoryReportScreen>
                     _report!,
                     context,
                     drinks: drinks,
+                    // The very same summary the cards above show — one calculation, so
+                    // the file and the screen can never disagree.
+                    profit: _profitSummary(),
+                    currencySymbol: CurrencyHelper.getSymbol(),
                   );
                 }
               },

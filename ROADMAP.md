@@ -981,3 +981,24 @@ them money the owner reads as fact:
 - **Still open**: the downloadable report (`ExportHelper.exportInventoryReport`) carries no money figures at
   all — the totals, margin and averages exist only on screen.
 
+## 2026-10-31 — The money now leaves the app with the report
+Follow-on to the entry above: the Profit tab had the figures, the **exported file** did not.
+`ExportHelper.exportInventoryReport` wrote stock counts, categories, expiry and movements, so the totals, the
+margin and the two averages could never reach an accountant.
+- **One definition, three formats**: `InventoryReportFiles.profitRows(profit, t)` builds the label/value rows
+  once, and both the Excel sheet (`Profit`, next to `Summary`) and the CSV block consume it — so the two
+  formats cannot drift apart. A test asserts that function directly, which is the honest way to cover the
+  sheet: the `excel` package cannot re-parse a workbook containing the empty spacer rows this builder writes.
+- **Numbers stay numbers** in Excel and CSV (two decimals) so a spreadsheet can sum the column; the PDF is
+  the presentation one and takes an optional `currencySymbol` from the caller.
+- **The caveats travel with the figures**: units with no cost on record, and units that could not be valued,
+  are printed under the money block in the PDF and as extra rows in Excel/CSV. A file that leaves the
+  building must not read better than the screen it came from.
+- **The screen passes its own summary in** (`profit: _profitSummary()`), so file and screen are one
+  calculation rather than two that can disagree.
+- The export dialog gained a **Profit & margins** checkbox, appended last so the existing checkbox order —
+  and `optionsFromSelection` — stays stable for every caller.
+- New keys: `exp_profitSection`, `exp_unitsSold` (EN+FR).
+- Gates: Flutter **476 tests** (+8), `flutter analyze lib` **534 issues** / 0 errors,
+  i18n **EN=1484 FR=1484**. Backend untouched.
+

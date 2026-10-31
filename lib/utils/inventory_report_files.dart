@@ -14,6 +14,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../models/drink_model.dart';
 import '../models/inventory_model.dart';
 import 'expiry_alert_helper.dart';
+import 'report_profit_helper.dart';
 
 /// Which sections the user wants in the exported inventory report.
 class InventoryExportOptions {
@@ -35,6 +36,10 @@ class InventoryExportOptions {
   /// Stock movement log for the period.
   final bool transactions;
 
+  /// The money side: revenue, cost, profit, margin and the per-unit averages, priced
+  /// by `report_profit_helper.dart` — the same figures the Reports screen shows.
+  final bool profit;
+
   const InventoryExportOptions({
     this.summary = true,
     this.charts = true,
@@ -42,6 +47,7 @@ class InventoryExportOptions {
     this.lowStock = true,
     this.expiry = true,
     this.transactions = true,
+    this.profit = true,
   });
 
   /// Everything included.
@@ -49,7 +55,13 @@ class InventoryExportOptions {
 
   /// Nothing selected (the dialog refuses to export in that case).
   bool get isEmpty =>
-      !summary && !charts && !currentStock && !lowStock && !expiry && !transactions;
+      !summary &&
+      !charts &&
+      !currentStock &&
+      !lowStock &&
+      !expiry &&
+      !transactions &&
+      !profit;
 }
 
 /// One row of the expiry table (derived from the drinks' batch dates).
@@ -110,6 +122,34 @@ class InventoryReportFiles {
   }
 
   /// Total units currently in stock.
+  /// The money figures as label/value rows — the ONE definition, shared by the Excel
+  /// sheet and the CSV block so the two formats cannot drift apart, and directly
+  /// testable (the excel package cannot reliably re-parse a workbook that contains
+  /// empty rows, so asserting through this is the honest way to cover the sheet).
+  ///
+  /// Numbers stay numbers: a spreadsheet has to be able to sum the column.
+  static List<List<Object>> profitRows(
+      ProfitSummary profit, String Function(String) t) {
+    return [
+      [t('exp_metric'), t('exp_value')],
+      [t('rpt_revenue'), profit.revenue],
+      [t('rpt_cost'), profit.cost],
+      [t('rpt_profit'), profit.profit],
+      [t('rpt_margin'), '${profit.marginPercent.toStringAsFixed(1)}%'],
+      [t('rpt_avgSellingPrice'), profit.averageSellingPrice],
+      [t('rpt_avgPurchasePrice'), profit.averagePurchasePrice],
+      [t('exp_unitsSold'), profit.unitsSold],
+      // The caveats travel with the figures, never left behind on the screen.
+      if (profit.unitsWithoutCost > 0)
+        [t('rpt_caveatNoCost'), profit.unitsWithoutCost],
+      if (profit.unitsUnvalued > 0)
+        [t('rpt_caveatUnvalued'), profit.unitsUnvalued],
+    ];
+  }
+
+  /// Sheet name of the money section in the Excel workbook.
+  static const String profitSheetName = 'Profit';
+
   static int totalInStock(InventoryReport report) =>
       report.currentStock.fold(0, (sum, item) => sum + item.quantity);
 
@@ -128,6 +168,8 @@ class InventoryReportFiles {
     String? companyName,
     Uint8List? logoBytes,
     List<Drink> drinks = const [],
+    ProfitSummary profit = ProfitSummary.empty,
+    String currencySymbol = '',
     InventoryExportOptions options = InventoryExportOptions.all,
     DateTime? generatedAt,
   }) async {
@@ -145,6 +187,11 @@ class InventoryReportFiles {
             pw.SizedBox(height: 12),
             _pdfSectionTitle(t('exp_summary')),
             _pdfKpiBoxes(report, expiry, t),
+          ],
+          if (options.profit) ...[
+            pw.SizedBox(height: 14),
+            _pdfSectionTitle(t('exp_profitSection')),
+            _pdfProfitBoxes(profit, t, currencySymbol),
           ],
           if (options.charts) ...[
             pw.SizedBox(height: 14),
@@ -327,48 +374,99 @@ if (options.expiry && expiry.isNotEmpty) ...[
             style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
       );
 
+  /// One tile in a KPI row. Shared by the stock summary and the money block so the two
+  /// sections cannot drift apart visually.
+  static pw.Widget _pdfBox(String label, String value) => pw.Expanded(
+        child: pw.Container(
+          padding: const pw.EdgeInsets.all(8),
+          margin: const pw.EdgeInsets.symmetric(horizontal: 3),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey400),
+            borderRadius: pw.BorderRadius.circular(4),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(value,
+                  style: pw.TextStyle(
+                      fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 2),
+              pw.Text(label,
+                  style: const pw.TextStyle(
+                      fontSize: 9, color: PdfColors.grey700)),
+            ],
+          ),
+        ),
+      );
+
+  /// The money block: what the shop charged, what it paid, what is left, and the two
+  /// per-unit averages. Priced by report_profit_helper.dart, so these are the figures
+  /// on the Reports screen — not a second calculation that could drift from it.
+  static pw.Widget _pdfProfitBoxes(
+      ProfitSummary profit, String Function(String) t, String currencySymbol) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Row(children: [
+          _pdfBox(t('rpt_revenue'), _money(profit.revenue, currencySymbol)),
+          _pdfBox(t('rpt_cost'), _money(profit.cost, currencySymbol)),
+          _pdfBox(t('rpt_profit'), _money(profit.profit, currencySymbol)),
+          _pdfBox(
+              t('rpt_margin'), '${profit.marginPercent.toStringAsFixed(1)}%'),
+        ]),
+        pw.SizedBox(height: 4),
+        pw.Row(children: [
+          _pdfBox(t('rpt_avgSellingPrice'),
+              _money(profit.averageSellingPrice, currencySymbol)),
+          _pdfBox(t('rpt_avgPurchasePrice'),
+              _money(profit.averagePurchasePrice, currencySymbol)),
+          _pdfBox(t('exp_unitsSold'), '${profit.unitsSold}'),
+        ]),
+        // An incomplete cost price must never travel as a healthy margin.
+        if (profit.hasCaveat) ...[
+          pw.SizedBox(height: 4),
+          if (profit.unitsWithoutCost > 0)
+            pw.Text(t('rpt_caveatNoCost'),
+                style:
+                    const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+          if (profit.unitsUnvalued > 0)
+            pw.Text(t('rpt_caveatUnvalued'),
+                style:
+                    const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+        ],
+      ],
+    );
+  }
+
+  /// Money as it appears in the PDF: two decimals, with the caller's currency symbol
+  /// when it has one. Deliberately dependency-free — this file has to stay testable
+  /// without a currency service. Excel and CSV write the plain number instead, so the
+  /// reader can sum the column.
+  static String _money(double value, String symbol) {
+    final amount = value.toStringAsFixed(2);
+    return symbol.isEmpty ? amount : '$amount $symbol';
+  }
+
   static pw.Widget _pdfKpiBoxes(
       InventoryReport report, List<InventoryExpiryRow> expiry,
       String Function(String) t) {
     final expired = expiry.where((e) => e.isExpired).length;
-    pw.Widget box(String label, String value) => pw.Expanded(
-          child: pw.Container(
-            padding: const pw.EdgeInsets.all(8),
-            margin: const pw.EdgeInsets.symmetric(horizontal: 3),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.grey400),
-              borderRadius: pw.BorderRadius.circular(4),
-            ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(value,
-                    style: pw.TextStyle(
-                        fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                pw.SizedBox(height: 2),
-                pw.Text(label,
-                    style: const pw.TextStyle(
-                        fontSize: 9, color: PdfColors.grey700)),
-              ],
-            ),
-          ),
-        );
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.Row(children: [
-          box(t('exp_totalItemsInStock'), '${totalInStock(report)}'),
-          box(t('exp_itemsIn'), '${report.totalItemsIn}'),
-          box(t('exp_itemsOut'), '${report.totalItemsOut}'),
-          box(t('exp_netChange'), '${report.netChange}'),
+          _pdfBox(t('exp_totalItemsInStock'), '${totalInStock(report)}'),
+          _pdfBox(t('exp_itemsIn'), '${report.totalItemsIn}'),
+          _pdfBox(t('exp_itemsOut'), '${report.totalItemsOut}'),
+          _pdfBox(t('exp_netChange'), '${report.netChange}'),
         ]),
         pw.SizedBox(height: 4),
         pw.Row(children: [
-          box(t('exp_lowStockItems'), '${lowStockItems(report).length}'),
-          box(t('expiryAlertTitle'), '${expiry.length}'),
-          box(t('expiryAlreadyExpired'), '$expired'),
-          box(t('exp_transactionsHeader'), '${report.transactions.length}'),
+          _pdfBox(t('exp_lowStockItems'), '${lowStockItems(report).length}'),
+          _pdfBox(t('expiryAlertTitle'), '${expiry.length}'),
+          _pdfBox(t('expiryAlreadyExpired'), '$expired'),
+          _pdfBox(t('exp_transactionsHeader'), '${report.transactions.length}'),
         ]),
       ],
     );
@@ -475,6 +573,7 @@ if (options.expiry && expiry.isNotEmpty) ...[
     String? companyName,
     String? logoUrl,
     List<Drink> drinks = const [],
+    ProfitSummary profit = ProfitSummary.empty,
     InventoryExportOptions options = InventoryExportOptions.all,
     DateTime? generatedAt,
   }) {
@@ -532,6 +631,16 @@ if (options.expiry && expiry.isNotEmpty) ...[
           t('expiryAlertTitle'),
           expiry.length,
         ]);
+      }
+
+      if (options.profit) {
+        // Its own sheet, next to the summary: the money is what an owner opens the
+        // workbook for.
+        final sheet = excel[profitSheetName];
+        header(sheet, t('exp_profitSection'));
+        for (final row in profitRows(profit, t)) {
+          sheet.appendRow(row);
+        }
       }
 
       if (options.charts) {
@@ -655,6 +764,7 @@ if (options.currentStock && report.currentStock.isNotEmpty) {
     String? companyName,
     String? logoUrl,
     List<Drink> drinks = const [],
+    ProfitSummary profit = ProfitSummary.empty,
     InventoryExportOptions options = InventoryExportOptions.all,
     DateTime? generatedAt,
   }) {
@@ -686,6 +796,20 @@ if (options.currentStock && report.currentStock.isNotEmpty) {
       buffer.writeln(
           '${_csv(t('exp_lowStockItems'))},${lowStockItems(report).length}');
       buffer.writeln('${_csv(t('expiryAlertTitle'))},${expiry.length}');
+    }
+
+    if (options.profit) {
+      // Plain 2-decimal numbers, not formatted text: a spreadsheet has to be able to
+      // sum this column.
+      buffer.writeln();
+      buffer.writeln(_csv(t('exp_profitSection')));
+      for (final row in profitRows(profit, t)) {
+        buffer.writeln(row
+            .map((v) => v is String
+                ? _csv(v)
+                : (v is double ? v.toStringAsFixed(2) : v.toString()))
+            .join(','));
+      }
     }
 
     if (options.charts) {

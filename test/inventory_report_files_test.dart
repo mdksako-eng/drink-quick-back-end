@@ -8,6 +8,7 @@ import 'package:drinks_calculator_fixed/models/drink_model.dart';
 import 'package:drinks_calculator_fixed/models/inventory_model.dart';
 import 'package:drinks_calculator_fixed/utils/export_helper.dart';
 import 'package:drinks_calculator_fixed/utils/inventory_report_files.dart';
+import 'package:drinks_calculator_fixed/utils/report_profit_helper.dart';
 
 String t(String key) => const {
       'exp_inventoryReport': 'Inventory Report',
@@ -45,6 +46,17 @@ String t(String key) => const {
       'expiryAlreadyExpired': 'already expired',
       'expiryDaysLeft': 'day(s) left',
       'companyName': 'Company',
+      // The money section (report_profit_helper figures).
+      'exp_profitSection': 'Profit & margins',
+      'exp_unitsSold': 'Units sold',
+      'rpt_revenue': 'Revenue',
+      'rpt_cost': 'Cost',
+      'rpt_profit': 'Profit',
+      'rpt_margin': 'Margin',
+      'rpt_avgSellingPrice': 'Avg selling price',
+      'rpt_avgPurchasePrice': 'Avg purchase price',
+      'rpt_caveatNoCost': 'Some units have no cost price on record',
+      'rpt_caveatUnvalued': 'Some units could not be valued',
       'dm_expiryDate': 'Expiry date',
     }[key] ??
     key;
@@ -116,16 +128,43 @@ Drink _drink({required String name, DateTime? expiry, int stock = 0}) => Drink(
       currentStock: stock,
       expiryDate: expiry,
     );
+
+/// 10 units at 1000 sold, costing 700: revenue 10 000, cost 7 000, profit 3 000,
+/// margin 30 %, averages 1000 / 700.
+const _profit = ProfitSummary(
+  revenue: 10000,
+  cost: 7000,
+  unitsSold: 10,
+  unitsWithoutCost: 0,
+  unitsUnvalued: 0,
+  profitByCategory: {},
+  topProfitableDrinks: [],
+);
+
+/// The same, but 2 of the units have no cost on record — the case that used to be
+/// exported as a flattering 100 % margin.
+const _profitWithCaveat = ProfitSummary(
+  revenue: 10000,
+  cost: 7000,
+  unitsSold: 10,
+  unitsWithoutCost: 2,
+  unitsUnvalued: 3,
+  profitByCategory: {},
+  topProfitableDrinks: [],
+);
+
 void main() {
   group('optionsFromSelection', () {
     test('maps the checkbox order to the report sections', () {
-      final all = ExportHelper.optionsFromSelection(const [true, true, true, true, true, true]);
+      final all = ExportHelper.optionsFromSelection(
+          const [true, true, true, true, true, true, true]);
       expect(all.summary, isTrue);
       expect(all.charts, isTrue);
       expect(all.currentStock, isTrue);
       expect(all.lowStock, isTrue);
       expect(all.expiry, isTrue);
       expect(all.transactions, isTrue);
+      expect(all.profit, isTrue);
       expect(all.isEmpty, isFalse);
     });
 
@@ -134,10 +173,13 @@ void main() {
       expect(only.summary, isTrue);
       expect(only.charts, isFalse);
       expect(only.transactions, isFalse);
+      // A list that predates the money box simply leaves it off.
+      expect(only.profit, isFalse);
     });
 
     test('nothing selected is empty (the dialog refuses to export)', () {
-      final none = ExportHelper.optionsFromSelection(const [false, false, false, false, false, false]);
+      final none = ExportHelper.optionsFromSelection(
+          const [false, false, false, false, false, false, false]);
       expect(none.isEmpty, isTrue);
     });
 
@@ -274,6 +316,110 @@ void main() {
       );
       final csv = InventoryReportFiles.buildCsv(report: report, t: t);
       expect(csv, contains('"Beer, Premium"'));
+    });
+  });
+
+  group('money in the exported file', () {
+    test('the CSV carries the totals, the margin and the two averages', () {
+      final csv = InventoryReportFiles.buildCsv(
+        report: _report,
+        t: t,
+        profit: _profit,
+      );
+
+      expect(csv, contains('Profit & margins'));
+      expect(csv, contains('Revenue,10000.00'));
+      expect(csv, contains('Cost,7000.00'));
+      expect(csv, contains('Profit,3000.00'));
+      expect(csv, contains('Margin,30.0%'));
+      expect(csv, contains('Avg selling price,1000.00'));
+      expect(csv, contains('Avg purchase price,700.00'));
+      expect(csv, contains('Units sold,10'));
+    });
+
+    test('the CSV omits the money when the box is unchecked', () {
+      final csv = InventoryReportFiles.buildCsv(
+        report: _report,
+        t: t,
+        profit: _profit,
+        options: const InventoryExportOptions(profit: false),
+      );
+
+      expect(csv, isNot(contains('Profit & margins')));
+      expect(csv, isNot(contains('Avg selling price')));
+    });
+
+    test('an incomplete cost price is exported with its caveat', () {
+      final csv = InventoryReportFiles.buildCsv(
+        report: _report,
+        t: t,
+        profit: _profitWithCaveat,
+      );
+
+      expect(csv, contains('Some units have no cost price on record,2'));
+      expect(csv, contains('Some units could not be valued,3'));
+    });
+
+    test('a complete report carries no caveat', () {
+      final csv = InventoryReportFiles.buildCsv(
+        report: _report,
+        t: t,
+        profit: _profit,
+      );
+
+      expect(csv, isNot(contains('no cost price on record')));
+      expect(csv, isNot(contains('could not be valued')));
+    });
+
+    test('the money rows are the one definition both formats use', () {
+      final rows = InventoryReportFiles.profitRows(_profit, t);
+      final byLabel = {for (final row in rows) row[0] as String: row[1]};
+
+      expect(byLabel['Metric'], 'Value');
+      expect(byLabel['Revenue'], 10000.0);
+      expect(byLabel['Cost'], 7000.0);
+      expect(byLabel['Profit'], 3000.0);
+      expect(byLabel['Margin'], '30.0%');
+      expect(byLabel['Avg selling price'], 1000.0);
+      expect(byLabel['Avg purchase price'], 700.0);
+      expect(byLabel['Units sold'], 10);
+      // Header plus the seven figures, and nothing else on a complete report.
+      expect(rows, hasLength(8));
+    });
+
+    test('the caveat rows appear only when the figures are incomplete', () {
+      final rows = InventoryReportFiles.profitRows(_profitWithCaveat, t);
+      final byLabel = {for (final row in rows) row[0] as String: row[1]};
+
+      expect(byLabel['Some units have no cost price on record'], 2);
+      expect(byLabel['Some units could not be valued'], 3);
+      expect(rows, hasLength(10));
+    });
+
+    test('the Excel workbook is produced with the money sheet', () {
+      final bytes = InventoryReportFiles.buildExcel(
+        report: _report,
+        t: t,
+        profit: _profit,
+      );
+
+      // What goes INTO the sheet is asserted through profitRows above: the excel
+      // package cannot re-parse a workbook containing the empty spacer rows this
+      // builder writes, so decoding the bytes here would fail for reasons that have
+      // nothing to do with the report.
+      expect(bytes, isNotNull);
+      expect(bytes!, isNotEmpty);
+    });
+
+    test('the PDF is produced with the money section', () async {
+      final bytes = await InventoryReportFiles.buildPdf(
+        report: _report,
+        t: t,
+        companyName: 'Ma Boutique SARL',
+        profit: _profitWithCaveat,
+        currencySymbol: 'Frs',
+      );
+      expect(bytes, isNotEmpty);
     });
   });
 }

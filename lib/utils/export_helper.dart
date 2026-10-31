@@ -21,15 +21,21 @@ import 'company_logo_bytes.dart';
 import 'company_name_helper.dart';
 import 'i18n.dart';
 import 'inventory_report_files.dart';
+import 'report_profit_helper.dart';
 
 class ExportHelper {
   /// Exports [report] in the format and with the sections the user chooses.
   ///
   /// [drinks] supplies the batch dates for the expiry section (optional).
+  /// [profit] is the money summary the Reports screen shows, passed in rather than
+  /// recomputed here so the file can never disagree with the screen.
+  /// [currencySymbol] is used by the PDF only — Excel and CSV keep plain numbers.
   static Future<void> exportInventoryReport(
     InventoryReport report,
     BuildContext context, {
     List<Drink> drinks = const [],
+    ProfitSummary profit = ProfitSummary.empty,
+    String currencySymbol = '',
   }) async {
     final messenger = ScaffoldMessenger.of(context);
     final selection = await showExportOptionsDialog(
@@ -41,6 +47,9 @@ class ExportHelper {
         ExportSectionOption(labelKey: 'exp_lowStockItems', value: true),
         ExportSectionOption(labelKey: 'expiryAlertTitle', value: true),
         ExportSectionOption(labelKey: 'exp_transactionsHeader', value: true),
+        // Appended last so the checkbox order — and optionsFromSelection — stays
+        // stable for every existing caller.
+        ExportSectionOption(labelKey: 'exp_profitSection', value: true),
       ],
       title: t('exp_inventoryReport'),
     );
@@ -69,6 +78,8 @@ class ExportHelper {
             companyName: companyName,
             logoBytes: logoBytes,
             drinks: drinks,
+            profit: profit,
+            currencySymbol: currencySymbol,
             options: options,
           );
           await _saveAndShare(
@@ -85,6 +96,7 @@ class ExportHelper {
             companyName: companyName,
             logoUrl: logoUrl,
             drinks: drinks,
+            profit: profit,
             options: options,
           );
           if (bytes == null) throw Exception('Excel export failed');
@@ -102,6 +114,7 @@ class ExportHelper {
             companyName: companyName,
             logoUrl: logoUrl,
             drinks: drinks,
+            profit: profit,
             options: options,
           );
           await _saveAndShare(
@@ -128,6 +141,7 @@ class ExportHelper {
       lowStock: at(3),
       expiry: at(4),
       transactions: at(5),
+      profit: at(6),
     );
   }
 /// Writes the file and opens the platform share sheet.
