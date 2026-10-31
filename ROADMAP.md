@@ -1002,3 +1002,29 @@ margin and the two averages could never reach an accountant.
 - Gates: Flutter **476 tests** (+8), `flutter analyze lib` **534 issues** / 0 errors,
   i18n **EN=1484 FR=1484**. Backend untouched.
 
+## 2026-10-31 — The chosen style, applied app-wide (soft depth + one glass surface)
+The 2026-10-29 entry *decided* the style — **Material 3 with restrained soft depth; no glassmorphism,
+neumorphism or claymorphism** — but only piloted it on the drawer: `app_theme.dart` was imported by three
+files, and every other screen still hand-picked its own radii, alphas and shadows. This puts the decision
+where it actually takes effect.
+- **The leverage point is the theme, not 200 widgets.** `_buildLightTheme` / `_buildDarkTheme` in `main.dart`
+  now take their radii and elevations from the tokens (`AppRadius.mediumAll` for buttons and inputs,
+  `AppRadius.largeAll` for cards, `AppElevation.raised` / `floating`), so every screen inherits one surface
+  language instead of re-guessing it. The two hand-picked theme radii (12 and 16) are gone, and a test fails
+  if either comes back.
+- **The surfaces that had no rule were given one**: `dialogTheme`, `bottomSheetTheme`, `snackBarTheme`, plus
+  `filledButtonTheme` and `textButtonTheme`. Before this, every dialog and sheet took whatever shape the
+  screen that opened it felt like — exactly the inconsistency the token file was written to stop.
+  `AppElevation` is new (flat 0 / soft 2 / raised 4 / floating 8), so "what floats" is a name, not a number.
+- **One glass surface, deliberately.** `AppGlass` (blur 12, a tint, a hairline edge) is applied to the **lock
+  overlay** — the one surface whose backdrop cannot move (it covers a frozen app) and whose brand gradient is
+  already translucent, so the blur reads through it. It is applied in the overlay rather than in the lock
+  screen's body, because the overlay is what covers the app: that is what puts the blur on the screen behind.
+  **Why not everywhere**: `BackdropFilter` re-blurs its region every frame, so glass behind a scrolling list
+  spends a low-end phone's frame budget while a cashier scrolls for a bottle. Two tests encode the rule — no
+  file under `lib/screens/` may mention `AppGlass`, and it may be applied exactly once.
+- Gates: Flutter **483 tests** (+7), `flutter analyze lib` **534 issues** / 0 errors. i18n and backend
+  untouched.
+- **Still open**: the per-screen cleanup — 36 hand-picked `BoxShadow`, 27 `LinearGradient` and ~197
+  `withValues(alpha:)` calls remain in screens that predate the tokens.
+

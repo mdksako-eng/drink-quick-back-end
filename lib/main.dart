@@ -38,6 +38,8 @@ import 'package:drinks_calculator_fixed/widgets/legal_consent_gate.dart';
 import 'package:drinks_calculator_fixed/widgets/plan_gate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
+import 'theme/app_theme.dart';
+
 // Global navigator key for showing dialogs from anywhere
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -326,24 +328,30 @@ class MyAppState extends State<MyApp> {
       appBarTheme: AppBarTheme(
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
-        elevation: 4,
+        elevation: AppElevation.raised,
         centerTitle: true,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.mediumAll),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: primaryColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.mediumAll),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.mediumAll),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.mediumAll),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
@@ -355,22 +363,37 @@ class MyAppState extends State<MyApp> {
         contentPadding: compact
             ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
             : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        border: OutlineInputBorder(borderRadius: AppRadius.mediumAll),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppRadius.mediumAll,
           borderSide: BorderSide(color: primaryColor, width: 2),
         ),
       ),
       cardTheme: CardThemeData(
-        elevation: 4,
+        elevation: AppElevation.raised,
         margin: compact
-            ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
+            ? const EdgeInsets.symmetric(
+                horizontal: AppSpace.sm, vertical: AppSpace.xs)
             : null,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.largeAll),
+      ),
+      // The surfaces that used to take whatever shape the screen that opened them felt
+      // like: one dialog / sheet / snackbar language for the whole app, inherited by
+      // every screen instead of re-picked in each one.
+      dialogTheme: DialogThemeData(
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.largeAll),
+        elevation: AppElevation.floating,
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.large),
+          ),
         ),
+        elevation: AppElevation.floating,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.mediumAll),
       ),
       textTheme: const TextTheme(
         bodyLarge: TextStyle(color: Colors.black87),
@@ -405,24 +428,30 @@ class MyAppState extends State<MyApp> {
       appBarTheme: AppBarTheme(
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
-        elevation: 4,
+        elevation: AppElevation.raised,
         centerTitle: true,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.mediumAll),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: primaryColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.mediumAll),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.mediumAll),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.mediumAll),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
@@ -434,22 +463,35 @@ class MyAppState extends State<MyApp> {
         contentPadding: compact
             ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
             : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        border: OutlineInputBorder(borderRadius: AppRadius.mediumAll),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppRadius.mediumAll,
           borderSide: BorderSide(color: primaryColor, width: 2),
         ),
       ),
       cardTheme: CardThemeData(
-        elevation: 4,
+        elevation: AppElevation.raised,
         margin: compact
-            ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
+            ? const EdgeInsets.symmetric(
+                horizontal: AppSpace.sm, vertical: AppSpace.xs)
             : null,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.largeAll),
+      ),
+      // Same surface language as the light theme — see the note there.
+      dialogTheme: DialogThemeData(
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.largeAll),
+        elevation: AppElevation.floating,
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.large),
+          ),
         ),
+        elevation: AppElevation.floating,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.mediumAll),
       ),
       textTheme: const TextTheme(
         bodyLarge: TextStyle(color: Colors.white),
@@ -1167,19 +1209,26 @@ class LockScreenOverlay extends StatelessWidget {
             child,
             if (lockParams != null)
               Positioned.fill(
-                child: Consumer<AuthProvider>(
-                  builder: (context, authProvider, _) {
-                    final user = authProvider.currentUser;
-                    return LockScreen(
-                      userId: user?.id ?? '',
-                      onAuthenticated: () =>
-                          globalLockAuthenticated?.call(),
-                      isBackgroundLock: lockParams.isBackgroundLock,
-                      sessionTerminatedMessage:
-                          lockParams.sessionTerminatedMessage,
-                      previousDevice: lockParams.previousDevice,
-                    );
-                  },
+                // 🪟 The app's one glass surface. It belongs to the OVERLAY, not to the
+                // lock screen's body: the overlay is what covers the app, so the blur
+                // lands on the frozen screen behind it. The lock screen's own gradient
+                // is translucent and paints on top, which is what makes it read as glass
+                // rather than a flat panel. Safe here and nowhere else — the backdrop
+                // cannot move (see AppGlass's rule).
+                child: AppGlass.surface(
+                  child: Consumer<AuthProvider>(
+                    builder: (context, authProvider, _) {
+                      final user = authProvider.currentUser;
+                      return LockScreen(
+                        userId: user?.id ?? '',
+                        onAuthenticated: () => globalLockAuthenticated?.call(),
+                        isBackgroundLock: lockParams.isBackgroundLock,
+                        sessionTerminatedMessage:
+                            lockParams.sessionTerminatedMessage,
+                        previousDevice: lockParams.previousDevice,
+                      );
+                    },
+                  ),
                 ),
               ),
           ],

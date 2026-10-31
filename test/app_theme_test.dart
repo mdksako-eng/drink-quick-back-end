@@ -105,4 +105,63 @@ void main() {
       expect(menu, isNot(contains('withValues(alpha: 0.1)')));
     });
   });
+
+  group('elevation steps', () {
+    test('grow flat -> soft -> raised -> floating', () {
+      expect(AppElevation.flat, lessThan(AppElevation.soft));
+      expect(AppElevation.soft, lessThan(AppElevation.raised));
+      expect(AppElevation.raised, lessThan(AppElevation.floating));
+      expect(AppElevation.flat, 0);
+    });
+  });
+
+  group('the app-wide theme takes its shapes from the tokens', () {
+    final main = File('lib/main.dart').readAsStringSync();
+
+    test('the theme builders use the radius and elevation tokens', () {
+      expect(main, contains('AppRadius.mediumAll'));
+      expect(main, contains('AppRadius.largeAll'));
+      expect(main, contains('AppElevation.raised'));
+      expect(main, contains('AppElevation.floating'));
+    });
+
+    test('the hand-picked theme radii are gone', () {
+      // These were the two numbers every screen had to guess at before.
+      expect(main, isNot(contains('BorderRadius.circular(12)')));
+      expect(main, isNot(contains('BorderRadius.circular(16)')));
+    });
+
+    test('dialogs, sheets and snackbars have one shared language', () {
+      expect(main, contains('dialogTheme: DialogThemeData('));
+      expect(main, contains('bottomSheetTheme: BottomSheetThemeData('));
+      expect(main, contains('snackBarTheme: SnackBarThemeData('));
+    });
+  });
+
+  group('the glass rule (static surfaces only)', () {
+    test('the blur stays modest, so it cannot quietly become expensive', () {
+      expect(AppGlass.blur, lessThanOrEqualTo(16));
+    });
+
+    test('no screen uses it — the backdrop there can move', () {
+      // `BackdropFilter` re-blurs its region every frame, so glass behind a scrolling
+      // list burns a low-end phone's frame budget. The lock overlay is the one place
+      // whose backdrop is frozen; this test is what keeps it that way.
+      final offenders = Directory('lib/screens')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .where((f) => f.readAsStringSync().contains('AppGlass'))
+          .map((f) => f.path)
+          .toList();
+
+      expect(offenders, isEmpty);
+    });
+
+    test('it is applied exactly once, on the lock overlay', () {
+      final main = File('lib/main.dart').readAsStringSync();
+      // Count the CALL, not the name: the surrounding comment mentions AppGlass too.
+      expect('AppGlass.surface('.allMatches(main).length, 1);
+    });
+  });
 }
