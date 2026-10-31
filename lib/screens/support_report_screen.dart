@@ -8,6 +8,9 @@ import 'package:drinks_calculator_fixed/providers/auth_provider.dart';
 import 'package:drinks_calculator_fixed/services/support_service.dart';
 import 'package:drinks_calculator_fixed/utils/helpers.dart';
 import 'package:drinks_calculator_fixed/utils/i18n.dart';
+import 'package:drinks_calculator_fixed/widgets/custom_drawer.dart';
+import 'package:drinks_calculator_fixed/widgets/drawer_menu_button.dart';
+import 'package:drinks_calculator_fixed/utils/drawer_navigation.dart';
 
 class SupportReportScreen extends StatefulWidget {
   const SupportReportScreen({super.key});
@@ -88,7 +91,20 @@ class _SupportReportScreenState extends State<SupportReportScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(t('supportReportTitle'))),
+      // 🧭 Reachable from every top-level screen: getting from here to another one no
+      // longer means going back to the till first.
+      drawer: const CustomDrawer(currentScreen: DrawerScreen.reportProblem),
+      appBar: AppBar(
+        // An EXPLICIT leading keeps the back arrow: with a drawer on the Scaffold,
+        // Flutter's AppBar would otherwise place its own drawer button here
+        // (app_bar.dart: `if (hasDrawer) leading = DrawerButton()`).
+        leading: const BackButton(),
+        title: Text(t('supportReportTitle')),
+        actions: const [
+          // Opens the drawer WITHOUT taking the leading slot.
+          DrawerMenuButton(),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

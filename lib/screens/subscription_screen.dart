@@ -8,6 +8,9 @@ import '../services/payments_status_service.dart';
 import '../utils/i18n.dart';
 import '../utils/payment_channel_helper.dart';
 import '../utils/payment_error_helper.dart';
+import '../widgets/custom_drawer.dart';
+import '../widgets/drawer_menu_button.dart';
+import '../utils/drawer_navigation.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   /// When true the screen is used as the mandatory post-login gate: no back
@@ -370,9 +373,19 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
 
     return Scaffold(
+      // 🧭 Only when opened from the drawer. As a paywall gate (`widget.gate`) this
+      // screen is a modal detour: it deliberately has no back arrow and must not offer
+      // a way out into the rest of the app.
+      drawer: widget.gate
+          ? null
+          : const CustomDrawer(currentScreen: DrawerScreen.subscription),
       appBar: AppBar(
         title: Text(title),
         automaticallyImplyLeading: !widget.gate,
+        // With a drawer present the implied leading becomes the drawer button, so the
+        // back arrow has to be pinned explicitly (app_bar.dart: `if (hasDrawer)`).
+        leading: widget.gate ? null : const BackButton(),
+        actions: widget.gate ? null : const [DrawerMenuButton()],
       ),
       body: RefreshIndicator(
         onRefresh: provider.refresh,

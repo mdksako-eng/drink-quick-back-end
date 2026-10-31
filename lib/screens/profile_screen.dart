@@ -19,6 +19,9 @@ import 'package:image_picker/image_picker.dart';
 import '../utils/image_crop_helper.dart';
 import '../utils/owner_permissions.dart';
 import 'auth_screen.dart';
+import '../widgets/custom_drawer.dart';
+import '../widgets/drawer_menu_button.dart';
+import '../utils/drawer_navigation.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -323,11 +326,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final orderCount = context.watch<OrderProvider>().getTodaysOrders().length;
 
     return Scaffold(
+      // 🧭 Reachable from every top-level screen: getting from here to another one no
+      // longer means going back to the till first.
+      drawer: const CustomDrawer(currentScreen: DrawerScreen.profile),
       appBar: AppBar(
+        // An EXPLICIT leading keeps the back arrow: with a drawer on the Scaffold,
+        // Flutter's AppBar would otherwise place its own drawer button here
+        // (app_bar.dart: `if (hasDrawer) leading = DrawerButton()`).
+        leading: const BackButton(color: Colors.white),
         title: Text(t('profile')),
         backgroundColor: primary,
         foregroundColor: Colors.white,
         elevation: 4,
+        actions: const [
+          // Opens the drawer WITHOUT taking the leading slot.
+          DrawerMenuButton(color: Colors.white),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

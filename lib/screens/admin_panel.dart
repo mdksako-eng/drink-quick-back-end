@@ -11,6 +11,9 @@ import '../config/api_config.dart';
 import '../services/secure_storage_service.dart';
 import '../utils/i18n.dart';
 import 'admin_support_reports_screen.dart';
+import '../widgets/custom_drawer.dart';
+import '../widgets/drawer_menu_button.dart';
+import '../utils/drawer_navigation.dart';
 
 class AdminPanel extends StatefulWidget {
   const AdminPanel({Key? key}) : super(key: key);
@@ -453,11 +456,20 @@ class _AdminPanelState extends State<AdminPanel> with SingleTickerProviderStateM
     }
 
     return Scaffold(
+      // 🧭 Reachable from every top-level screen: getting from here to another one no
+      // longer means going back to the till first.
+      drawer: const CustomDrawer(currentScreen: DrawerScreen.adminPanel),
       appBar: AppBar(
+        // An EXPLICIT leading keeps the back arrow: with a drawer on the Scaffold,
+        // Flutter's AppBar would otherwise place its own drawer button here
+        // (app_bar.dart: `if (hasDrawer) leading = DrawerButton()`).
+        leading: const BackButton(color: Colors.white),
         title: Text(t('admin_title')),
         backgroundColor: _primaryColor,
         foregroundColor: Colors.white,
         actions: [
+          // Opens the drawer WITHOUT taking the leading slot.
+          const DrawerMenuButton(color: Colors.white),
           IconButton(
             icon: const Icon(Icons.inbox_outlined),
             tooltip: t('adminSupportReportsTitle'),

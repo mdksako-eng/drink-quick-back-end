@@ -25,6 +25,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:drinks_calculator_fixed/utils/ai_order_parser.dart';
 import 'package:drinks_calculator_fixed/widgets/ai_thinking_indicator.dart';
+import '../widgets/custom_drawer.dart';
+import '../widgets/drawer_menu_button.dart';
+import '../utils/drawer_navigation.dart';
 
 class AIAssistantScreen extends StatefulWidget {
   const AIAssistantScreen({Key? key}) : super(key: key);
@@ -1038,11 +1041,20 @@ ORDER_JSON: [{"name":"<exact drink name as written above>","qty":<number>}]
     onLongPress: () => LockService().resetTimer(),
     behavior: HitTestBehavior.translucent,
     child:Scaffold(
+      // 🧭 Reachable from every top-level screen: getting from here to another one no
+      // longer means going back to the till first.
+      drawer: const CustomDrawer(currentScreen: DrawerScreen.aiAssistant),
       appBar: AppBar(
+        // An EXPLICIT leading keeps the back arrow: with a drawer on the Scaffold,
+        // Flutter's AppBar would otherwise place its own drawer button here
+        // (app_bar.dart: `if (hasDrawer) leading = DrawerButton()`).
+        leading: const BackButton(color: Colors.white),
         title: Text(t('b3_aiAssistant')),
         foregroundColor: Colors.white,
         backgroundColor: theme.primaryColor,
         actions: [
+          // Opens the drawer WITHOUT taking the leading slot.
+          const DrawerMenuButton(color: Colors.white),
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: _clearChat,

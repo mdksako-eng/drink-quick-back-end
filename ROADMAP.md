@@ -939,12 +939,16 @@ hub: getting from Inventory to Shift meant going back to the till first. Reporte
   hamburger. Pinning an **explicit** `leading: BackButton()` wins (`Widget? leading = widget.leading;` is read
   first), so every screen keeps back on the left and opens the drawer from a menu button in `actions`.
   Dragging from the left edge still opens the drawer too.
-- **Applied to 12 screens**: inventory, drinks, shift, customers (ledger), containers, purchasing, analytics
-  (dashboard), forecast, variance, staff (manager panel), approvals, settings. The till is unchanged (it owns
-  its drawer and its three hamburgers). `drink_management_screen.dart` already had an explicit leading, so it
-  needed only the drawer + the action.
-- **Not yet done (the rest of the list)**: profile, subscription, AI assistant, admin panel, support report,
-  admin support reports, inventory report, notifications — the same three lines each now.
+- **Applied to 17 screens**: inventory, drinks, shift, customers (ledger), containers, purchasing, analytics
+  (dashboard), forecast, variance, staff (manager panel), approvals, settings, profile, subscription, AI
+  assistant, admin panel and report-a-problem. The till is unchanged: it owns its drawer and its three
+  hamburgers, and its `currentScreen` already defaults to `DrawerScreen.dashboard`.
+- **Deliberately not mounted**: the barcode scanner (`barcode_scan_page.dart` is a focused camera task), and
+  the entries that are not screens at all — `invoices`, `about` and `help` are callbacks the till handles.
+  Sub-screens that are not drawer destinations (inventory report, admin support reports, notifications) are
+  left alone, so the menu never offers a way to somewhere the user did not come from.
+- **Subscription is conditional on purpose**: opened from the drawer it gets the drawer and a pinned back
+  arrow; opened as a paywall gate (`widget.gate`) it stays a modal detour — no back arrow, no drawer.
 - Guards: `test/drawer_menu_button_test.dart` (new) pumps a pushed screen and asserts **both** invariants — the
   back arrow survives *and* the button opens the drawer. It is what caught the leading-slot mistake: the first
   run failed with `Found 0 widgets with type "BackButton"`.
