@@ -14,6 +14,9 @@ import '../utils/staff_permissions.dart';
 import '../config/api_config.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
 import 'package:drinks_calculator_fixed/services/secure_storage_service.dart';
+import '../widgets/custom_drawer.dart';
+import '../widgets/drawer_menu_button.dart';
+import '../utils/drawer_navigation.dart';
 
 class ManagerPanel extends StatefulWidget {
   const ManagerPanel({Key? key}) : super(key: key);
@@ -539,11 +542,20 @@ class _ManagerPanelState extends State<ManagerPanel>
       onLongPress: () => LockService().resetTimer(),
       behavior: HitTestBehavior.translucent,
       child: Scaffold(
+        // 🧭 Reachable from every top-level screen: getting from here to another one
+        // no longer means going back to the till first.
+        drawer: const CustomDrawer(currentScreen: DrawerScreen.staff),
         appBar: AppBar(
+          // An EXPLICIT leading keeps the back arrow: with a drawer on the Scaffold,
+          // Flutter's AppBar would otherwise place its own drawer button here
+          // (app_bar.dart: `if (hasDrawer) leading = DrawerButton()`).
+          leading: const BackButton(color: Colors.white),
           title: Text(t('b3_staffMgmt')),
           backgroundColor: _primaryColor,
           foregroundColor: Colors.white,
           actions: [
+            // Opens the drawer WITHOUT taking the leading slot, so the back arrow stays.
+            const DrawerMenuButton(color: Colors.white),
             IconButton(icon: const Icon(Icons.refresh), onPressed: _loadStaff)
           ],
           bottom: TabBar(

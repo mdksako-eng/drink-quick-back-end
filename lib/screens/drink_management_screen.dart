@@ -22,6 +22,9 @@ import 'package:drinks_calculator_fixed/services/drink_image_service.dart';
 import 'package:drinks_calculator_fixed/utils/image_crop_helper.dart';
 import '../utils/i18n.dart';
 import 'barcode_scan_page.dart';
+import '../widgets/custom_drawer.dart';
+import '../widgets/drawer_menu_button.dart';
+import '../utils/drawer_navigation.dart';
 
 class DrinkManagementScreen extends StatefulWidget {
   const DrinkManagementScreen({Key? key}) : super(key: key);
@@ -608,6 +611,9 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
       onLongPress: () => LockService().resetTimer(),
       behavior: HitTestBehavior.translucent,
       child: Scaffold(
+        // 🧭 Reachable from every top-level screen: getting from here to another one
+        // no longer means going back to the till first.
+        drawer: const CustomDrawer(currentScreen: DrawerScreen.drinks),
         appBar: AppBar(
           title: Text(
             t('dm_title'),
@@ -622,6 +628,9 @@ class _DrinkManagementScreenState extends State<DrinkManagementScreen> {
             onPressed: () => Navigator.pop(context),
           ),
           actions: [
+            // Opens the drawer WITHOUT taking the leading slot, so the explicit back
+            // arrow above stays visible.
+            const DrawerMenuButton(color: Colors.white),
             if (_editingDrinkId != null)
               IconButton(
                 icon: const Icon(Icons.close, color: Colors.white),

@@ -17,6 +17,9 @@ import '../utils/container_ledger_helper.dart';
 import '../utils/helpers.dart';
 import '../utils/i18n.dart';
 import '../widgets/offline_indicator.dart';
+import '../widgets/custom_drawer.dart';
+import '../widgets/drawer_menu_button.dart';
+import '../utils/drawer_navigation.dart';
 
 class ContainersScreen extends StatefulWidget {
   const ContainersScreen({super.key});
@@ -42,9 +45,20 @@ class _ContainersScreenState extends State<ContainersScreen> {
     final manager = provider.canManageTypes(_role);
 
     return Scaffold(
+      // 🧭 Reachable from every top-level screen: getting from here to another one no
+      // longer means going back to the till first.
+      drawer: const CustomDrawer(currentScreen: DrawerScreen.containers),
       appBar: AppBar(
+        // An EXPLICIT leading keeps the back arrow: with a drawer on the Scaffold,
+        // Flutter's AppBar would otherwise place its own drawer button here
+        // (app_bar.dart: `if (hasDrawer) leading = DrawerButton()`), and the menu
+        // button in `actions` opens the drawer instead.
+        leading: const BackButton(),
         title: Text(t('contMenu')),
         actions: [
+          // Opens the drawer WITHOUT taking the leading slot, so the back arrow stays
+          // visible (a Scaffold's own drawer button would replace it).
+          const DrawerMenuButton(),
           if (manager)
             IconButton(
               icon: const Icon(Icons.add),

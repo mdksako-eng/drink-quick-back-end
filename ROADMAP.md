@@ -924,3 +924,30 @@ Glass remains an option for 2–3 *static* surfaces (drawer header, a floating b
   against drifting back to hand-picked values; the drawer test file gained a dark-mode case
 - i18n unchanged (no new keys)
 
+
+## 2026-10-31 — The drawer reaches every top-level screen (and keeps the back arrow)
+The drawer was mounted in exactly ONE place (`calculator_screen.dart`), so the other destinations formed a
+hub: getting from Inventory to Shift meant going back to the till first. Reported on 2026-10-29, now fixed.
+- **`lib/widgets/drawer_menu_button.dart`** (new): the menu button for a screen that is not the till. It is a
+  widget rather than an inline `IconButton` because the obvious version
+  (`AppBar(actions: [IconButton(onPressed: () => Scaffold.of(context).openDrawer())])`) throws *"No Scaffold
+  widget found"*: that `context` belongs to the enclosing build method, which sits **above** the Scaffold
+  (`app_bar.dart`). The widget's own context is below it, so the trap cannot be reintroduced by accident.
+- **The subtlety that decided the design**: a Scaffold's `drawer` does **not** coexist with the implied back
+  arrow. `AppBar` resolves the leading slot as `if (hasDrawer) leading = DrawerButton()` — *before* the
+  `parentRoute.impliesAppBarDismissal` branch — so adding a drawer silently turns the back arrow into a
+  hamburger. Pinning an **explicit** `leading: BackButton()` wins (`Widget? leading = widget.leading;` is read
+  first), so every screen keeps back on the left and opens the drawer from a menu button in `actions`.
+  Dragging from the left edge still opens the drawer too.
+- **Applied to 12 screens**: inventory, drinks, shift, customers (ledger), containers, purchasing, analytics
+  (dashboard), forecast, variance, staff (manager panel), approvals, settings. The till is unchanged (it owns
+  its drawer and its three hamburgers). `drink_management_screen.dart` already had an explicit leading, so it
+  needed only the drawer + the action.
+- **Not yet done (the rest of the list)**: profile, subscription, AI assistant, admin panel, support report,
+  admin support reports, inventory report, notifications — the same three lines each now.
+- Guards: `test/drawer_menu_button_test.dart` (new) pumps a pushed screen and asserts **both** invariants — the
+  back arrow survives *and* the button opens the drawer. It is what caught the leading-slot mistake: the first
+  run failed with `Found 0 widgets with type "BackButton"`.
+- Gates: `flutter analyze lib` **535 issues**, no `error -` (unchanged); Flutter **456 tests** (+1);
+  i18n unchanged (no new keys, reuses `menu`). Backend untouched.
+

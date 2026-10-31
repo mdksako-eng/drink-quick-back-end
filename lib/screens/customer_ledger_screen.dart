@@ -20,6 +20,9 @@ import '../utils/helpers.dart';
 import '../utils/i18n.dart';
 import '../utils/price_extension.dart';
 import '../utils/whatsapp_helper.dart';
+import '../widgets/custom_drawer.dart';
+import '../widgets/drawer_menu_button.dart';
+import '../utils/drawer_navigation.dart';
 
 class CustomerLedgerScreen extends StatefulWidget {
   const CustomerLedgerScreen({super.key});
@@ -62,11 +65,23 @@ class _CustomerLedgerScreenState extends State<CustomerLedgerScreen>
     final pending = provider.pendingCount;
 
     return Scaffold(
+      // 🧭 Reachable from every top-level screen: getting from here to another one no
+      // longer means going back to the till first.
+      drawer: const CustomDrawer(currentScreen: DrawerScreen.customers),
       appBar: AppBar(
+        // An EXPLICIT leading keeps the back arrow: with a drawer on the Scaffold,
+        // Flutter's AppBar would otherwise place its own drawer button here
+        // (app_bar.dart: `if (hasDrawer) leading = DrawerButton()`), and the menu
+        // button in `actions` opens the drawer instead.
+        leading: const BackButton(color: Colors.white),
         title: Text(t('custTitle')),
         backgroundColor: primary,
         foregroundColor: Colors.white,
         elevation: 4,
+        actions: const [
+          // Opens the drawer WITHOUT taking the leading slot, so the back arrow stays.
+          DrawerMenuButton(color: Colors.white),
+        ],
         bottom: TabBar(
           controller: _tabs,
           labelColor: Colors.white,

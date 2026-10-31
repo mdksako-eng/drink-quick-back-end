@@ -11,6 +11,9 @@ import '../services/backend_auth_service.dart';
 import '../utils/helpers.dart';
 import '../utils/color_helper.dart';
 import 'package:drinks_calculator_fixed/services/lock_service.dart';
+import '../widgets/custom_drawer.dart';
+import '../widgets/drawer_menu_button.dart';
+import '../utils/drawer_navigation.dart';
 
 class ManagerApprovalScreen extends StatefulWidget {
   const ManagerApprovalScreen({Key? key}) : super(key: key);
@@ -367,12 +370,21 @@ class _ManagerApprovalScreenState extends State<ManagerApprovalScreen> {
       onLongPress: () => LockService().resetTimer(),
       behavior: HitTestBehavior.translucent,
       child: Scaffold(
+        // 🧭 Reachable from every top-level screen: getting from here to another one
+        // no longer means going back to the till first.
+        drawer: const CustomDrawer(currentScreen: DrawerScreen.approvals),
         appBar: AppBar(
+          // An EXPLICIT leading keeps the back arrow: with a drawer on the Scaffold,
+          // Flutter's AppBar would otherwise place its own drawer button here
+          // (app_bar.dart: `if (hasDrawer) leading = DrawerButton()`).
+          leading: const BackButton(color: Colors.white),
           title: Text(_showJoins ? 'Join Requests' : t('b3_loginApprovals')),
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
           elevation: 4,
           actions: [
+            // Opens the drawer WITHOUT taking the leading slot, so the back arrow stays.
+            const DrawerMenuButton(color: Colors.white),
             // 🔐 Toggle between login approvals and join requests
             TextButton.icon(
               onPressed: () => setState(() => _showJoins = !_showJoins),
