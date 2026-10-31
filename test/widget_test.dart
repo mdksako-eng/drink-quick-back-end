@@ -28,25 +28,38 @@ void main() {
 
     // The splash is the only screen that renders this status label, so drive the
     // async startup frame-by-frame and record whether it appeared at all.
+    //
+    // ⚠️ Frames are inspected BEFORE and AFTER each pump, in 10 ms steps. The old
+    // version only looked before pumping 50 ms at a time, so on a fast — or merely
+    // loaded — machine the startup could finish inside a single step and the loop
+    // stepped straight over the splash. That made the test fail only when the whole
+    // suite ran in parallel, which looks like a regression and is not one.
     var sawSplash = false;
-    for (var i = 0; i < 15; i++) {
-      final splashStatus = find.text('Checking authentication...');
-      final loadingStatus = find.text('Loading app...');
-      if (splashStatus.evaluate().isNotEmpty ||
-          loadingStatus.evaluate().isNotEmpty) {
+    var sawBranding = false;
+    void captureSplash() {
+      if (find.text('Checking authentication...').evaluate().isNotEmpty ||
+          find.text('Loading app...').evaluate().isNotEmpty) {
         sawSplash = true;
-        // The branded splash must show its name, tagline and spinner.
-        expect(find.text('Drinks Quick Cal'), findsWidgets);
-        expect(find.text('Professional Drink Ordering & Management'),
-            findsWidgets);
-        expect(find.byType(CircularProgressIndicator), findsWidgets);
-        break;
+        if (find.text('Drinks Quick Cal').evaluate().isNotEmpty &&
+            find.text('Professional Drink Ordering & Management')
+                .evaluate()
+                .isNotEmpty &&
+            find.byType(CircularProgressIndicator).evaluate().isNotEmpty) {
+          sawBranding = true;
+        }
       }
-      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    captureSplash(); // frame 0: the build pumpWidget produced
+    for (var i = 0; i < 60 && !sawSplash; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+      captureSplash();
     }
 
     expect(sawSplash, isTrue,
         reason: 'The branded splash should be visible while the app initialises');
+    expect(sawBranding, isTrue,
+        reason: 'The splash shows its name, tagline and spinner');
 
     // With no stored session the startup finishes on the sign-in screen.
     for (var i = 0;
